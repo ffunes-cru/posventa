@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="pv_import_maquinas_form" model="ir.ui.view">
+        <field name="name">pv.import.maquinas.form</field>
+        <field name="model">pv.import.maquinas</field>
+        <field name="arch" type="xml">
+            <form string="Importar Máquinas">
+                <group invisible="state != 'upload'">
+                    <group>
+                        <field name="archivo" filename="archivo_nombre"/>
+                        <field name="archivo_nombre" invisible="1"/>
+                    </group>
+                    <group>
+                        <div class="alert alert-info">
+                            <p><strong>Formato esperado del archivo Excel:</strong></p>
+                            <p>Columnas: <code>of</code>, <code>tipo</code>, <code>concesionario</code>,
+                            <code>cliente</code>, <code>ciudad</code>, <code>provincia</code>, <code>estado</code></p>
+                            <p>Tipos válidos: PIONERA, GRINGA, DRILOR, PLANTOR, MIXIA</p>
+                            <p>Estados válidos: LIBERADA, STOCK, VENDIDA</p>
+                        </div>
+                    </group>
+                </group>
+                <group invisible="state != 'preview'">
+                    <div class="row">
+                        <div class="col-12">
+                            <field name="preview_html" nolabel="1"/>
+                            <field name="error_html" nolabel="1"/>
+                        </div>
+                    </div>
+                    <group>
+                        <field name="lineas_ok"/>
+                        <field name="lineas_error"/>
+                    </group>
+                </group>
+                <group invisible="state != 'done'">
+                    <div class="alert alert-success">
+                        <p><strong>Importación completada exitosamente.</strong></p>
+                    </div>
+                </group>
+                <field name="state" invisible="1"/>
+                <footer>
+                    <button name="action_preview" type="object" string="Vista Previa"
+                            class="btn-primary" invisible="state != 'upload'"/>
+                    <button name="action_import" type="object" string="Importar"
+                            class="btn-primary" invisible="state != 'preview'"
+                            confirm="¿Confirma la importación de las filas válidas?"/>
+                    <button string="Cerrar" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_pv_import_maquinas" model="ir.actions.act_window">
+        <field name="name">Importar Máquinas</field>
+        <field name="res_model">pv.import.maquinas</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+</odoo>

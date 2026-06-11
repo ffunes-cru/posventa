@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Tree View -->
+    <record id="pv_concesionario_view_tree" model="ir.ui.view">
+        <field name="name">pv.concesionario.view.tree</field>
+        <field name="model">pv.concesionario</field>
+        <field name="arch" type="xml">
+            <list string="Concesionarios">
+                <field name="name"/>
+                <field name="partner_id"/>
+                <field name="user_id"/>
+                <field name="email"/>
+                <field name="phone"/>
+                <field name="city"/>
+                <field name="state_id"/>
+                <field name="maquina_count" string="Máquinas"/>
+                <field name="ticket_count" string="Tickets"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Form View -->
+    <record id="pv_concesionario_view_form" model="ir.ui.view">
+        <field name="name">pv.concesionario.view.form</field>
+        <field name="model">pv.concesionario</field>
+        <field name="arch" type="xml">
+            <form string="Concesionario">
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_maquinas" type="object" class="oe_stat_button" icon="fa-cubes">
+                            <field name="maquina_count" widget="statinfo" string="Máquinas"/>
+                        </button>
+                        <button name="action_view_tickets" type="object" class="oe_stat_button" icon="fa-ticket">
+                            <field name="ticket_count" widget="statinfo" string="Tickets"/>
+                        </button>
+                    </div>
+                    <div class="oe_title">
+                        <label for="name" class="oe_edit_only"/>
+                        <h1>
+                            <field name="name" placeholder="Nombre del Concesionario"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group string="Asociaciones">
+                            <field name="partner_id"/>
+                            <field name="user_id"/>
+                        </group>
+                        <group string="Contacto">
+                            <field name="email"/>
+                            <field name="phone"/>
+                            <field name="city"/>
+                            <field name="state_id"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Personal Autorizado" name="personal">
+                            <field name="contacto_ids" mode="list">
+                                <list editable="bottom">
+                                    <field name="name"/>
+                                    <field name="cargo"/>
+                                    <field name="telefono"/>
+                                    <field name="email"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+                <div class="oe_chatter">
+                    <field name="message_follower_ids"/>
+                    <field name="activity_ids"/>
+                    <field name="message_ids"/>
+                </div>
+            </form>
+        </field>
+    </record>
+
+    <!-- Search View -->
+    <record id="pv_concesionario_view_search" model="ir.ui.view">
+        <field name="name">pv.concesionario.view.search</field>
+        <field name="model">pv.concesionario</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <field name="partner_id"/>
+                <field name="city"/>
+                <field name="state_id"/>
+                <filter string="Con login" name="has_user" domain="[('user_id', '!=', False)]"/>
+                <filter string="Archivados" name="inactive" domain="[('active', '=', False)]"/>
+            </search>
+        </field>
+    </record>
+
+    <!-- Action -->
+    <record id="action_pv_concesionario" model="ir.actions.act_window">
+        <field name="name">Concesionarios</field>
+        <field name="res_model">pv.concesionario</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="pv_concesionario_view_search"/>
+    </record>
+</odoo>

@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Tree View -->
+    <record id="pv_ticket_medida_view_tree" model="ir.ui.view">
+        <field name="name">pv.ticket.medida.view.tree</field>
+        <field name="model">pv.ticket.medida</field>
+        <field name="arch" type="xml">
+            <list string="Medidas y Seguimiento">
+                <field name="name"/>
+                <field name="ticket_id"/>
+                <field name="tipo"/>
+                <field name="responsable_id"/>
+                <field name="fecha_vencimiento"/>
+                <field name="estado" widget="badge" decoration-success="estado == 'completada'" decoration-warning="estado == 'en_curso'" decoration-danger="estado == 'vencida'" decoration-info="estado == 'pendiente'"/>
+                <button name="action_completar" string="Completar" type="object" icon="fa-check" invisible="estado in ('completada', 'vencida')"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Form View -->
+    <record id="pv_ticket_medida_view_form" model="ir.ui.view">
+        <field name="name">pv.ticket.medida.view.form</field>
+        <field name="model">pv.ticket.medida</field>
+        <field name="arch" type="xml">
+            <form string="Medida / Acción de Seguimiento">
+                <sheet>
+                    <header>
+                        <button name="action_en_curso" string="Poner en Curso" type="object" invisible="estado != 'pendiente'"/>
+                        <button name="action_completar" string="Completar Medida" type="object" class="oe_highlight" invisible="estado in ('completada', 'vencida')"/>
+                        <field name="estado" widget="statusbar" statusbar_visible="pendiente,en_curso,completada"/>
+                    </header>
+                    <group>
+                        <group>
+                            <field name="name"/>
+                            <field name="ticket_id"/>
+                            <field name="tipo"/>
+                        </group>
+                        <group>
+                            <field name="responsable_id"/>
+                            <field name="fecha_vencimiento"/>
+                            <field name="fecha_creacion"/>
+                            <field name="fecha_completada" invisible="estado != 'completada'"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Comentario / Detalle" name="detalle">
+                            <field name="comentario" placeholder="Escriba los detalles de la medida tomada o el plan de acción..."/>
+                        </page>
+                    </notebook>
+                </sheet>
+                <div class="oe_chatter">
+                    <field name="message_follower_ids"/>
+                    <field name="message_ids"/>
+                </div>
+            </form>
+        </field>
+    </record>
+
+    <!-- Search View -->
+    <record id="pv_ticket_medida_view_search" model="ir.ui.view">
+        <field name="name">pv.ticket.medida.view.search</field>
+        <field name="model">pv.ticket.medida</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <field name="ticket_id"/>
+                <field name="responsable_id"/>
+                <filter string="Pendiente / En Curso" name="pending_measures" domain="[('estado', 'in', ('pendiente', 'en_curso'))]"/>
+                <filter string="Vencida" name="overdue" domain="[('estado', '=', 'vencida')]"/>
+                <filter string="Completada" name="done" domain="[('estado', '=', 'completada')]"/>
+                <filter string="Ticket" name="group_ticket" context="{'group_by': 'ticket_id'}"/>
+                <filter string="Responsable" name="group_responsable" context="{'group_by': 'responsable_id'}"/>
+                <filter string="Estado" name="group_estado" context="{'group_by': 'estado'}"/>
+            </search>
+        </field>
+    </record>
+
+    <!-- Action -->
+    <record id="action_pv_ticket_medida" model="ir.actions.act_window">
+        <field name="name">Medidas y Seguimiento</field>
+        <field name="res_model">pv.ticket.medida</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="pv_ticket_medida_view_search"/>
+    </record>
+</odoo>

@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- ========================================== -->
+    <!-- SISTEMA VIEWS                              -->
+    <!-- ========================================== -->
+    <record id="pv_sistema_view_tree" model="ir.ui.view">
+        <field name="name">pv.sistema.view.tree</field>
+        <field name="model">pv.sistema</field>
+        <field name="arch" type="xml">
+            <list editable="bottom" string="Sistemas">
+                <field name="sequence" widget="handle"/>
+                <field name="codigo"/>
+                <field name="name"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="pv_sistema_view_form" model="ir.ui.view">
+        <field name="name">pv.sistema.view.form</field>
+        <field name="model">pv.sistema</field>
+        <field name="arch" type="xml">
+            <form string="Sistema">
+                <sheet>
+                    <group>
+                        <field name="codigo"/>
+                        <field name="name"/>
+                        <field name="sequence"/>
+                    </group>
+                    <notebook>
+                        <page string="Subsistemas" name="subsistemas">
+                            <field name="subsistema_ids" mode="list">
+                                <list editable="bottom">
+                                    <field name="codigo"/>
+                                    <field name="name"/>
+                                    <field name="sequence"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_pv_sistema" model="ir.actions.act_window">
+        <field name="name">Sistemas</field>
+        <field name="res_model">pv.sistema</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <!-- ========================================== -->
+    <!-- SUBSISTEMA VIEWS                           -->
+    <!-- ========================================== -->
+    <record id="pv_subsistema_view_tree" model="ir.ui.view">
+        <field name="name">pv.subsistema.view.tree</field>
+        <field name="model">pv.subsistema</field>
+        <field name="arch" type="xml">
+            <list string="Subsistemas">
+                <field name="codigo"/>
+                <field name="name"/>
+                <field name="sistema_id"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="pv_subsistema_view_form" model="ir.ui.view">
+        <field name="name">pv.subsistema.view.form</field>
+        <field name="model">pv.subsistema</field>
+        <field name="arch" type="xml">
+            <form string="Subsistema">
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="codigo"/>
+                            <field name="name"/>
+                            <field name="sistema_id"/>
+                        </group>
+                        <group>
+                            <field name="sequence"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Campos Adicionales" name="campos">
+                            <field name="campo_extra_ids" mode="list">
+                                <list editable="bottom">
+                                    <field name="sequence" widget="handle"/>
+                                    <field name="name"/>
+                                    <field name="tipo_campo"/>
+                                    <field name="obligatorio"/>
+                                    <field name="opciones"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Problemas Catalogados" name="problemas">
+                            <field name="problema_ids" mode="list">
+                                <list editable="bottom">
+                                    <field name="codigo"/>
+                                    <field name="name"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Guía de Descripción" name="guia">
+                            <field name="placeholder_descripcion" placeholder="Texto que guiará al operador al describir el reclamo..."/>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_pv_subsistema" model="ir.actions.act_window">
+        <field name="name">Subsistemas</field>
+        <field name="res_model">pv.subsistema</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <!-- ========================================== -->
+    <!-- PROBLEMA VIEWS                             -->
+    <!-- ========================================== -->
+    <record id="pv_problema_view_tree" model="ir.ui.view">
+        <field name="name">pv.problema.view.tree</field>
+        <field name="model">pv.problema</field>
+        <field name="arch" type="xml">
+            <list editable="bottom" string="Problemas Catalogados">
+                <field name="codigo"/>
+                <field name="name"/>
+                <field name="subsistema_id"/>
+                <field name="sistema_id" readonly="1"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="action_pv_problema" model="ir.actions.act_window">
+        <field name="name">Problemas Catalogados</field>
+        <field name="res_model">pv.problema</field>
+        <field name="view_mode">list</field>
+    </record>
+</odoo>

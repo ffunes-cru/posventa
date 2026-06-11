@@ -1,0 +1,218 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Tree View -->
+    <record id="pv_ticket_view_tree" model="ir.ui.view">
+        <field name="name">pv.ticket.view.tree</field>
+        <field name="model">pv.ticket</field>
+        <field name="arch" type="xml">
+            <list string="Tickets de Reclamo">
+                <field name="name"/>
+                <field name="tipo_ticket"/>
+                <field name="maquina_id"/>
+                <field name="of"/>
+                <field name="concesionario_id"/>
+                <field name="sistema_id"/>
+                <field name="subsistema_id"/>
+                <field name="prioridad" widget="badge" decoration-danger="prioridad == 'critica'" decoration-warning="prioridad == 'alta'" decoration-info="prioridad == 'media'"/>
+                <field name="estado" widget="badge" decoration-info="estado == 'abierto'" decoration-warning="estado == 'en_proceso'" decoration-success="estado == 'aceptado'" decoration-danger="estado == 'rechazado'" decoration-muted="estado == 'cerrado'"/>
+                <field name="responsable_id"/>
+                <field name="t1_horas" string="T1 (h)"/>
+                <field name="t2_horas" string="T2 (h)"/>
+                <field name="t3_horas" string="T3 (h)"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Kanban View -->
+    <record id="pv_ticket_view_kanban" model="ir.ui.view">
+        <field name="name">pv.ticket.view.kanban</field>
+        <field name="model">pv.ticket</field>
+        <field name="arch" type="xml">
+            <kanban default_group_by="estado" class="o_kanban_small_column" quick_create="false">
+                <field name="name"/>
+                <field name="maquina_id"/>
+                <field name="sistema_id"/>
+                <field name="prioridad"/>
+                <field name="responsable_id"/>
+                <field name="estado"/>
+                <field name="color"/>
+                <templates>
+                    <t t-name="card">
+                        <div class="oe_kanban_card oe_kanban_global_click">
+                            <div class="oe_kanban_content">
+                                <div class="o_kanban_record_title font-weight-bold">
+                                    <strong><field name="name"/></strong>
+                                </div>
+                                <div>
+                                    <span class="text-muted">OF: </span><field name="of"/>
+                                </div>
+                                <div>
+                                    <span>MÁQ: </span><field name="maquina_id"/>
+                                </div>
+                                <div t-if="record.sistema_id.raw_value">
+                                    <span>SIS: </span><field name="sistema_id"/>
+                                </div>
+                                <div class="o_kanban_record_bottom mt-2 d-flex justify-content-between align-items-center">
+                                    <field name="prioridad" widget="label_selection" options="{'classes': {'baja': 'info', 'media': 'warning', 'alta': 'danger', 'critica': 'danger'}}"/>
+                                    <field name="responsable_id" widget="many2one_avatar_user"/>
+                                </div>
+                            </div>
+                        </div>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+
+    <!-- Form View -->
+    <record id="pv_ticket_view_form" model="ir.ui.view">
+        <field name="name">pv.ticket.view.form</field>
+        <field name="model">pv.ticket</field>
+        <field name="arch" type="xml">
+            <form string="Ticket de Reclamo">
+                <header>
+                    <button name="action_enviar_ticket" string="Enviar Ticket" type="object" class="oe_highlight" invisible="estado != 'borrador'"/>
+                    <button name="action_tomar_ticket" string="Tomar Ticket" type="object" class="oe_highlight" invisible="estado != 'abierto'" groups="posventa.group_pv_staff"/>
+                    <button name="action_aceptar_ticket" string="Aceptar Reclamo" type="object" class="oe_highlight" invisible="estado != 'en_proceso'" groups="posventa.group_pv_staff"/>
+                    <button name="action_rechazar_ticket" string="Rechazar Reclamo" type="object" class="btn-danger" invisible="estado != 'en_proceso'" groups="posventa.group_pv_staff"/>
+                    <button name="action_cerrar_ticket" string="Cerrar Ticket" type="object" class="oe_highlight" invisible="estado != 'aceptado'" groups="posventa.group_pv_staff"/>
+                    <field name="estado" widget="statusbar" statusbar_visible="abierto,en_proceso,aceptado,cerrado"/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_medidas" type="object" class="oe_stat_button" icon="fa-tasks">
+                            <field name="medida_count" widget="statinfo" string="Medidas"/>
+                        </button>
+                    </div>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name" readonly="1"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group string="Datos de Máquina">
+                            <field name="tipo_ticket" readonly="estado != 'borrador'"/>
+                            <field name="maquina_id" readonly="estado not in ('borrador', 'abierto')" domain="[('estado', '!=', 'liberada')]"/>
+                            <field name="of"/>
+                            <field name="tipo_maquina"/>
+                            <field name="cliente_id"/>
+                            <field name="concesionario_id"/>
+                        </group>
+                        <group string="Operador e Información General">
+                            <field name="operador_id" readonly="estado not in ('borrador', 'abierto', 'en_proceso')"/>
+                            <field name="prioridad" readonly="estado not in ('borrador', 'abierto', 'en_proceso')"/>
+                            <field name="responsable_id" readonly="1"/>
+                            <field name="multimedia_url" widget="url" placeholder="https://drive.google.com/drive/folders/..."/>
+                        </group>
+                    </group>
+                    <group string="Detalle del Desvío">
+                        <group>
+                            <field name="sistema_id" required="1" readonly="estado not in ('borrador', 'abierto', 'en_proceso')"/>
+                            <field name="subsistema_id" required="1" readonly="estado not in ('borrador', 'abierto', 'en_proceso')"/>
+                            <field name="problema_id" readonly="estado not in ('borrador', 'abierto', 'en_proceso')"/>
+                        </group>
+                        <group>
+                            <field name="ubicacion_actual"/>
+                            <field name="hectareas"/>
+                        </group>
+                    </group>
+                    <group string="Información Dinámica del Subsistema" invisible="not campo_extra_ids">
+                        <field name="campo_extra_ids" nolabel="1" readonly="estado not in ('borrador', 'abierto', 'en_proceso')">
+                            <list editable="bottom" create="false" delete="false">
+                                <field name="campo_id" readonly="1" force_save="1"/>
+                                <field name="campo_nombre" readonly="1"/>
+                                <field name="valor"/>
+                            </list>
+                        </field>
+                    </group>
+                    <group string="Detalles del Reclamo">
+                        <field name="placeholder_descripcion" invisible="1"/>
+                        <field name="descripcion" required="1" readonly="estado not in ('borrador', 'abierto', 'en_proceso')" placeholder="Describa brevemente el problema. Utilice la guía de descripción si está disponible."/>
+                        <field name="acciones_realizadas" readonly="estado not in ('borrador', 'abierto', 'en_proceso')" placeholder="Indique qué acciones de contención o reparación provisoria ha realizado."/>
+                        <field name="motivo_rechazo" invisible="estado != 'rechazado' and not motivo_rechazo" required="estado == 'en_proceso'" readonly="estado != 'en_proceso'"/>
+                    </group>
+                    <notebook>
+                        <page string="Datos SAP (IT / PV)" name="sap" groups="posventa.group_pv_staff">
+                            <group>
+                                <group>
+                                    <field name="sap_numero_aviso" readonly="estado not in ('aceptado', 'en_proceso')"/>
+                                    <field name="sap_numero_orden" readonly="estado not in ('aceptado', 'en_proceso')"/>
+                                </group>
+                                <group>
+                                    <field name="sap_centro" readonly="estado not in ('aceptado', 'en_proceso')"/>
+                                    <field name="sap_material" readonly="estado not in ('aceptado', 'en_proceso')"/>
+                                </group>
+                            </group>
+                            <field name="sap_notas" placeholder="Notas internas para SAP..."/>
+                        </page>
+                        
+                        <page string="Tiempos y KPIs" name="kpis">
+                            <group>
+                                <group string="Fechas Clave">
+                                    <field name="fecha_creacion"/>
+                                    <field name="fecha_primera_atencion"/>
+                                    <field name="fecha_solucion"/>
+                                    <field name="fecha_cierre"/>
+                                </group>
+                                <group string="Indicadores (Horas)">
+                                    <field name="t1_horas" string="T1 - Primera Atención"/>
+                                    <field name="t2_horas" string="T2 - Solución"/>
+                                    <field name="t3_horas" string="T3 - Solución Definitiva (Interno)" groups="posventa.group_pv_staff"/>
+                                </group>
+                            </group>
+                        </page>
+
+                        <page string="Medidas y Seguimiento" name="medidas">
+                            <field name="medida_ids" mode="list">
+                                <list editable="bottom">
+                                    <field name="name"/>
+                                    <field name="tipo"/>
+                                    <field name="responsable_id"/>
+                                    <field name="fecha_vencimiento"/>
+                                    <field name="estado" widget="badge"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook> 
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <!-- Search View -->
+    <record id="pv_ticket_view_search" model="ir.ui.view">
+        <field name="name">pv.ticket.view.search</field>
+        <field name="model">pv.ticket</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <field name="maquina_id"/>
+                <field name="concesionario_id"/>
+                <field name="sistema_id"/>
+                <field name="subsistema_id"/>
+                <field name="responsable_id"/>
+                <filter string="Abiertos" name="state_abierto" domain="[('estado', '=', 'abierto')]"/>
+                <filter string="En Proceso" name="state_en_proceso" domain="[('estado', '=', 'en_proceso')]"/>
+                <filter string="Aceptados" name="state_aceptado" domain="[('estado', '=', 'aceptado')]"/>
+                <filter string="Cerrados" name="state_cerrado" domain="[('estado', '=', 'cerrado')]"/>
+                <separator/>
+                <filter string="Prioridad Alta/Crítica" name="priority_high" domain="[('prioridad', 'in', ('alta', 'critica'))]"/>
+                <filter string="Medidas Vencidas" name="medidas_vencidas" domain="[('medidas_vencidas_count', '>', 0)]"/>
+                <filter string="Concesionario" name="group_concesionario" context="{'group_by': 'concesionario_id'}"/>
+                <filter string="Sistema" name="group_sistema" context="{'group_by': 'sistema_id'}"/>
+                <filter string="Estado" name="group_estado" context="{'group_by': 'estado'}"/>
+                <filter string="Responsable" name="group_responsable" context="{'group_by': 'responsable_id'}"/>
+            </search>
+        </field>
+    </record>
+
+    <!-- Action -->
+    <record id="action_pv_ticket" model="ir.actions.act_window">
+        <field name="name">Tickets de Reclamo</field>
+        <field name="res_model">pv.ticket</field>
+        <field name="view_mode">kanban,list,form</field>
+        <field name="search_view_id" ref="pv_ticket_view_search"/>
+    </record>
+</odoo>
+

@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="action_report_pv_ticket" model="ir.actions.report">
+        <field name="name">Expediente de Ticket</field>
+        <field name="model">pv.ticket</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">posventa.report_pv_ticket_template</field>
+        <field name="report_file">posventa.report_pv_ticket_template</field>
+        <field name="print_report_name">'Ticket_%s' % (object.name)</field>
+        <field name="binding_model_id" ref="model_pv_ticket"/>
+        <field name="binding_type">report</field>
+    </record>
+
+    <template id="report_pv_ticket_template">
+        <t t-call="web.html_container">
+            <t t-foreach="docs" t-as="o">
+                <t t-call="web.external_layout">
+                    <div class="page" style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #333;">
+                        <div class="row mb-4">
+                            <div class="col-6">
+                                <h2>Expediente de Ticket</h2>
+                                <h3 class="text-primary" t-field="o.name"/>
+                            </div>
+                            <div class="col-6 text-end">
+                                <strong>Fecha de Emisión:</strong> <span t-esc="context_today().strftime('%d/%m/%Y')"/><br/>
+                                <strong>Estado:</strong> <span t-field="o.estado"/><br/>
+                                <strong>Prioridad:</strong> <span t-field="o.prioridad"/>
+                            </div>
+                        </div>
+
+                        <div class="row mb-4">
+                            <div class="col-6">
+                                <h4 style="border-bottom: 2px solid #007A87; padding-bottom: 5px;">Detalles de la Máquina</h4>
+                                <strong>Máquina:</strong> <span t-field="o.maquina_id.name"/><br/>
+                                <strong>Orden de Fabricación (OF):</strong> <span t-field="o.of"/><br/>
+                                <strong>Tipo de Máquina:</strong> <span t-field="o.tipo_maquina"/><br/>
+                                <strong>Cliente Final:</strong> <span t-field="o.cliente_id.name"/><br/>
+                                <strong>Concesionario:</strong> <span t-field="o.concesionario_id.name"/>
+                            </div>
+                            <div class="col-6">
+                                <h4 style="border-bottom: 2px solid #007A87; padding-bottom: 5px;">Clasificación de Falla</h4>
+                                <strong>Sistema:</strong> <span t-field="o.sistema_id.name"/><br/>
+                                <strong>Subsistema:</strong> <span t-field="o.subsistema_id.name"/><br/>
+                                <strong>Problema Catalogado:</strong> <span t-field="o.problema_id.name"/><br/>
+                                <strong>Ubicación Actual:</strong> <span t-field="o.ubicacion_actual"/><br/>
+                                <strong>Hectáreas de Trabajo:</strong> <span t-field="o.hectareas"/>
+                            </div>
+                        </div>
+
+                        <div class="mb-4" t-if="o.campo_extra_ids">
+                            <h4 style="border-bottom: 2px solid #007A87; padding-bottom: 5px;">Información Adicional del Subsistema</h4>
+                            <table class="table table-sm table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Parámetro</th>
+                                        <th>Valor Reportado</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr t-foreach="o.campo_extra_ids" t-as="c">
+                                        <td><span t-field="c.campo_nombre"/></td>
+                                        <td><span t-field="c.valor"/></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="mb-4">
+                            <h4 style="border-bottom: 2px solid #007A87; padding-bottom: 5px;">Descripción del Concesionario</h4>
+                            <div style="background-color: #f9f9f9; padding: 15px; border-radius: 5px; border-left: 5px solid #007A87;">
+                                <p t-field="o.descripcion"/>
+                            </div>
+                        </div>
+
+                        <div class="mb-4" t-if="o.acciones_realizadas">
+                            <h4 style="border-bottom: 2px solid #007A87; padding-bottom: 5px;">Acciones Realizadas en Campo</h4>
+                            <div style="background-color: #f9f9f9; padding: 15px; border-radius: 5px; border-left: 5px solid #ffc107;">
+                                <p t-field="o.acciones_realizadas"/>
+                            </div>
+                        </div>
+
+                        <div class="mb-4" t-if="o.medida_ids">
+                            <h4 style="border-bottom: 2px solid #007A87; padding-bottom: 5px;">Plan de Acción y Medidas de Seguimiento</h4>
+                            <table class="table table-sm table-bordered">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Medida</th>
+                                        <th>Tipo</th>
+                                        <th>Responsable</th>
+                                        <th>Vencimiento</th>
+                                        <th>Estado</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr t-foreach="o.medida_ids" t-as="m">
+                                        <td><span t-field="m.name"/></td>
+                                        <td><span t-field="m.tipo"/></td>
+                                        <td><span t-field="m.responsable_id.name"/></td>
+                                        <td><span t-field="m.fecha_vencimiento"/></td>
+                                        <td><span t-field="m.estado"/></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="row mt-5" t-if="o.estado in ('aceptado', 'cerrado')" groups="posventa.group_pv_staff">
+                            <div class="col-12">
+                                <h4 style="border-bottom: 2px solid #007A87; padding-bottom: 5px;">Información de Cierre y SAP (Crucianelli Interno)</h4>
+                                <strong>Aviso SAP Nro:</strong> <span t-field="o.sap_numero_aviso"/> | 
+                                <strong>Orden SAP Nro:</strong> <span t-field="o.sap_numero_orden"/> | 
+                                <strong>Centro:</strong> <span t-field="o.sap_centro"/> | 
+                                <strong>Material:</strong> <span t-field="o.sap_material"/><br/>
+                                <strong>Tiempo de Primera Atención (T1):</strong> <span t-field="o.t1_horas"/> hs<br/>
+                                <strong>Tiempo de Solución (T2):</strong> <span t-field="o.t2_horas"/> hs<br/>
+                                <strong>Tiempo de Cierre Definitivo (T3):</strong> <span t-field="o.t3_horas"/> hs
+                            </div>
+                        </div>
+                    </div>
+                </t>
+            </t>
+        </t>
+    </template>
+</odoo>

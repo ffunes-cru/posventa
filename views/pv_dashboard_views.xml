@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="pv_ticket_view_graph" model="ir.ui.view">
+        <field name="name">pv.ticket.view.graph</field>
+        <field name="model">pv.ticket</field>
+        <field name="arch" type="xml">
+            <graph string="Métricas de Tickets" type="bar" sample="1">
+                <field name="sistema_id" type="row"/>
+                <field name="t2_horas" type="measure" operator="avg" string="Tiempo de Solución Promedio (Horas)"/>
+            </graph>
+        </field>
+    </record>
+
+    <record id="pv_ticket_view_pivot" model="ir.ui.view">
+        <field name="name">pv.ticket.view.pivot</field>
+        <field name="model">pv.ticket</field>
+        <field name="arch" type="xml">
+            <pivot string="Análisis de Tickets" sample="1">
+                <field name="concesionario_id" type="row"/>
+                <field name="estado" type="col"/>
+                <field name="t1_horas" type="measure" operator="avg"/>
+                <field name="t2_horas" type="measure" operator="avg"/>
+                <field name="t3_horas" type="measure" operator="avg"/>
+            </pivot>
+        </field>
+    </record>
+
+    <record id="action_pv_dashboard" model="ir.actions.act_window">
+        <field name="name">Tablero de Control</field>
+        <field name="res_model">pv.ticket</field>
+        <field name="view_mode">graph,pivot</field>
+        <field name="view_ids" eval="[(5, 0, 0),
+            (0, 0, {'view_mode': 'graph', 'view_id': ref('pv_ticket_view_graph')}),
+            (0, 0, {'view_mode': 'pivot', 'view_id': ref('pv_ticket_view_pivot')})
+        ]"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                El tablero está listo.
+            </p>
+            <p>
+                Aquí verás los tiempos de respuesta automáticos basados en tus campos T1, T2 y T3.
+            </p>
+        </field>
+    </record>
+</odoo>

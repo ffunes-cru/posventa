@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Tree View -->
+    <record id="pv_maquina_view_tree" model="ir.ui.view">
+        <field name="name">pv.maquina.view.tree</field>
+        <field name="model">pv.maquina</field>
+        <field name="arch" type="xml">
+            <list string="Máquinas">
+                <field name="of"/>
+                <field name="tipo"/>
+                <field name="concesionario_id"/>
+                <field name="cliente_id"/>
+                <field name="ciudad"/>
+                <field name="provincia_id"/>
+                <field name="estado" widget="badge" decoration-success="estado == 'vendida'" decoration-warning="estado == 'stock'" decoration-info="estado == 'liberada'"/>
+                <field name="tiene_fru" string="FRU" widget="boolean"/>
+                <field name="tiene_cpm" string="CPM" widget="boolean"/>
+                <field name="tiene_feu" string="FEU" widget="boolean"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Form View -->
+    <record id="pv_maquina_view_form" model="ir.ui.view">
+        <field name="name">pv.maquina.view.form</field>
+        <field name="model">pv.maquina</field>
+        <field name="arch" type="xml">
+            <form string="Máquina Posventa">
+                <header>
+                    <button name="action_marcar_stock" string="Marcar como Stock" type="object" class="oe_highlight" invisible="estado == 'stock'"/>
+                    <button name="action_marcar_vendida" string="Marcar como Vendida" type="object" class="oe_highlight" invisible="estado == 'vendida'"/>
+                    <field name="estado" widget="statusbar" statusbar_visible="liberada,stock,vendida"/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_certificados" type="object" class="oe_stat_button" icon="fa-file-text-o">
+                            <field name="certificado_count" widget="statinfo" string="Certificados"/>
+                        </button>
+                        <button name="action_view_tickets" type="object" class="oe_stat_button" icon="fa-ticket">
+                            <field name="ticket_count" widget="statinfo" string="Tickets"/>
+                        </button>
+                    </div>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name" readonly="1"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group string="Datos de Fábrica">
+                            <field name="of"/>
+                            <field name="tipo"/>
+                        </group>
+                        <group string="Asignación y Ubicación">
+                            <field name="concesionario_id"/>
+                            <field name="cliente_id"/>
+                            <field name="ciudad"/>
+                            <field name="provincia_id"/>
+                            <field name="fecha_venta" invisible="estado != 'vendida'"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Certificados" name="certificados">
+                            <field name="certificado_ids" mode="list" readonly="1">
+                                <list>
+                                    <field name="tipo"/>
+                                    <field name="fecha"/>
+                                    <field name="archivo_nombre"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Historial de Tickets" name="tickets">
+                            <field name="ticket_ids" mode="list" readonly="1">
+                                <list>
+                                    <field name="name"/>
+                                    <field name="tipo_ticket"/>
+                                    <field name="fecha_creacion"/>
+                                    <field name="sistema_id"/>
+                                    <field name="estado" widget="badge"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <!-- Search View -->
+    <record id="pv_maquina_view_search" model="ir.ui.view">
+        <field name="name">pv.maquina.view.search</field>
+        <field name="model">pv.maquina</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="of"/>
+                <field name="tipo"/>
+                <field name="concesionario_id"/>
+                <field name="cliente_id"/>
+                <filter string="Liberada" name="state_liberada" domain="[('estado', '=', 'liberada')]"/>
+                <filter string="En Stock" name="state_stock" domain="[('estado', '=', 'stock')]"/>
+                <filter string="Vendida" name="state_vendida" domain="[('estado', '=', 'vendida')]"/>
+                <separator/>
+                <filter string="Sin CPM" name="no_cpm" domain="[('tiene_cpm', '=', False)]"/>
+                <filter string="Con CPM" name="has_cpm" domain="[('tiene_cpm', '=', True)]"/>
+                <filter string="Concesionario" name="group_concesionario" context="{'group_by': 'concesionario_id'}"/>
+                <filter string="Tipo de Máquina" name="group_tipo" context="{'group_by': 'tipo'}"/>
+                <filter string="Estado" name="group_estado" context="{'group_by': 'estado'}"/>
+            </search>
+        </field>
+    </record>
+
+    <!-- Action -->
+    <record id="action_pv_maquina" model="ir.actions.act_window">
+        <field name="name">Máquinas</field>
+        <field name="res_model">pv.maquina</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="pv_maquina_view_search"/>
+    </record>
+</odoo>

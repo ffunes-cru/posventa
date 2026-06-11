@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!-- ========================================= -->
+        <!-- 15 Sistemas involucrados                  -->
+        <!-- ========================================= -->
+        <record id="sistema_chasis" model="pv.sistema">
+            <field name="name">Chasis</field>
+            <field name="codigo">SIS-01</field>
+            <field name="sequence">1</field>
+        </record>
+        <record id="sistema_lanza" model="pv.sistema">
+            <field name="name">Lanza</field>
+            <field name="codigo">SIS-02</field>
+            <field name="sequence">2</field>
+        </record>
+        <record id="sistema_sustentacion" model="pv.sistema">
+            <field name="name">Sistema de sustentación</field>
+            <field name="codigo">SIS-03</field>
+            <field name="sequence">3</field>
+        </record>
+        <record id="sistema_hidraulico" model="pv.sistema">
+            <field name="name">Equipo hidráulico y neumático</field>
+            <field name="codigo">SIS-04</field>
+            <field name="sequence">4</field>
+        </record>
+        <record id="sistema_tolvas" model="pv.sistema">
+            <field name="name">Tolvas</field>
+            <field name="codigo">SIS-05</field>
+            <field name="sequence">5</field>
+        </record>
+        <record id="sistema_mando_siembra" model="pv.sistema">
+            <field name="name">Mando de siembra y fertilización</field>
+            <field name="codigo">SIS-06</field>
+            <field name="sequence">6</field>
+        </record>
+        <record id="sistema_dosificador_semillas" model="pv.sistema">
+            <field name="name">Dosificador de semillas</field>
+            <field name="codigo">SIS-07</field>
+            <field name="sequence">7</field>
+        </record>
+        <record id="sistema_dosificador_fertilizante" model="pv.sistema">
+            <field name="name">Dosificador de fertilizante</field>
+            <field name="codigo">SIS-08</field>
+            <field name="sequence">8</field>
+        </record>
+        <record id="sistema_marcadores" model="pv.sistema">
+            <field name="name">Marcadores</field>
+            <field name="codigo">SIS-09</field>
+            <field name="sequence">9</field>
+        </record>
+        <record id="sistema_cuerpo_siembra" model="pv.sistema">
+            <field name="name">Cuerpo de siembra</field>
+            <field name="codigo">SIS-10</field>
+            <field name="sequence">10</field>
+        </record>
+        <record id="sistema_cuchillas" model="pv.sistema">
+            <field name="name">Cuchillas, discos y accesorios</field>
+            <field name="codigo">SIS-11</field>
+            <field name="sequence">11</field>
+        </record>
+        <record id="sistema_transporte" model="pv.sistema">
+            <field name="name">Transporte de semillas y fertilizante</field>
+            <field name="codigo">SIS-12</field>
+            <field name="sequence">12</field>
+        </record>
+        <record id="sistema_aspiracion" model="pv.sistema">
+            <field name="name">Sistema de aspiración</field>
+            <field name="codigo">SIS-13</field>
+            <field name="sequence">13</field>
+        </record>
+        <record id="sistema_precision_planting" model="pv.sistema">
+            <field name="name">Precision Planting</field>
+            <field name="codigo">SIS-14</field>
+            <field name="sequence">14</field>
+        </record>
+        <record id="sistema_leaf" model="pv.sistema">
+            <field name="name">Leaf</field>
+            <field name="codigo">SIS-15</field>
+            <field name="sequence">15</field>
+        </record>
+    </data>
+</odoo>
