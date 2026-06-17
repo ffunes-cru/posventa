@@ -11,11 +11,7 @@ TIPO_CERTIFICADO = [
     ('recall', 'Recall'),
 ]
 
-TIPO_RECLAMO_PREVIO = [
-    ('rotura', 'Rotura'),
-    ('faltante', 'Faltante'),
-    ('otro', 'Otro'),
-]
+
 
 
 class PvCertificado(models.Model):
@@ -23,6 +19,7 @@ class PvCertificado(models.Model):
     _description = 'Certificado de Máquina'
     _inherit = ['mail.thread']
     _order = 'fecha desc, id desc'
+
 
     name = fields.Char(
         string='Referencia',
@@ -51,34 +48,17 @@ class PvCertificado(models.Model):
     archivo = fields.Binary(
         string='Archivo PDF',
         attachment=True,
+        required=True,
     )
     archivo_nombre = fields.Char(
         string='Nombre de archivo',
+        required=True,
     )
     notas = fields.Text(
         string='Observaciones',
     )
 
-    # --- Reclamo previo a puesta en marcha (solo FRU) ---
-    tiene_reclamo_previo = fields.Boolean(
-        string='¿Tiene reclamo previo a la puesta en marcha?',
-        help='Marcar si al recepcionar la unidad se detecta un desvío',
-    )
-    reclamo_previo_tipo = fields.Selection(
-        TIPO_RECLAMO_PREVIO,
-        string='Tipo de desvío',
-    )
-    reclamo_previo_comentario = fields.Text(
-        string='Detalle del desvío',
-    )
-    reclamo_previo_multimedia = fields.Char(
-        string='Multimedia (link Google Drive)',
-    )
-    ticket_previo_id = fields.Many2one(
-        'pv.ticket',
-        string='Ticket generado',
-        readonly=True,
-    )
+
 
     # --- Related fields ---
     concesionario_id = fields.Many2one(
@@ -103,47 +83,20 @@ class PvCertificado(models.Model):
                     'en estado VENDIDA. Máquina: %s', rec.maquina_id.name
                 ))
 
-    @api.constrains('tiene_reclamo_previo', 'reclamo_previo_tipo', 'tipo')
-    def _check_reclamo_previo_fields(self):
+    @api.constrains('maquina_id', 'tipo')
+    def _check_unique_tipo_maquina(self):
         for rec in self:
-            if rec.tiene_reclamo_previo and rec.tipo == 'fru':
-                if not rec.reclamo_previo_tipo:
-                    raise ValidationError(_(
-                        'Debe seleccionar el tipo de desvío del reclamo previo.'
-                    ))
+            domain = [('maquina_id', '=', rec.maquina_id.id), ('tipo', '=', rec.tipo), ('id', '!=', rec.id)]
+            if self.search_count(domain) > 0:
+                tipo_label = dict(TIPO_CERTIFICADO).get(rec.tipo, rec.tipo)
+                raise ValidationError(_('Ya existe un certificado de tipo "%s" para esta máquina.', tipo_label))
 
-    def action_crear_ticket_previo(self):
-        """Create a pre-PM ticket from FRU with claim."""
-        self.ensure_one()
-        if self.tipo != 'fru':
-            raise UserError(_('Solo se puede crear un ticket previo desde un FRU.'))
-        if not self.tiene_reclamo_previo:
-            raise UserError(_('No se marcó reclamo previo.'))
-        if self.ticket_previo_id:
-            raise UserError(_('Ya existe un ticket previo para este certificado.'))
+    @api.constrains('archivo', 'archivo_nombre')
+    def _check_archivo_pdf(self):
+        for rec in self:
+            if not rec.archivo:
+                raise ValidationError(_('El archivo adjunto es obligatorio.'))
+            if rec.archivo_nombre and not rec.archivo_nombre.lower().endswith('.pdf'):
+                raise ValidationError(_('El archivo debe tener extensión .pdf y este es: %s', rec.archivo_nombre))
 
-        ticket = self.env['pv.ticket'].create({
-            'maquina_id': self.maquina_id.id,
-            'tipo_ticket': 'pre_pm',
-            'descripcion': self.reclamo_previo_comentario or '',
-            'multimedia_url': self.reclamo_previo_multimedia or '',
-            'prioridad': 'media',
-        })
-        self.ticket_previo_id = ticket.id
 
-        return {
-            'type': 'ir.actions.act_window',
-            'name': _('Ticket Previo'),
-            'res_model': 'pv.ticket',
-            'view_mode': 'form',
-            'res_id': ticket.id,
-        }
-
-    @api.model_create_multi
-    def create(self, vals_list):
-        records = super().create(vals_list)
-        # Auto-create pre-PM ticket if FRU with reclamo previo
-        for rec in records:
-            if rec.tipo == 'fru' and rec.tiene_reclamo_previo:
-                rec.action_crear_ticket_previo()
-        return records

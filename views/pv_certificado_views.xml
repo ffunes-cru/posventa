@@ -11,8 +11,6 @@
                 <field name="maquina_id"/>
                 <field name="fecha"/>
                 <field name="concesionario_id"/>
-                <field name="tiene_reclamo_previo" string="Reclamo Previo" widget="boolean"/>
-                <field name="ticket_previo_id" string="Ticket Generado"/>
             </list>
         </field>
     </record>
@@ -36,13 +34,7 @@
                             <field name="concesionario_id" readonly="1" force_save="1"/>
                         </group>
                     </group>
-                    <group string="Reclamo Pre-Puesta en Marcha" invisible="tipo != 'fru'">
-                        <field name="tiene_reclamo_previo"/>
-                        <field name="reclamo_previo_tipo" invisible="not tiene_reclamo_previo" required="tiene_reclamo_previo and tipo == 'fru'"/>
-                        <field name="reclamo_previo_comentario" invisible="not tiene_reclamo_previo"/>
-                        <field name="reclamo_previo_multimedia" invisible="not tiene_reclamo_previo" placeholder="https://drive.google.com/drive/folders/..." widget="url"/>
-                        <field name="ticket_previo_id" invisible="not ticket_previo_id"/>
-                    </group>
+
                     <notebook>
                         <page string="Observaciones" name="observaciones">
                             <field name="notas" placeholder="Ingrese comentarios adicionales sobre este certificado..."/>

@@ -195,3 +195,13 @@ class PvMaquina(models.Model):
             'target': 'new',
             'context': {'form_view_ref': 'posventa.pv_maquina_transfer_form'},
         }
+        
+    def action_abrir_wizard_transferencia(self):
+        return {
+            'name': 'Trasladar Máquina a otro Concesionario',
+            'type': 'ir.actions.act_window',
+            'res_model': 'pv.transferir.maquina.wizard',
+            'view_mode': 'form',
+            'target': 'new', # Abre el formato Pop-up
+            'context': {'default_maquina_id': self.id}
+        }

@@ -28,7 +28,7 @@
         <field name="name">pv.ticket.view.kanban</field>
         <field name="model">pv.ticket</field>
         <field name="arch" type="xml">
-            <kanban default_group_by="estado" class="o_kanban_small_column" quick_create="false">
+            <kanban default_group_by="estado" class="o_kanban_small_column" quick_create="false" records_draggable="false">
                 <field name="name"/>
                 <field name="maquina_id"/>
                 <field name="sistema_id"/>
@@ -65,7 +65,7 @@
     </record>
 
     <!-- Form View -->
-    <record id="pv_ticket_view_form" model="ir.ui.view">
+<record id="pv_ticket_view_form" model="ir.ui.view">
         <field name="name">pv.ticket.view.form</field>
         <field name="model">pv.ticket</field>
         <field name="arch" type="xml">
@@ -76,6 +76,12 @@
                     <button name="action_aceptar_ticket" string="Aceptar Reclamo" type="object" class="oe_highlight" invisible="estado != 'en_proceso'" groups="posventa.group_pv_staff"/>
                     <button name="action_rechazar_ticket" string="Rechazar Reclamo" type="object" class="btn-danger" invisible="estado != 'en_proceso'" groups="posventa.group_pv_staff"/>
                     <button name="action_cerrar_ticket" string="Cerrar Ticket" type="object" class="oe_highlight" invisible="estado != 'aceptado'" groups="posventa.group_pv_staff"/>
+                    
+                    <button name="action_back_to_borrador" string="Volver a Borrador" type="object" class="btn-secondary" invisible="estado != 'abierto'" groups="posventa.group_pv_admin"/>
+                    <button name="action_back_to_abierto" string="Volver a Abierto" type="object" class="btn-secondary" invisible="estado != 'en_proceso'" groups="posventa.group_pv_staff"/>
+                    <button name="action_back_to_en_proceso" string="Volver a En Proceso" type="object" class="btn-secondary" invisible="estado not in ('aceptado', 'rechazado')" groups="posventa.group_pv_staff"/>
+                    <button name="action_back_to_aceptado" string="Volver a Aceptado" type="object" class="btn-secondary" invisible="estado != 'cerrado'" groups="posventa.group_pv_admin"/>
+                    
                     <field name="estado" widget="statusbar" statusbar_visible="abierto,en_proceso,aceptado,cerrado"/>
                 </header>
                 <sheet>
@@ -91,32 +97,41 @@
                     </div>
                     <group>
                         <group string="Datos de Máquina">
-                            <field name="tipo_ticket" readonly="estado != 'borrador'"/>
-                            <field name="maquina_id" readonly="estado not in ('borrador', 'abierto')" domain="[('estado', '!=', 'liberada')]"/>
-                            <field name="of"/>
-                            <field name="tipo_maquina"/>
-                            <field name="cliente_id"/>
-                            <field name="concesionario_id"/>
+                            <field name="maquina_id" readonly="estado != 'borrador'" domain="[('estado', '!=', 'liberada')]"/>
+                            <field name="tipo_ticket" readonly="1" force_save="1"/>
+                            <field name="of" readonly="estado != 'borrador'"/>
+                            <field name="tipo_maquina" readonly="1"/>
+                            <field name="cliente_id" readonly="1"/>
+                            <field name="concesionario_id" readonly="estado != 'borrador'"/>
                         </group>
                         <group string="Operador e Información General">
-                            <field name="operador_id" readonly="estado not in ('borrador', 'abierto', 'en_proceso')"/>
+                            <field name="operador_id" readonly="estado != 'borrador'"/>
                             <field name="prioridad" readonly="estado not in ('borrador', 'abierto', 'en_proceso')"/>
-                            <field name="responsable_id" readonly="1"/>
+                            <field name="responsable_id" readonly="1" groups="!posventa.group_pv_admin"/>
+                            <field name="responsable_id" groups="posventa.group_pv_admin"/>
                             <field name="multimedia_url" widget="url" placeholder="https://drive.google.com/drive/folders/..."/>
                         </group>
                     </group>
-                    <group string="Detalle del Desvío">
+                    
+                    <group string="Clasificación Post-PM" invisible="tipo_ticket == 'pre_pm'">
                         <group>
-                            <field name="sistema_id" required="1" readonly="estado not in ('borrador', 'abierto', 'en_proceso')"/>
-                            <field name="subsistema_id" required="1" readonly="estado not in ('borrador', 'abierto', 'en_proceso')"/>
-                            <field name="problema_id" readonly="estado not in ('borrador', 'abierto', 'en_proceso')"/>
+                            <field name="sistema_id" required="tipo_ticket == 'post_pm'" readonly="estado != 'borrador'"/>
+                            <field name="subsistema_id" required="tipo_ticket == 'post_pm'" readonly="estado != 'borrador'"/>
+                            <field name="problema_id" readonly="estado != 'borrador'"/>
                         </group>
                         <group>
                             <field name="ubicacion_actual"/>
                             <field name="hectareas"/>
                         </group>
                     </group>
-                    <group string="Información Dinámica del Subsistema" invisible="not campo_extra_ids">
+                    
+                    <group string="Clasificación Pre-PM" invisible="tipo_ticket == 'post_pm'">
+                        <group>
+                            <field name="desvio_tipo" required="tipo_ticket == 'pre_pm'" readonly="estado != 'borrador'"/>
+                        </group>
+                    </group>
+                    
+                    <group string="Información Dinámica del Subsistema" invisible="not campo_extra_ids or tipo_ticket == 'pre_pm'">
                         <field name="campo_extra_ids" nolabel="1" readonly="estado not in ('borrador', 'abierto', 'en_proceso')">
                             <list editable="bottom" create="false" delete="false">
                                 <field name="campo_id" readonly="1" force_save="1"/>
@@ -127,9 +142,9 @@
                     </group>
                     <group string="Detalles del Reclamo">
                         <field name="placeholder_descripcion" invisible="1"/>
-                        <field name="descripcion" required="1" readonly="estado not in ('borrador', 'abierto', 'en_proceso')" placeholder="Describa brevemente el problema. Utilice la guía de descripción si está disponible."/>
-                        <field name="acciones_realizadas" readonly="estado not in ('borrador', 'abierto', 'en_proceso')" placeholder="Indique qué acciones de contención o reparación provisoria ha realizado."/>
-                        <field name="motivo_rechazo" invisible="estado != 'rechazado' and not motivo_rechazo" required="estado == 'en_proceso'" readonly="estado != 'en_proceso'"/>
+                        <field name="descripcion" required="1" readonly="estado != 'borrador'" placeholder="Describa brevemente el problema..."/>
+                        <field name="acciones_realizadas" invisible="tipo_ticket == 'pre_pm'" readonly="estado not in ('borrador', 'abierto', 'en_proceso')" placeholder="Indique qué acciones..."/>
+                        <field name="motivo_rechazo" invisible="estado not in ('en_proceso', 'rechazado')" readonly="estado != 'en_proceso'"/>
                     </group>
                     <notebook>
                         <page string="Datos SAP (IT / PV)" name="sap" groups="posventa.group_pv_staff">

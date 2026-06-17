@@ -42,8 +42,13 @@ class PvTicket(models.Model):
     tipo_ticket = fields.Selection(
         TIPO_TICKET,
         string='Tipo de Ticket',
-        required=True,
-        default='post_pm',
+        compute='_compute_tipo_ticket',
+        store=True,
+        tracking=True,
+    )
+    desvio_tipo = fields.Selection(
+        [('rotura', 'Rotura'), ('faltante', 'Faltante'), ('otro', 'Otro')],
+        string='Tipo de desvío',
         tracking=True,
     )
 
@@ -264,6 +269,25 @@ class PvTicket(models.Model):
                 delta = rec.fecha_cierre - rec.fecha_creacion
                 rec.t3_horas = round(delta.total_seconds() / 3600, 2)
 
+    @api.depends('maquina_id', 'maquina_id.tiene_cpm')
+    def _compute_tipo_ticket(self):
+        for rec in self:
+            if rec.maquina_id:
+                rec.tipo_ticket = 'post_pm' if rec.maquina_id.tiene_cpm else 'pre_pm'
+            else:
+                rec.tipo_ticket = 'pre_pm'
+
+    @api.constrains('tipo_ticket', 'maquina_id')
+    def _check_tipo_ticket_coherence(self):
+        for rec in self:
+            if rec.maquina_id:
+                expected = 'post_pm' if rec.maquina_id.tiene_cpm else 'pre_pm'
+                if rec.tipo_ticket != expected:
+                    raise ValidationError(_(
+                        'El tipo de ticket (%s) no coincide con el estado de la máquina. '
+                        'Debería ser %s.', rec.tipo_ticket, expected
+                    ))
+
     @api.model_create_multi
     def create(self, vals_list):
         for vals in vals_list:
@@ -271,21 +295,7 @@ class PvTicket(models.Model):
                 vals['name'] = self.env['ir.sequence'].next_by_code('pv.ticket') or _('Nuevo')
         return super().create(vals_list)
 
-    @api.constrains('tipo_ticket', 'maquina_id')
-    def _check_ticket_requirements(self):
-        for rec in self:
-            if rec.estado == 'borrador':
-                continue
 
-            if rec.tipo_ticket == 'post_pm' and rec.maquina_id:
-                if not rec.maquina_id.tiene_cpm:
-                    raise ValidationError(_(
-                        'No se puede crear un ticket Post Puesta en Marcha '
-                        'sin que la máquina tenga un CPM cargado.\n'
-                        'Máquina: %s\n\n'
-                        'Debe cargar primero el Certificado de Puesta en Marcha (CPM).',
-                        rec.maquina_id.name
-                    ))
 
     @api.onchange('sistema_id')
     def _onchange_sistema_id(self):
@@ -320,7 +330,9 @@ class PvTicket(models.Model):
             rec.message_post(
                 body=_('Ticket enviado a revisión técnica por el concesionario.'),
                 message_type='notification',
+                subtype_xmlid='mail.mt_note',
             )
+            rec._send_notification_to_staff()
 
     # --- State transitions ---
     def action_tomar_ticket(self):
@@ -336,6 +348,7 @@ class PvTicket(models.Model):
             rec.message_post(
                 body=_('Ticket tomado por %s', self.env.user.name),
                 message_type='notification',
+                subtype_xmlid='mail.mt_note',
             )
 
     def action_aceptar_ticket(self):
@@ -351,6 +364,7 @@ class PvTicket(models.Model):
         self.message_post(
             body=_('Reclamo aceptado y validado'),
             message_type='notification',
+            subtype_xmlid='mail.mt_note',
         )
         
         template = self.env.ref('posventa.mail_template_ticket_aceptado', raise_if_not_found=False)
@@ -398,6 +412,7 @@ class PvTicket(models.Model):
         self.message_post(
             body=_('Reclamo rechazado. Motivo: %s', self.motivo_rechazo),
             message_type='notification',
+            subtype_xmlid='mail.mt_note',
         )
 
         template = self.env.ref('posventa.mail_template_ticket_rechazado', raise_if_not_found=False)
@@ -440,6 +455,63 @@ class PvTicket(models.Model):
             rec.message_post(
                 body=_('Ticket cerrado. Expediente completo.'),
                 message_type='notification',
+                subtype_xmlid='mail.mt_note',
+            )
+
+    # --- rollback actions for administrator ---
+    def action_back_to_borrador(self):
+        for rec in self:
+            rec.write({'estado': 'borrador'})
+            rec.message_post(
+                body=_('Ticket devuelto a Borrador por el Administrador.'),
+                message_type='notification',
+                subtype_xmlid='mail.mt_note',
+            )
+
+    def action_back_to_abierto(self):
+        for rec in self:
+            rec.write({'estado': 'abierto'})
+            rec.write({'responsable_id': False})
+            rec.message_post(
+                body=_('Ticket devuelto a Abierto por el Administrador.'),
+                message_type='notification',
+                subtype_xmlid='mail.mt_note',
+            )
+
+    def action_back_to_en_proceso(self):
+        for rec in self:
+            rec.write({'estado': 'en_proceso'})
+            rec.message_post(
+                body=_('Ticket devuelto a En Proceso por el Administrador.'),
+                message_type='notification',
+                subtype_xmlid='mail.mt_note',
+            )
+
+    def action_back_to_aceptado(self):
+        for rec in self:
+            rec.write({'estado': 'aceptado'})
+            rec.message_post(
+                body=_('Ticket devuelto a Aceptado por el Administrador.'),
+                message_type='notification',
+                subtype_xmlid='mail.mt_note',
+            )
+
+    def _send_notification_to_staff(self):
+        self.ensure_one()
+        template = self.env.ref('posventa.mail_template_ticket_creado', raise_if_not_found=False)
+        if not template:
+            return
+        
+        staff_group = self.env.ref('posventa.group_pv_staff', raise_if_not_found=False)
+        if not staff_group:
+            return
+            
+        staff_users = staff_group.all_user_ids.filtered(lambda u: u.email)
+        for user in staff_users:
+            template.send_mail(
+                self.id, 
+                force_send=True, 
+                email_values={'email_to': user.email}
             )
 
     def action_view_medidas(self):

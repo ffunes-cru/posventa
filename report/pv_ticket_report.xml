@@ -22,7 +22,7 @@
                                 <h3 class="text-primary" t-field="o.name"/>
                             </div>
                             <div class="col-6 text-end">
-                                <strong>Fecha de Emisión:</strong> <span t-esc="context_today().strftime('%d/%m/%Y')"/><br/>
+                                <strong>Fecha de Emisión:</strong> <span t-esc="datetime.date.today().strftime('%d/%m/%Y')"/><br/>
                                 <strong>Estado:</strong> <span t-field="o.estado"/><br/>
                                 <strong>Prioridad:</strong> <span t-field="o.prioridad"/>
                             </div>

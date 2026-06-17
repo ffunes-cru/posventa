@@ -86,5 +86,41 @@
             <field name="auto_delete">False</field>
         </record>
 
+        <record id="mail_template_ticket_creado" model="mail.template">
+            <field name="name">Posventa: Nuevo Ticket Creado (Staff)</field>
+            <field name="model_id" ref="model_pv_ticket"/>
+            <field name="subject">Nuevo Ticket {{ object.name }} - {{ object.concesionario_id.name }}</field>
+            <field name="email_from">"Posventa Crucianelli" &lt;wordpress@crucianelli.com&gt;</field>
+            <field name="body_html" type="html">
+                <div style="margin: 0px; padding: 0px; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+                    <p>Estimado/a Staff de Posventa,</p>
+                    <p>Se ha recibido un nuevo ticket de reclamo <strong t-out="object.name"/> enviado por el concesionario <strong t-out="object.concesionario_id.name"/>.</p>
+                    <table style="border-collapse: collapse; width: 100%; margin-top: 15px; margin-bottom: 15px;">
+                        <tr>
+                            <td style="padding: 6px; font-weight: bold; width: 150px; border-bottom: 1px solid #eee;">Máquina:</td>
+                            <td style="padding: 6px; border-bottom: 1px solid #eee;" t-out="object.maquina_id.name"/>
+                        </tr>
+                        <tr>
+                            <td style="padding: 6px; font-weight: bold; border-bottom: 1px solid #eee;">OF:</td>
+                            <td style="padding: 6px; border-bottom: 1px solid #eee;" t-out="object.of"/>
+                        </tr>
+                        <tr>
+                            <td style="padding: 6px; font-weight: bold; border-bottom: 1px solid #eee;">Tipo de Ticket:</td>
+                            <td style="padding: 6px; border-bottom: 1px solid #eee;" t-out="object.tipo_ticket == 'pre_pm' and 'Pre Puesta en Marcha' or 'Post Puesta en Marcha'"/>
+                        </tr>
+                    </table>
+                    <div style="margin: 20px 0px 20px 0px;">
+                        <a t-att-href="'%s/web#id=%s&amp;model=pv.ticket&amp;view_type=form' % (object.get_base_url(), object.id)"
+                           style="background-color: #d11c1c; padding: 10px 20px 10px 20px; text-decoration: none; color: #ffffff; border-radius: 4px; font-size: 14px; font-weight: bold; display: inline-block;">
+                            Ver Ticket
+                        </a>
+                    </div>
+                    <hr style="border: 0; border-top: 1px solid #eee; margin-top: 20px;"/>
+                    <p style="font-size: 11px; color: #777;">Este es un correo automático generado por el Sistema de Posventa Crucianelli.</p>
+                </div>
+            </field>
+            <field name="auto_delete">False</field>
+        </record>
+
     </data>
 </odoo>

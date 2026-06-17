@@ -27,8 +27,9 @@
         <field name="arch" type="xml">
             <form string="Máquina Posventa">
                 <header>
-                    <button name="action_marcar_stock" string="Marcar como Stock" type="object" class="oe_highlight" invisible="estado == 'stock'"/>
-                    <button name="action_marcar_vendida" string="Marcar como Vendida" type="object" class="oe_highlight" invisible="estado == 'vendida'"/>
+                    <button name="action_marcar_stock" string="Marcar como Stock" type="object" class="oe_highlight" invisible="estado == 'stock' or not tiene_fru"/>
+                    <button name="action_marcar_vendida" string="Marcar como Vendida" type="object" class="oe_highlight" invisible="estado == 'vendida' or not tiene_fru"/>
+                    <button name="action_abrir_wizard_transferencia" string="Trasladar Máquina" type="object" class="btn-secondary" invisible="estado == 'liberada'"/>
                     <field name="estado" widget="statusbar" statusbar_visible="liberada,stock,vendida"/>
                 </header>
                 <sheet>

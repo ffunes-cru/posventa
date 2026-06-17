@@ -15,6 +15,7 @@
     <record id="group_pv_concesionario" model="res.groups">
         <field name="name">Concesionario</field>
         <field name="privilege_id" ref="res_groups_privilege_posventa"/>
+        <field name="implied_ids" eval="[(5, 0, 0)]"/>
         <field name="comment">
             Acceso de concesionario: puede crear máquinas, certificados y tickets propios.
             Solo ve datos de su concesionario.
@@ -24,7 +25,7 @@
     <record id="group_pv_staff" model="res.groups">
         <field name="name">Staff Call Center</field>
         <field name="privilege_id" ref="res_groups_privilege_posventa"/>
-        <field name="implied_ids" eval="[(4, ref('group_pv_concesionario'))]"/>
+        <field name="implied_ids" eval="[(5, 0, 0)]"/>
         <field name="comment">
             Gestión integral de tickets, seguimiento operativo, cambio de estados,
             carga de datos SAP, visualización de dashboards.
@@ -34,8 +35,7 @@
     <record id="group_pv_admin" model="res.groups">
         <field name="name">Administrador Posventa</field>
         <field name="privilege_id" ref="res_groups_privilege_posventa"/>
-        <field name="implied_ids" eval="[(4, ref('group_pv_staff'))]"/>
-        <field name="comment">
+        <field name="implied_ids" eval="[(5, 0, 0), (4, ref('group_pv_staff')), (4, ref('group_pv_concesionario'))]"/>        <field name="comment">
             Acceso total: gestión de usuarios, concesionarios, reasignación de tickets,
             configuración general, importación masiva.
         </field>
@@ -73,7 +73,7 @@
     <record id="rule_pv_ticket_staff" model="ir.rule">
         <field name="name">Tickets: todos (Staff)</field>
         <field name="model_id" ref="model_pv_ticket"/>
-        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="domain_force">[('estado', '!=', 'borrador')]</field>
         <field name="groups" eval="[(4, ref('group_pv_staff'))]"/>
     </record>
 
@@ -93,12 +93,25 @@
         <field name="groups" eval="[(4, ref('group_pv_staff'))]"/>
     </record>
 
-    <!-- Concesionario: solo ve concesionario propio -->
     <record id="rule_pv_concesionario_concesionario" model="ir.rule">
-        <field name="name">Concesionarios: solo propio (Concesionario)</field>
+        <field name="name">Concesionarios: lectura global, escritura propia</field>
+        <field name="model_id" ref="model_pv_concesionario"/>
+        <field name="domain_force">[(1, '=', 1)]</field> <field name="groups" eval="[(4, ref('group_pv_concesionario'))]"/>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+
+    <record id="rule_pv_concesionario_propio_write" model="ir.rule">
+        <field name="name">Concesionarios: modificación propia</field>
         <field name="model_id" ref="model_pv_concesionario"/>
         <field name="domain_force">[('user_id', '=', user.id)]</field>
         <field name="groups" eval="[(4, ref('group_pv_concesionario'))]"/>
+        <field name="perm_read" eval="False"/>
+        <field name="perm_write" eval="True"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
     </record>
 
     <!-- Staff/Admin: ve todos los concesionarios -->

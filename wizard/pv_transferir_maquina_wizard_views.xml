@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="pv_transferir_maquina_wizard_form" model="ir.ui.view">
+        <field name="name">pv.transferir.maquina.wizard.form</field>
+        <field name="model">pv.transferir.maquina.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Transferir Máquina">
+                <group>
+                    <field name="maquina_id" domain="[('estado', '!=', 'liberada')]"/>
+                    <field name="concesionario_destino_id"/>
+                    <field name="provincia_destino_id"/>
+                    <field name="ciudad_destino_id"/>
+                </group>
+                <footer>
+                    <button name="action_transferir" string="Transferir" type="object" class="oe_highlight"/>
+                    <button string="Cancelar" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>
