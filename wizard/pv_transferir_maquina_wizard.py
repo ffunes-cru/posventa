@@ -14,22 +14,23 @@ class PvTransferirMaquinaWizard(models.TransientModel):
         self.ensure_one()
         if self.maquina_id.concesionario_id == self.concesionario_destino_id:
             raise UserError("La máquina ya pertenece a este concesionario.")
-        
-        # .sudo() es la clave: el sistema hace el cambio de dueño saltándose las restricciones de guardado
+
+
+        # En lugar de transferir, "proponemos" la transferencia
         self.maquina_id.sudo().write({
-            'concesionario_id': self.concesionario_destino_id.id,
-            'provincia_id': self.provincia_destino_id.id,
-            'ciudad': self.ciudad_destino_id,
-            'estado': 'liberada',
+            'concesionario_destino_id': self.concesionario_destino_id.id,
+            'provincia_destino_id': self.provincia_destino_id.id,
+            'ciudad_destino': self.ciudad_destino_id,
+            'estado': 'pendiente',
         })
 
         self.maquina_id.message_post(
-            body=_('Máquina transferida a %s por %s', self.concesionario_destino_id.name, self.env.user.name),
+            body=_('Solicitud de transferencia enviada a %s por %s (Pendiente de aceptación)', self.concesionario_destino_id.name, self.env.user.name),
             message_type='notification',
             subtype_xmlid='mail.mt_note',
         )   
 
-        # Como la máquina ya no es del concesionario actual, lo redirigimos a la vista listado
+        # Redirigimos al listado
         return {
             'type': 'ir.actions.act_window',
             'name': 'Máquinas',

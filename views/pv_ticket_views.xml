@@ -106,9 +106,10 @@
                         </group>
                         <group string="Operador e Información General">
                             <field name="operador_id" readonly="estado != 'borrador'"/>
-                            <field name="prioridad" readonly="estado not in ('borrador', 'abierto', 'en_proceso')"/>
-                            <field name="responsable_id" readonly="1" groups="!posventa.group_pv_admin"/>
-                            <field name="responsable_id" groups="posventa.group_pv_admin"/>
+                            <field name="prioridad" readonly="1" groups="!posventa.group_pv_staff"/>
+                            <field name="prioridad" readonly="estado not in ('borrador', 'abierto', 'en_proceso')" groups="posventa.group_pv_staff"/>
+                            <field name="responsable_id" readonly="1" groups="!posventa.group_pv_staff"/>
+                            <field name="responsable_id" groups="posventa.group_pv_staff"/>
                             <field name="multimedia_url" widget="url" placeholder="https://drive.google.com/drive/folders/..."/>
                         </group>
                     </group>
@@ -141,10 +142,11 @@
                         </field>
                     </group>
                     <group string="Detalles del Reclamo">
-                        <field name="placeholder_descripcion" invisible="1"/>
+                        <field name="placeholder_descripcion" invisible="not subsistema_id or not placeholder_descripcion"/>
                         <field name="descripcion" required="1" readonly="estado != 'borrador'" placeholder="Describa brevemente el problema..."/>
                         <field name="acciones_realizadas" invisible="tipo_ticket == 'pre_pm'" readonly="estado not in ('borrador', 'abierto', 'en_proceso')" placeholder="Indique qué acciones..."/>
-                        <field name="motivo_rechazo" invisible="estado not in ('en_proceso', 'rechazado')" readonly="estado != 'en_proceso'"/>
+                        <field name="motivo_rechazo" invisible="estado not in ('en_proceso', 'rechazado')" readonly="1" groups="!posventa.group_pv_staff"/>
+                        <field name="motivo_rechazo" invisible="estado not in ('en_proceso', 'rechazado')" readonly="estado != 'en_proceso'" groups="posventa.group_pv_staff"/>
                     </group>
                     <notebook>
                         <page string="Datos SAP (IT / PV)" name="sap" groups="posventa.group_pv_staff">

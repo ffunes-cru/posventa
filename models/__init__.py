@@ -10,3 +10,4 @@ from . import pv_problema
 from . import pv_ticket
 from . import pv_ticket_campo_valor
 from . import pv_ticket_medida
+from . import pv_maquina_transfer

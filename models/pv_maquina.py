@@ -12,6 +12,7 @@ TIPO_MAQUINA = [
 ]
 
 ESTADO_MAQUINA = [
+    ('pendiente', 'PENDIENTE DE TRANSFERENCIA'),
     ('liberada', 'LIBERADA'),
     ('stock', 'STOCK'),
     ('vendida', 'VENDIDA'),
@@ -125,10 +126,10 @@ class PvMaquina(models.Model):
             tipo_label = dict(TIPO_MAQUINA).get(rec.tipo, '')
             rec.name = f"{tipo_label} - {rec.of}" if rec.of else ''
 
-    @api.depends('certificado_ids', 'certificado_ids.tipo')
+    @api.depends('certificado_ids', 'certificado_ids.tipo', 'certificado_ids.active')
     def _compute_tiene_certificados(self):
         for rec in self:
-            tipos = rec.certificado_ids.mapped('tipo')
+            tipos = rec.certificado_ids.filtered(lambda l: l.active).mapped('tipo')
             rec.tiene_cpm = 'cpm' in tipos
             rec.tiene_fru = 'fru' in tipos
             rec.tiene_feu = 'feu' in tipos
@@ -136,7 +137,7 @@ class PvMaquina(models.Model):
     @api.depends('certificado_ids')
     def _compute_certificado_count(self):
         for rec in self:
-            rec.certificado_count = len(rec.certificado_ids)
+            rec.certificado_count = len(rec.certificado_ids.filtered(lambda l: l.active))
 
     @api.depends('ticket_ids')
     def _compute_ticket_count(self):

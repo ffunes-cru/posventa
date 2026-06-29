@@ -10,5 +10,16 @@
             <field name="interval_type">days</field>
             <field name="active">True</field>
         </record>
+
+        <record id="cron_pv_check_vencimientos_certificates" model="ir.cron">
+            <field name="name">Posventa: Archivar vencimientos de certificados</field>
+            <field name="model_id" ref="model_pv_certificado"/>
+            <field name="state">code</field>
+            <field name="code">model._archive_expired_certificates()</field>
+            <field name="interval_number">1</field>
+            <field name="interval_type">days</field>
+            <field name="active">True</field>
+        </record>
+
     </data>
 </odoo>

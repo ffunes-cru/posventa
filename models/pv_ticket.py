@@ -269,7 +269,7 @@ class PvTicket(models.Model):
                 delta = rec.fecha_cierre - rec.fecha_creacion
                 rec.t3_horas = round(delta.total_seconds() / 3600, 2)
 
-    @api.depends('maquina_id', 'maquina_id.tiene_cpm')
+    @api.depends('maquina_id')
     def _compute_tipo_ticket(self):
         for rec in self:
             if rec.maquina_id:
@@ -286,6 +286,16 @@ class PvTicket(models.Model):
                     raise ValidationError(_(
                         'El tipo de ticket (%s) no coincide con el estado de la máquina. '
                         'Debería ser %s.', rec.tipo_ticket, expected
+                    ))
+
+    @api.constrains('campo_extra_ids')
+    def _check_obligatory_extra_fields(self):
+        for rec in self:
+            if rec.campo_extra_ids:
+                for campo in rec.campo_extra_ids:
+                    if campo.campo_obligatorio and not campo.valor:
+                        raise ValidationError(_(
+                            'El campo %s es obligatorio.', campo.campo_nombre
                     ))
 
     @api.model_create_multi

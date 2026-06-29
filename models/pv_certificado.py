@@ -12,8 +12,6 @@ TIPO_CERTIFICADO = [
 ]
 
 
-
-
 class PvCertificado(models.Model):
     _name = 'pv.certificado'
     _description = 'Certificado de Máquina'
@@ -45,6 +43,11 @@ class PvCertificado(models.Model):
         required=True,
         tracking=True,
     )
+    fecha_vencimiento = fields.Date(
+        string='Fecha Vencimiento',
+        required=True,
+        tracking=True,
+    )
     archivo = fields.Binary(
         string='Archivo PDF',
         attachment=True,
@@ -58,7 +61,11 @@ class PvCertificado(models.Model):
         string='Observaciones',
     )
 
-
+    active = fields.Boolean(
+        string='Activo',
+        default=True,
+        tracking=True,
+    )
 
     # --- Related fields ---
     concesionario_id = fields.Many2one(
@@ -93,10 +100,21 @@ class PvCertificado(models.Model):
 
     @api.constrains('archivo', 'archivo_nombre')
     def _check_archivo_pdf(self):
+        extensiones_validas = ('.pdf', '.jpg', '.jpeg', '.png')
         for rec in self:
             if not rec.archivo:
                 raise ValidationError(_('El archivo adjunto es obligatorio.'))
-            if rec.archivo_nombre and not rec.archivo_nombre.lower().endswith('.pdf'):
-                raise ValidationError(_('El archivo debe tener extensión .pdf y este es: %s', rec.archivo_nombre))
+            if rec.archivo_nombre and not rec.archivo_nombre.lower().endswith(extensiones_validas):
+                raise ValidationError(_('El archivo debe tener una de las siguientes extensiones: %s y este es: %s', extensiones_validas, rec.archivo_nombre))
 
-
+    @api.model
+    def _archive_expired_certificates(self):
+        """Método para ser ejecutado por un Cron diario"""
+        hoy = fields.Date.today()
+        # Buscamos certificados activos cuya fecha de vencimiento sea anterior a hoy
+        certificados_vencidos = self.search([
+            ('active', '=', True),
+            ('fecha_vencimiento', '<', hoy)
+        ])
+        if certificados_vencidos:
+            certificados_vencidos.write({'active': False})
