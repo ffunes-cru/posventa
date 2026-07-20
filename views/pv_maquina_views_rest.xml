@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="pv_maquina_view_list_restricted" model="ir.ui.view">
+        <field name="name">pv.maquina.view.list.restricted</field>
+        <field name="model">pv.maquina</field>
+        <field name="inherit_id" ref="posventa.pv_maquina_view_tree"/>
+
+        <field name="arch" type="xml">
+            <xpath expr="//list" position="attributes">
+                <attribute name="create">0</attribute>
+            </xpath>
+        </field>
+    </record>
+</odoo>

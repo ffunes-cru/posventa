@@ -179,6 +179,22 @@ class PvTicket(models.Model):
         string='Notas SAP',
     )
 
+    # --- Garantía (Cargada al aceptar reclamo) ---
+    garantia_aceptada = fields.Boolean(
+        string='Garantía Aceptada',
+        tracking=True,
+    )
+    garantia_observaciones = fields.Text(
+        string='Observaciones de Garantía',
+        tracking=True,
+    )
+    garantia_adjunto = fields.Binary(
+        string='Adjunto de Garantía',
+    )
+    garantia_adjunto_name = fields.Char(
+        string='Nombre del adjunto de garantía',
+    )
+
     # --- Medidas y seguimiento ---
     medida_ids = fields.One2many(
         'pv.ticket.medida',
@@ -298,12 +314,38 @@ class PvTicket(models.Model):
                             'El campo %s es obligatorio.', campo.campo_nombre
                     ))
 
+    @api.constrains('maquina_id', 'estado')
+    def _check_maquina_cpm_vencido(self):
+        for rec in self:
+            if rec.maquina_id and rec.maquina_id.estado == 'cpm_vencido':
+                raise ValidationError(_(
+                    'No se puede crear ni tramitar un ticket para la máquina %s '
+                    'porque su Certificado de Puesta en Marcha (CPM) está vencido. '
+                    'Debe registrar un nuevo CPM en la máquina antes de poder crear o tramitar tickets.', rec.maquina_id.name
+                ))
+
+    @api.constrains('responsable_id', 'estado')
+    def _check_responsable_coherence(self):
+        for rec in self:
+            if rec.responsable_id and rec.estado in ('borrador', 'abierto'):
+                raise ValidationError(_("Un ticket no puede tener un responsable asignado en estado Borrador o Abierto."))
+
     @api.model_create_multi
     def create(self, vals_list):
         for vals in vals_list:
+            # Check CPM vencido on creation
+            if vals.get('maquina_id'):
+                maquina = self.env['pv.maquina'].browse(vals['maquina_id'])
+                if maquina.exists() and maquina.estado == 'cpm_vencido':
+                    raise ValidationError(_(
+                        'No se puede crear un ticket para la máquina %s porque su Certificado de Puesta en Marcha (CPM) está vencido. '
+                        'Debe registrar un nuevo CPM en la máquina antes de poder crear o tramitar tickets.', maquina.name
+                    ))
             if vals.get('name', _('Nuevo')) == _('Nuevo'):
                 vals['name'] = self.env['ir.sequence'].next_by_code('pv.ticket') or _('Nuevo')
         return super().create(vals_list)
+
+    # El método write() se encuentra unificado al final del archivo para centralizar todas las validaciones de seguridad.
 
 
 
@@ -330,6 +372,27 @@ class PvTicket(models.Model):
             self.campo_extra_ids = [(5, 0, 0)]
 
     def action_enviar_ticket(self):
+        """ Abre el Asistente de IA antes de enviar el ticket """
+        self.ensure_one()
+        if self.estado != 'borrador':
+            raise UserError(_('Solo se pueden enviar tickets en estado Borrador.'))
+            
+        wizard = self.env['pv.ticket.chat.wizard'].create({
+            'ticket_id': self.id,
+        })
+        wizard._initialize_chat()
+        
+        return {
+            'name': _('Asistente IA - Enviar Ticket'),
+            'type': 'ir.actions.act_window',
+            'view_mode': 'form',
+            'res_model': 'pv.ticket.chat.wizard',
+            'res_id': wizard.id,
+            'target': 'new',
+            'context': self.env.context,
+        }
+
+    def _action_enviar_ticket_direct(self):
         """ El concesionario envía el ticket al Staff (BORRADOR -> ABIERTO) """
         for rec in self:
             if rec.estado != 'borrador':
@@ -343,6 +406,61 @@ class PvTicket(models.Model):
                 subtype_xmlid='mail.mt_note',
             )
             rec._send_notification_to_staff()
+
+    def action_aceptar_ticket_direct(self):
+        """ Acepta el reclamo programáticamente sin abrir el wizard interactivo de correo """
+        for rec in self:
+            if rec.estado != 'en_proceso':
+                raise UserError(_('Solo se pueden aceptar tickets EN PROCESO.'))
+            rec.write({
+                'estado': 'aceptado',
+                'fecha_solucion': fields.Datetime.now(),
+            })
+            rec.message_post(
+                body=_('Reclamo aceptado y validado (vía Asistente IA)'),
+                message_type='notification',
+                subtype_xmlid='mail.mt_note',
+            )
+            template = self.env.ref('posventa.mail_template_ticket_aceptado', raise_if_not_found=False)
+            if template:
+                template.send_mail(rec.id, force_send=True)
+
+    def action_rechazar_ticket_direct(self, motivo):
+        """ Rechaza el reclamo programáticamente sin abrir el wizard interactivo de correo """
+        for rec in self:
+            if rec.estado != 'en_proceso':
+                raise UserError(_('Solo se pueden rechazar tickets EN PROCESO.'))
+            rec.write({
+                'estado': 'rechazado',
+                'motivo_rechazo': motivo,
+                'fecha_cierre': fields.Datetime.now(),
+            })
+            rec.message_post(
+                body=_('Reclamo rechazado (vía Asistente IA). Motivo: %s', motivo),
+                message_type='notification',
+                subtype_xmlid='mail.mt_note',
+            )
+            template = self.env.ref('posventa.mail_template_ticket_rechazado', raise_if_not_found=False)
+            if template:
+                template.send_mail(rec.id, force_send=True)
+
+    def action_open_ai_chat(self):
+        """ Abre el Asistente de IA para interactuar libremente en cualquier estado """
+        self.ensure_one()
+        wizard = self.env['pv.ticket.chat.wizard'].create({
+            'ticket_id': self.id,
+        })
+        wizard._initialize_chat()
+        
+        return {
+            'name': _('Asistente IA - Chat de Consulta'),
+            'type': 'ir.actions.act_window',
+            'view_mode': 'form',
+            'res_model': 'pv.ticket.chat.wizard',
+            'res_id': wizard.id,
+            'target': 'new',
+            'context': self.env.context,
+        }
 
     # --- State transitions ---
     def action_tomar_ticket(self):
@@ -362,49 +480,20 @@ class PvTicket(models.Model):
             )
 
     def action_aceptar_ticket(self):
-        """Accept the claim and open the email wizard like standard Sales does."""
+        """Abre el asistente (popup) para aceptar el reclamo y registrar la garantía."""
         self.ensure_one()
         if self.estado != 'en_proceso':
             raise UserError(_('Solo se pueden aceptar tickets EN PROCESO.'))
             
-        self.write({
-            'estado': 'aceptado',
-            'fecha_solucion': fields.Datetime.now(),
-        })
-        self.message_post(
-            body=_('Reclamo aceptado y validado'),
-            message_type='notification',
-            subtype_xmlid='mail.mt_note',
-        )
-        
-        template = self.env.ref('posventa.mail_template_ticket_aceptado', raise_if_not_found=False)
-        
-        # 1. Buscamos el res.partner real del concesionario
-        partner = self.concesionario_id.partner_id or (self.concesionario_id.user_id.partner_id if self.concesionario_id.user_id else False)
-        partner_id = partner.id if partner else False
-
-        # 2. Armamos el contexto idéntico al estándar de Ventas
-        ctx = {
-            'default_model': 'pv.ticket',
-            'default_res_ids': self.ids,
-            'default_composition_mode': 'comment',
-            'default_template_id': template.id if template else False,
-            'force_email': True,
-        }
-        
-        # 3. Si encontramos al partner, lo obligamos a bajarse como destinatario predeterminado
-        if partner_id:
-            ctx['default_partner_ids'] = [partner_id]
-
         return {
-            'name': _('Enviar correo'),
+            'name': _('Aceptar Reclamo / Garantía'),
             'type': 'ir.actions.act_window',
+            'res_model': 'pv.aceptar.ticket.wizard',
             'view_mode': 'form',
-            'res_model': 'mail.compose.message',
-            'views': [(False, 'form')],
-            'view_id': False,
             'target': 'new',
-            'context': ctx,
+            'context': {
+                'default_ticket_id': self.id,
+            }
         }
 
     def action_rechazar_ticket(self):
@@ -480,8 +569,8 @@ class PvTicket(models.Model):
 
     def action_back_to_abierto(self):
         for rec in self:
-            rec.write({'estado': 'abierto'})
-            rec.write({'responsable_id': False})
+            rec.sudo().write({'responsable_id': False})
+            rec.sudo().write({'estado': 'abierto'})
             rec.message_post(
                 body=_('Ticket devuelto a Abierto por el Administrador.'),
                 message_type='notification',
@@ -544,3 +633,52 @@ class PvTicket(models.Model):
                     'email_to': '',
                 })
         return res
+
+    def write(self, vals):
+        # 1. EVALUACIÓN DINÁMICA: ¿El usuario que está ejecutando esto es Admin o el Sistema (su)?
+        # Si es Admin o Sistema, lo dejamos pasar sin restricciones.
+        if self.env.su or self.env.user.has_group('posventa.group_pv_admin'):
+            return super(PvTicket, self).write(vals)
+
+        # 2. Restricción para Call Center (Staff): No interactuar con tickets de otros en proceso
+        if self.env.user.has_group('posventa.group_pv_staff'):
+            for rec in self:
+                if rec.estado == 'en_proceso' and rec.responsable_id and rec.responsable_id.id != self.env.user.id:
+                    raise UserError(_("No puede interactuar con un ticket que ya está en proceso por otro usuario."))
+
+        # 3. Restricción sobre responsable_id (aplica a todos los no-admin)
+        if 'responsable_id' in vals:
+            for rec in self:
+                # Permitir solo si se está tomando el ticket a sí mismo y pasa a/está en 'en_proceso'
+                is_taking = (
+                    vals.get('responsable_id') == self.env.user.id and 
+                    (vals.get('estado') == 'en_proceso' or rec.estado == 'en_proceso')
+                )
+                if not is_taking:
+                    raise UserError(_("Solo el Administrador de Posventa puede asignar o modificar el responsable de un ticket."))
+
+        # 4. Restricciones para Concesionarios (y otros no-staff, no-admin)
+        is_concesionario = self.env.user.has_group('posventa.group_pv_concesionario') or not self.env.user.has_group('posventa.group_pv_staff')
+        if is_concesionario:
+            # Si intentan cambiar el estado, restringir a que solo puedan pasarlo de borrador a abierto
+            if 'estado' in vals:
+                for rec in self:
+                    if not (rec.estado == 'borrador' and vals['estado'] == 'abierto'):
+                        raise UserError(_("Los concesionarios únicamente pueden enviar el ticket para cambiar su estado a Abierto."))
+
+            # Campos permitidos una vez que el ticket NO está en borrador
+            campos_permitidos_concesionario = [
+                'message_main_attachment_id', 
+                'activity_ids', 
+                'message_ids', 
+                'message_follower_ids',
+                'acciones_realizadas',
+                'estado',
+            ]
+            for rec in self:
+                if rec.estado != 'borrador':
+                    intento_modificar_negocio = any(key not in campos_permitidos_concesionario for key in vals.keys())
+                    if intento_modificar_negocio:
+                        raise UserError(_("Acción denegada: No tienes permisos para modificar este documento una vez creado y enviado."))
+
+        return super(PvTicket, self).write(vals)

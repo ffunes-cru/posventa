@@ -6,7 +6,7 @@
         <field name="arch" type="xml">
             <form string="Transferir Máquina">
                 <group>
-                    <field name="maquina_id" domain="[('estado', '!=', 'liberada')]"/>
+                    <field name="maquina_id" invisible="1"/>
                     <field name="concesionario_destino_id"/>
                     <field name="provincia_destino_id"/>
                     <field name="ciudad_destino_id"/>

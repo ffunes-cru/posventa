@@ -34,12 +34,17 @@ Módulo para la gestión integral de reclamos de posventa:
         'data/pv_sistema_data.xml',
         'data/ir_cron_data.xml',
         'data/mail_template_data.xml',
+        'data/ir_config_parameter_data.xml',
         # Wizard
         'wizard/pv_import_maquinas_views.xml',
         'wizard/pv_transferir_maquina_wizard_views.xml',
+        'wizard/pv_ticket_chat_wizard_views.xml',
+        'wizard/pv_aceptar_ticket_wizard_views.xml',
         # Views
+        'views/res_config_settings_views.xml',
         'views/pv_concesionario_views.xml',
         'views/pv_maquina_views.xml',
+        'views/pv_maquina_views_rest.xml',
         'views/pv_certificado_views.xml',
         'views/pv_ticket_views.xml',
         'views/pv_ticket_medida_views.xml',

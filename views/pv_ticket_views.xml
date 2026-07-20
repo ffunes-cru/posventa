@@ -54,7 +54,7 @@
                                 </div>
                                 <div class="o_kanban_record_bottom mt-2 d-flex justify-content-between align-items-center">
                                     <field name="prioridad" widget="label_selection" options="{'classes': {'baja': 'info', 'media': 'warning', 'alta': 'danger', 'critica': 'danger'}}"/>
-                                    <field name="responsable_id" widget="many2one_avatar_user"/>
+                                    <field name="responsable_id" widget="many2one_avatar_user" readonly="1"/>
                                 </div>
                             </div>
                         </div>
@@ -72,6 +72,7 @@
             <form string="Ticket de Reclamo">
                 <header>
                     <button name="action_enviar_ticket" string="Enviar Ticket" type="object" class="oe_highlight" invisible="estado != 'borrador'"/>
+                    <button name="action_open_ai_chat" string="Consultar IA" type="object" class="btn-info" invisible="estado == 'borrador'"/>
                     <button name="action_tomar_ticket" string="Tomar Ticket" type="object" class="oe_highlight" invisible="estado != 'abierto'" groups="posventa.group_pv_staff"/>
                     <button name="action_aceptar_ticket" string="Aceptar Reclamo" type="object" class="oe_highlight" invisible="estado != 'en_proceso'" groups="posventa.group_pv_staff"/>
                     <button name="action_rechazar_ticket" string="Rechazar Reclamo" type="object" class="btn-danger" invisible="estado != 'en_proceso'" groups="posventa.group_pv_staff"/>
@@ -99,17 +100,15 @@
                         <group string="Datos de Máquina">
                             <field name="maquina_id" readonly="estado != 'borrador'" domain="[('estado', '!=', 'liberada')]"/>
                             <field name="tipo_ticket" readonly="1" force_save="1"/>
-                            <field name="of" readonly="estado != 'borrador'"/>
-                            <field name="tipo_maquina" readonly="1"/>
                             <field name="cliente_id" readonly="1"/>
-                            <field name="concesionario_id" readonly="estado != 'borrador'"/>
+                            <field name="concesionario_id" readonly="1"/>
                         </group>
                         <group string="Operador e Información General">
                             <field name="operador_id" readonly="estado != 'borrador'"/>
                             <field name="prioridad" readonly="1" groups="!posventa.group_pv_staff"/>
                             <field name="prioridad" readonly="estado not in ('borrador', 'abierto', 'en_proceso')" groups="posventa.group_pv_staff"/>
-                            <field name="responsable_id" readonly="1" groups="!posventa.group_pv_staff"/>
-                            <field name="responsable_id" groups="posventa.group_pv_staff"/>
+                            <field name="responsable_id" readonly="1" groups="!posventa.group_pv_admin"/>
+                            <field name="responsable_id" readonly="estado in ('borrador', 'abierto')" groups="posventa.group_pv_admin"/>
                             <field name="multimedia_url" widget="url" placeholder="https://drive.google.com/drive/folders/..."/>
                         </group>
                     </group>
@@ -131,9 +130,8 @@
                             <field name="desvio_tipo" required="tipo_ticket == 'pre_pm'" readonly="estado != 'borrador'"/>
                         </group>
                     </group>
-                    
-                    <group string="Información Dinámica del Subsistema" invisible="not campo_extra_ids or tipo_ticket == 'pre_pm'">
-                        <field name="campo_extra_ids" nolabel="1" readonly="estado not in ('borrador', 'abierto', 'en_proceso')">
+                                     <group string="Información Dinámica del Subsistema" invisible="not campo_extra_ids or tipo_ticket == 'pre_pm'">
+                        <field name="campo_extra_ids" nolabel="1" readonly="estado != 'borrador'">
                             <list editable="bottom" create="false" delete="false">
                                 <field name="campo_id" readonly="1" force_save="1"/>
                                 <field name="campo_nombre" readonly="1"/>
@@ -144,11 +142,19 @@
                     <group string="Detalles del Reclamo">
                         <field name="placeholder_descripcion" invisible="not subsistema_id or not placeholder_descripcion"/>
                         <field name="descripcion" required="1" readonly="estado != 'borrador'" placeholder="Describa brevemente el problema..."/>
-                        <field name="acciones_realizadas" invisible="tipo_ticket == 'pre_pm'" readonly="estado not in ('borrador', 'abierto', 'en_proceso')" placeholder="Indique qué acciones..."/>
+                        <field name="acciones_realizadas" readonly="estado not in ('borrador', 'abierto', 'en_proceso')" placeholder="Indique qué acciones..."/>
                         <field name="motivo_rechazo" invisible="estado not in ('en_proceso', 'rechazado')" readonly="1" groups="!posventa.group_pv_staff"/>
                         <field name="motivo_rechazo" invisible="estado not in ('en_proceso', 'rechazado')" readonly="estado != 'en_proceso'" groups="posventa.group_pv_staff"/>
                     </group>
                     <notebook>
+                        <page string="Análisis de Garantía" name="garantia" invisible="estado not in ('aceptado', 'cerrado')">
+                            <group>
+                                <field name="garantia_aceptada" readonly="1"/>
+                                <field name="garantia_observaciones" readonly="1"/>
+                                <field name="garantia_adjunto" filename="garantia_adjunto_name" readonly="1"/>
+                                <field name="garantia_adjunto_name" invisible="1"/>
+                            </group>
+                        </page>
                         <page string="Datos SAP (IT / PV)" name="sap" groups="posventa.group_pv_staff">
                             <group>
                                 <group>

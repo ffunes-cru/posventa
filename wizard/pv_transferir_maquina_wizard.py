@@ -5,7 +5,7 @@ class PvTransferirMaquinaWizard(models.TransientModel):
     _name = 'pv.transferir.maquina.wizard'
     _description = 'Asistente de Transferencia de Máquina'
 
-    maquina_id = fields.Many2one('pv.maquina', string='Máquina', required=True, default=lambda self: self.env.context.get('active_id'))
+    maquina_id = fields.Many2one('pv.maquina', string='Máquina', required=True, default=lambda self: self.env.context.get('default_maquina_id') or self.env.context.get('active_id'))
     concesionario_destino_id = fields.Many2one('pv.concesionario', string='Concesionario Destino', required=True)
     provincia_destino_id = fields.Many2one('res.country.state', string='Provincia Destino', required=True)
     ciudad_destino_id = fields.Char(string='Ciudad Destino', required=True)

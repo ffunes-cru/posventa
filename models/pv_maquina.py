@@ -16,6 +16,7 @@ ESTADO_MAQUINA = [
     ('liberada', 'LIBERADA'),
     ('stock', 'STOCK'),
     ('vendida', 'VENDIDA'),
+    ('cpm_vencido', 'CPM VENCIDO'),
 ]
 
 
@@ -120,6 +121,14 @@ class PvMaquina(models.Model):
          'Ya existe una máquina con esta Orden de Fabricación.'),
     ]
 
+    is_pv_admin = fields.Boolean(compute='_compute_is_pv_admin', store=False)
+
+    def _compute_is_pv_admin(self):
+        # Evaluamos el grupo una sola vez para el usuario actual
+        has_group = self.env.user.has_group('posventa.group_pv_admin')
+        for record in self:
+            record.is_pv_admin = has_group
+
     @api.depends('tipo', 'of')
     def _compute_name(self):
         for rec in self:
@@ -145,22 +154,32 @@ class PvMaquina(models.Model):
             rec.ticket_count = len(rec.ticket_ids)
 
     def write(self, vals):
-        """Track state changes for audit trail."""
+        """Track state changes and restrict modification permissions."""
         if 'estado' in vals and vals['estado'] == 'vendida':
             vals['fecha_venta'] = fields.Datetime.now()
+
+        # Si cambia el concesionario (transferencia o edición manual)
+        if 'concesionario_id' in vals:
+            for rec in self:
+                if rec.concesionario_id and rec.concesionario_id.id != vals['concesionario_id']:
+                    # Archivar certificados activos de forma segura (bypasseando reglas de registro del usuario)
+                    self.env['pv.certificado'].sudo().search([('maquina_id', '=', rec.id)]).write({'active': False})
+                    rec.modified(['certificado_ids'])
+            # Reseteamos los flags y devolvemos la máquina a estado liberada
+            vals.update({
+                'tiene_fru': False,
+                'tiene_feu': False,
+                'tiene_cpm': False,
+                'estado': 'liberada',
+            })
+
+        # Restricción: Concesionarios o Staff no pueden cambiar datos básicos del registro
+        campos_restringidos = {'of', 'tipo', 'concesionario_id', 'cliente_id', 'ciudad', 'provincia_id'}
+        if campos_restringidos.intersection(vals.keys()):
+            if not self.env.su and not self.env.user.has_group('posventa.group_pv_admin'):
+                raise UserError(_('Únicamente el Administrador de Posventa puede crear o modificar los datos de una máquina.'))
+
         return super().write(vals)
-
-    def action_marcar_stock(self):
-        for rec in self:
-            if rec.estado == 'stock':
-                raise UserError(_('La máquina ya se encuentra en estado STOCK.'))
-            rec.estado = 'stock'
-
-    def action_marcar_vendida(self):
-        for rec in self:
-            if rec.estado == 'vendida':
-                raise UserError(_('La máquina ya se encuentra en estado VENDIDA.'))
-            rec.estado = 'vendida'
 
     def action_view_certificados(self):
         self.ensure_one()

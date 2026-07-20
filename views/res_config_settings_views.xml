@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_config_settings_view_form" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.inherit.posventa</field>
+        <field name="model">res.config.settings</field>
+        <field name="priority" eval="90"/>
+        <field name="inherit_id" ref="base.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//form" position="inside">
+                <app data-string="Posventa" string="Posventa" name="posventa" groups="posventa.group_pv_admin">
+                    <block title="Vencimiento de Certificados" id="pv_certificados_setting_block">
+                        <setting id="pv_fru_days" string="Vencimiento FRU" help="Días desde el ingreso de la máquina para que venza el FRU">
+                            <field name="pv_fru_expiration_days"/>
+                            <span> días</span>
+                        </setting>
+                        <setting id="pv_feu_days" string="Vencimiento FEU" help="Días desde el ingreso de la máquina para que venza el FEU">
+                            <field name="pv_feu_expiration_days"/>
+                            <span> días</span>
+                        </setting>
+                        <setting id="pv_cpm_days" string="Vencimiento CPM" help="Días de validez para el CPM desde la fecha de carga">
+                            <field name="pv_cpm_expiration_days"/>
+                            <span> días</span>
+                        </setting>
+                    </block>
+                </app>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="action_pv_config_settings" model="ir.actions.act_window">
+        <field name="name">Ajustes Posventa</field>
+        <field name="res_model">res.config.settings</field>
+        <field name="view_mode">form</field>
+        <field name="context">{'module': 'posventa'}</field>
+    </record>
+</odoo>

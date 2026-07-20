@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
 
+    <!-- Graph and Pivot Views (Retained for Ticket analysis) -->
     <record id="pv_ticket_view_graph" model="ir.ui.view">
         <field name="name">pv.ticket.view.graph</field>
         <field name="model">pv.ticket</field>
@@ -26,21 +27,201 @@
         </field>
     </record>
 
+    <!-- Full-Width Responsive Dashboard Form View -->
+    <record id="pv_dashboard_view_form" model="ir.ui.view">
+        <field name="name">pv.dashboard.view.form</field>
+        <field name="model">pv.dashboard</field>
+        <field name="arch" type="xml">
+            <form string="Tablero de Control" create="0" edit="0" delete="0" class="o_dashboard_form">
+                <!-- Custom transparent CSS overrides for clean dashboard layout -->
+                <style>
+                    .o_dashboard_form .o_form_sheet_bg {
+                        background: #f8f9fc !important;
+                        padding: 16px !important;
+                    }
+                    .o_dashboard_form .o_form_sheet {
+                        background: transparent !important;
+                        border: none !important;
+                        box-shadow: none !important;
+                        max-width: 100% !important;
+                        padding: 0 !important;
+                    }
+                    .o_dashboard_form .card {
+                        transition: transform 0.2s ease, box-shadow 0.2s ease;
+                    }
+                    .o_dashboard_form .card:hover {
+                        transform: translateY(-3px);
+                        box-shadow: 0 .5rem 1rem rgba(0,0,0,.1) !important;
+                    }
+                    .o_dashboard_form .display-4 {
+                        font-size: 2.5rem;
+                        line-height: 1.1;
+                    }
+                </style>
+                <sheet>
+                    <div class="container-fluid p-0">
+                        <!-- Banner Header -->
+                        <div class="row bg-white p-4 mb-4 shadow-sm align-items-center" style="border-radius: 8px; border: 1px solid #e3e6f0;">
+                            <div class="col-md-8 col-12 mb-3 mb-md-0">
+                                <h3 class="mb-1 font-weight-bold text-primary" style="font-size: 24px;">Tablero de Control Operativo</h3>
+                                <p class="text-muted mb-0" style="font-size: 14px;">Resumen en tiempo real del estado de los reclamos y KPIs de posventa.</p>
+                            </div>
+                            <div class="col-md-4 col-12 text-md-right text-left">
+                                <button type="object" name="action_view_metrics" class="btn btn-primary font-weight-bold shadow-sm px-4 py-2" style="border-radius: 5px;">
+                                    <i class="fa fa-bar-chart-o mr-2"/> Ver Gráficos y Análisis Pivot
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Cards Grid (Counts of Tickets by State) -->
+                        <div class="row">
+                            <!-- Borrador -->
+                            <div class="col-xl-2 col-md-4 col-sm-6 mb-4">
+                                <div class="card h-100 text-center shadow-sm border-0 bg-white" style="border-radius: 8px; border-top: 4px solid #6c757d !important; cursor: pointer;">
+                                    <div class="card-body py-4">
+                                        <h6 class="text-uppercase text-muted font-weight-bold mb-2" style="font-size: 12px; letter-spacing: 0.8px;">Borrador</h6>
+                                        <div class="font-weight-bold text-secondary mb-3 display-4">
+                                            <field name="count_borrador" readonly="1"/>
+                                        </div>
+                                        <button type="object" name="action_view_borrador" class="btn btn-outline-secondary btn-sm w-100 font-weight-bold" style="border-radius: 4px; font-size: 11px;">
+                                            Ver Listado <i class="fa fa-chevron-right ml-1"/>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Abierto -->
+                            <div class="col-xl-2 col-md-4 col-sm-6 mb-4">
+                                <div class="card h-100 text-center shadow-sm border-0 bg-white" style="border-radius: 8px; border-top: 4px solid #17a2b8 !important; cursor: pointer;">
+                                    <div class="card-body py-4">
+                                        <h6 class="text-uppercase text-muted font-weight-bold mb-2" style="font-size: 12px; letter-spacing: 0.8px;">Abiertos</h6>
+                                        <div class="font-weight-bold text-info mb-3 display-4">
+                                            <field name="count_abierto" readonly="1"/>
+                                        </div>
+                                        <button type="object" name="action_view_abierto" class="btn btn-outline-info btn-sm w-100 font-weight-bold" style="border-radius: 4px; font-size: 11px;">
+                                            Ver Listado <i class="fa fa-chevron-right ml-1"/>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- En Proceso -->
+                            <div class="col-xl-2 col-md-4 col-sm-6 mb-4">
+                                <div class="card h-100 text-center shadow-sm border-0 bg-white" style="border-radius: 8px; border-top: 4px solid #ffc107 !important; cursor: pointer;">
+                                    <div class="card-body py-4">
+                                        <h6 class="text-uppercase text-muted font-weight-bold mb-2" style="font-size: 12px; letter-spacing: 0.8px;">En Proceso</h6>
+                                        <div class="font-weight-bold text-warning mb-3 display-4">
+                                            <field name="count_en_proceso" readonly="1"/>
+                                        </div>
+                                        <button type="object" name="action_view_en_proceso" class="btn btn-outline-warning btn-sm w-100 font-weight-bold" style="border-radius: 4px; font-size: 11px;">
+                                            Ver Listado <i class="fa fa-chevron-right ml-1"/>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Aceptado -->
+                            <div class="col-xl-2 col-md-4 col-sm-6 mb-4">
+                                <div class="card h-100 text-center shadow-sm border-0 bg-white" style="border-radius: 8px; border-top: 4px solid #28a745 !important; cursor: pointer;">
+                                    <div class="card-body py-4">
+                                        <h6 class="text-uppercase text-muted font-weight-bold mb-2" style="font-size: 12px; letter-spacing: 0.8px;">Aceptados</h6>
+                                        <div class="font-weight-bold text-success mb-3 display-4">
+                                            <field name="count_aceptado" readonly="1"/>
+                                        </div>
+                                        <button type="object" name="action_view_aceptado" class="btn btn-outline-success btn-sm w-100 font-weight-bold" style="border-radius: 4px; font-size: 11px;">
+                                            Ver Listado <i class="fa fa-chevron-right ml-1"/>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Rechazado -->
+                            <div class="col-xl-2 col-md-4 col-sm-6 mb-4">
+                                <div class="card h-100 text-center shadow-sm border-0 bg-white" style="border-radius: 8px; border-top: 4px solid #dc3545 !important; cursor: pointer;">
+                                    <div class="card-body py-4">
+                                        <h6 class="text-uppercase text-muted font-weight-bold mb-2" style="font-size: 12px; letter-spacing: 0.8px;">Rechazados</h6>
+                                        <div class="font-weight-bold text-danger mb-3 display-4">
+                                            <field name="count_rechazado" readonly="1"/>
+                                        </div>
+                                        <button type="object" name="action_view_rechazado" class="btn btn-outline-danger btn-sm w-100 font-weight-bold" style="border-radius: 4px; font-size: 11px;">
+                                            Ver Listado <i class="fa fa-chevron-right ml-1"/>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Cerrado -->
+                            <div class="col-xl-2 col-md-4 col-sm-6 mb-4">
+                                <div class="card h-100 text-center shadow-sm border-0 bg-white" style="border-radius: 8px; border-top: 4px solid #343a40 !important; cursor: pointer;">
+                                    <div class="card-body py-4">
+                                        <h6 class="text-uppercase text-muted font-weight-bold mb-2" style="font-size: 12px; letter-spacing: 0.8px;">Cerrados</h6>
+                                        <div class="font-weight-bold text-dark mb-3 display-4">
+                                            <field name="count_cerrado" readonly="1"/>
+                                        </div>
+                                        <button type="object" name="action_view_cerrado" class="btn btn-outline-dark btn-sm w-100 font-weight-bold" style="border-radius: 4px; font-size: 11px;">
+                                            Ver Listado <i class="fa fa-chevron-right ml-1"/>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- KPIs Hours Display (Averages) -->
+                        <div class="row mt-3">
+                            <!-- T1 -->
+                            <div class="col-md-4 col-12 mb-4">
+                                <div class="card border-0 shadow-sm p-4 text-center text-white" style="border-radius: 8px; background: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%);">
+                                    <h6 class="text-uppercase font-weight-bold small opacity-75 mb-2" style="letter-spacing: 1px;">T1: Primera Atención</h6>
+                                    <h2 class="font-weight-bold mb-1" style="font-size: 42px;"><field name="avg_t1" readonly="1"/>h</h2>
+                                    <p class="small mb-0 opacity-75">Tiempo promedio hasta primera atención.</p>
+                                </div>
+                            </div>
+
+                            <!-- T2 -->
+                            <div class="col-md-4 col-12 mb-4">
+                                <div class="card border-0 shadow-sm p-4 text-center text-white" style="border-radius: 8px; background: linear-gradient(135deg, #10b981 0%, #065f46 100%);">
+                                    <h6 class="text-uppercase font-weight-bold small opacity-75 mb-2" style="letter-spacing: 1px;">T2: Tiempo de Solución</h6>
+                                    <h2 class="font-weight-bold mb-1" style="font-size: 42px;"><field name="avg_t2" readonly="1"/>h</h2>
+                                    <p class="small mb-0 opacity-75">Tiempo promedio para resolver el reclamo.</p>
+                                </div>
+                            </div>
+
+                            <!-- T3 -->
+                            <div class="col-md-4 col-12 mb-4">
+                                <div class="card border-0 shadow-sm p-4 text-center text-white" style="border-radius: 8px; background: linear-gradient(135deg, #f59e0b 0%, #b45309 100%);">
+                                    <h6 class="text-uppercase font-weight-bold small opacity-75 mb-2" style="letter-spacing: 1px;">T3: Cierre Definitivo</h6>
+                                    <h2 class="font-weight-bold mb-1" style="font-size: 42px;"><field name="avg_t3" readonly="1"/>h</h2>
+                                    <p class="small mb-0 opacity-75">Tiempo promedio hasta cierre administrativo.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Action that triggers action_open_dashboard server-side or opens form mode directly -->
     <record id="action_pv_dashboard" model="ir.actions.act_window">
         <field name="name">Tablero de Control</field>
-        <field name="res_model">pv.ticket</field>
-        <field name="view_mode">graph,pivot</field>
-        <field name="view_ids" eval="[(5, 0, 0),
-            (0, 0, {'view_mode': 'graph', 'view_id': ref('pv_ticket_view_graph')}),
-            (0, 0, {'view_mode': 'pivot', 'view_id': ref('pv_ticket_view_pivot')})
-        ]"/>
+        <field name="res_model">pv.dashboard</field>
+        <field name="view_mode">form</field>
+        <field name="view_id" ref="pv_dashboard_view_form"/>
+        <field name="target">current</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">
                 El tablero está listo.
             </p>
-            <p>
-                Aquí verás los tiempos de respuesta automáticos basados en tus campos T1, T2 y T3.
-            </p>
+        </field>
+    </record>
+
+    <!-- Server Action to open the dashboard transient record dynamically -->
+    <record id="action_pv_dashboard_server" model="ir.actions.server">
+        <field name="name">Tablero de Control</field>
+        <field name="model_id" ref="model_pv_dashboard"/>
+        <field name="state">code</field>
+        <field name="code">
+            action = model.action_open_dashboard()
         </field>
     </record>
 </odoo>

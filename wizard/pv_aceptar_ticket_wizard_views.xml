@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="pv_aceptar_ticket_wizard_view_form" model="ir.ui.view">
+        <field name="name">pv.aceptar.ticket.wizard.view.form</field>
+        <field name="model">pv.aceptar.ticket.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Aceptar Reclamo / Garantía">
+                <sheet>
+                    <group>
+                        <field name="ticket_id" readonly="1" options="{'no_open': True}"/>
+                        <field name="garantia_aceptada" widget="boolean_toggle"/>
+                        <field name="garantia_observaciones" placeholder="Ingrese observaciones y justificación del análisis de la garantía..." style="min-height: 80px;"/>
+                        <field name="garantia_adjunto" filename="garantia_adjunto_name"/>
+                        <field name="garantia_adjunto_name" invisible="1"/>
+                    </group>
+                </sheet>
+                <footer>
+                    <button name="action_confirmar" string="Aceptar Reclamo" type="object" class="oe_highlight"/>
+                    <button string="Cancelar" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

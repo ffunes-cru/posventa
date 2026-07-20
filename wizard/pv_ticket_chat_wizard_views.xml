@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="pv_ticket_chat_wizard_view_form" model="ir.ui.view">
+        <field name="name">pv.ticket.chat.wizard.view.form</field>
+        <field name="model">pv.ticket.chat.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Asistente de IA de Posventa">
+                <sheet>
+                    <div style="margin-bottom: 10px; padding: 10px; background-color: #f3f4f6; border-radius: 6px; border-left: 4px solid #3b82f6;">
+                        <strong>Ticket: </strong> <field name="ticket_id" readonly="1" options="{'no_open': True}"/>
+                        <field name="ticket_estado" invisible="1"/>
+                    </div>
+                    
+                    <field name="conversation_html" widget="html" readonly="1" options="{'safe': True}"/>
+                    
+                    <group style="margin-top: 15px;">
+                        <field name="user_message" placeholder="Escribe tu mensaje o consulta al asistente de IA..." nolabel="1" style="width: 100%; min-height: 60px;"/>
+                    </group>
+                </sheet>
+                <footer>
+                    <button name="action_send_message" string="Enviar Mensaje" type="object" class="oe_highlight"/>
+                    <button name="action_wizard_enviar_ticket" string="Enviar Ticket definitivamente" type="object" class="btn-success" invisible="ticket_estado != 'borrador'"/>
+                    <button name="action_close_with_summary" string="Finalizar y Guardar Resumen" type="object" class="btn-info"/>
+                    <button string="Cerrar" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

@@ -37,22 +37,22 @@
                 <sheet>
                     <group>
                         <group>
-                            <field name="tipo"/>
-                            <field name="maquina_id" domain="[('estado', '!=', 'liberada')]"/>
-                            <field name="fecha"/>
+                            <field name="tipo" readonly="id"/>
+                            <field name="maquina_id" domain="[('estado', '!=', 'liberada')]" readonly="context.get('default_maquina_id') or id"/>
+                            <field name="fecha" readonly="id"/>
                         </group>
                         <group>
-                            <field name="archivo" filename="archivo_nombre"/>
+                            <field name="archivo" filename="archivo_nombre" readonly="id"/>
                             <field name="archivo_nombre" invisible="1"/>
                             <field name="concesionario_id" readonly="1" force_save="1"/>
-                            <field name="fecha_vencimiento"/>
+                            <field name="fecha_vencimiento" readonly="1"/>
                             <field name="active" readonly="1"/>
                         </group>
                     </group>
-
+ 
                     <notebook>
                         <page string="Observaciones" name="observaciones">
-                            <field name="notas" placeholder="Ingrese comentarios adicionales sobre este certificado..."/>
+                            <field name="notas" placeholder="Ingrese comentarios adicionales sobre este certificado..." readonly="id"/>
                         </page>
                     </notebook>
                 </sheet>

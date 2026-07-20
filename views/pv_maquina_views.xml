@@ -5,7 +5,7 @@
         <field name="name">pv.maquina.view.tree</field>
         <field name="model">pv.maquina</field>
         <field name="arch" type="xml">
-            <list string="Máquinas">
+            <list string="Máquinas" create="1">
                 <field name="of"/>
                 <field name="tipo"/>
                 <field name="concesionario_id"/>
@@ -27,24 +27,23 @@
         <field name="arch" type="xml">
             <form string="Máquina Posventa">
                 <header>
-                    <button name="action_marcar_stock" string="Marcar como Stock" type="object" class="oe_highlight" invisible="estado in ('stock', 'pendiente') or not tiene_fru"/>
-                    <button name="action_marcar_vendida" string="Marcar como Vendida" type="object" class="oe_highlight" invisible="estado in ('liberada', 'pendiente', 'vendida') or not tiene_fru"/>
-                    <button name="action_abrir_wizard_transferencia" string="Trasladar Máquina" type="object" class="btn-secondary" invisible="estado in ('liberada', 'pendiente', 'vendida')"/>
+                    <button name="action_abrir_wizard_transferencia" string="Trasladar Máquina" type="object" class="btn-secondary" invisible="estado in ('liberada', 'pendiente', 'vendida', 'cpm_vencido')"/>
                     <button name="action_aceptar_transferencia" 
                         string="Aceptar Transferencia" 
                         type="object" 
                         class="oe_highlight" 
-                        invisible="estado != 'pendiente'"/>
+                        invisible="estado != 'pendiente' or not es_concesionario_destino"/>
             
                     <button name="action_rechazar_transferencia" 
                         string="Rechazar Transferencia" 
                         type="object" 
                         class="btn-secondary" 
-                            invisible="estado != 'pendiente'"/>
+                        invisible="estado != 'pendiente'"/>
 
-                    <field name="estado" widget="statusbar" statusbar_visible="liberada,stock,vendida"/>
+                    <field name="estado" widget="statusbar" statusbar_visible="liberada,stock,vendida,cpm_vencido"/>
                 </header>
                 <sheet>
+                    <field name="es_concesionario_destino" invisible="1"/>
                     <div class="oe_button_box" name="button_box">
                         <button name="action_view_certificados" type="object" class="oe_stat_button" icon="fa-file-text-o">
                             <field name="certificado_count" widget="statinfo" string="Certificados"/>
@@ -60,14 +59,14 @@
                     </div>
                     <group>
                         <group string="Datos de Fábrica">
-                            <field name="of"/>
-                            <field name="tipo"/>
+                            <field name="of" readonly="not is_pv_admin"/>
+                            <field name="tipo" readonly="not is_pv_admin"/>
                         </group>
                         <group string="Asignación y Ubicación">
-                            <field name="concesionario_id"/>
-                            <field name="cliente_id"/>
-                            <field name="ciudad"/>
-                            <field name="provincia_id"/>
+                            <field name="concesionario_id" readonly="not is_pv_admin"/>
+                            <field name="cliente_id" readonly="not is_pv_admin"/>
+                            <field name="ciudad" readonly="not is_pv_admin"/>
+                            <field name="provincia_id" readonly="not is_pv_admin"/>
                             <field name="fecha_venta" invisible="estado != 'vendida'"/>
                         </group>
                     </group>
