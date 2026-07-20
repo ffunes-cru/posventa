@@ -44,7 +44,6 @@ Módulo para la gestión integral de reclamos de posventa:
         'views/res_config_settings_views.xml',
         'views/pv_concesionario_views.xml',
         'views/pv_maquina_views.xml',
-        'views/pv_maquina_views_rest.xml',
         'views/pv_certificado_views.xml',
         'views/pv_ticket_views.xml',
         'views/pv_ticket_medida_views.xml',
