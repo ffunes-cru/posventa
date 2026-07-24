@@ -158,16 +158,4 @@
         <field name="search_view_id" ref="pv_maquina_view_search"/>
     </record>
 
-    <!-- Server Action to dynamically select normal or restricted action -->
-    <record id="action_pv_maquina_server" model="ir.actions.server">
-        <field name="name">Máquinas</field>
-        <field name="model_id" ref="model_pv_maquina"/>
-        <field name="state">code</field>
-        <field name="code">
-if env.user.has_group('posventa.group_pv_admin') or env.user.has_group('posventa.group_pv_staff'):
-    action = env.ref('posventa.action_pv_maquina').sudo().read()[0]
-else:
-    action = env.ref('posventa.action_pv_maquina_restricted').sudo().read()[0]
-        </field>
-    </record>
 </odoo>
