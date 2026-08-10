@@ -277,6 +277,10 @@ GUARDRAILS (REGLAS DE SEGURIDAD Y COMPORTAMIENTO):
         return instruction
 
     def _call_gemini_api(self, contents, tools=None):
+        enabled_param = self.env['ir.config_parameter'].sudo().get_param('posventa.enable_ai_integration', 'True')
+        if str(enabled_param).lower() not in ('true', '1'):
+            raise UserError(_("La integración con Inteligencia Artificial está deshabilitada en los ajustes del módulo."))
+
         api_key = self.env['ir.config_parameter'].sudo().get_param('posventa.gemini_api_key')
         if not api_key or api_key == 'TU_API_KEY_AQUI':
             raise ValidationError(_(

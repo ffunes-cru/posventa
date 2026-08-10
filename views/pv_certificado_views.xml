@@ -5,7 +5,7 @@
         <field name="name">pv.certificado.view.tree</field>
         <field name="model">pv.certificado</field>
         <field name="arch" type="xml">
-            <list string="Certificados">
+            <list string="Certificados" create="1">
                 <field name="name"/>
                 <field name="tipo"/>
                 <field name="maquina_id"/>
@@ -15,18 +15,6 @@
         </field>
     </record>
 
-    <record id="pv_certificado_view_search" model="ir.ui.view">
-        <field name="name">pv.certificado.search</field>
-        <field name="model">pv.certificado</field>
-        <field name="arch" type="xml">
-            <search string="Buscar Certificados">
-                <field name="maquina_id"/>
-                
-                <separator/>
-                <filter string="Archivados" name="archived" domain="[('active', '=', False)]"/>
-            </search>
-        </field>
-    </record>
 
     <!-- Form View -->
     <record id="pv_certificado_view_form" model="ir.ui.view">
@@ -35,10 +23,15 @@
         <field name="arch" type="xml">
             <form string="Certificado">
                 <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_tickets" type="object" class="oe_stat_button" icon="fa-ticket">
+                            <field name="ticket_count" widget="statinfo" string="Tickets"/>
+                        </button>
+                    </div>
                     <group>
                         <group>
                             <field name="tipo" readonly="id"/>
-                            <field name="maquina_id" domain="[('estado', '!=', 'liberada')]" readonly="context.get('default_maquina_id') or id"/>
+                            <field name="maquina_id" domain="[('tiene_cpm', '=', False)]" readonly="context.get('default_maquina_id') or id"/>
                             <field name="fecha" readonly="id"/>
                         </group>
                         <group>
@@ -51,6 +44,17 @@
                     </group>
  
                     <notebook>
+                        <page string="Tickets / Reclamos" name="tickets">
+                            <field name="ticket_ids" mode="list" readonly="1">
+                                <list>
+                                    <field name="name"/>
+                                    <field name="tipo_ticket"/>
+                                    <field name="fecha_creacion"/>
+                                    <field name="sistema_id"/>
+                                    <field name="estado" widget="badge"/>
+                                </list>
+                            </field>
+                        </page>
                         <page string="Observaciones" name="observaciones">
                             <field name="notas" placeholder="Ingrese comentarios adicionales sobre este certificado..." readonly="id"/>
                         </page>

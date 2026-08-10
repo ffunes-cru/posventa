@@ -1,6 +1,7 @@
 # Part of Crucianelli Posventa Module
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError, ValidationError
+from .pv_maquina import ESTADO_MAQUINA
 
 
 ESTADO_TICKET = [
@@ -57,6 +58,7 @@ class PvTicket(models.Model):
         'pv.maquina',
         string='Máquina',
         required=True,
+        domain="[('estado', 'not in', ('liberada', 'pendiente', 'cpm_vencido'))]",
         tracking=True,
     )
     of = fields.Char(
@@ -78,6 +80,16 @@ class PvTicket(models.Model):
         related='maquina_id.concesionario_id',
         store=True,
         string='Concesionario',
+    )
+    certificado_id = fields.Many2one(
+        'pv.certificado',
+        string='Certificado Asociado',
+        compute='_compute_certificado_id',
+        store=True,
+        readonly=True,
+        tracking=True,
+        ondelete='restrict',
+        help='Certificado activo asociado al momento de la creación del ticket.'
     )
 
     # --- Operador ---
@@ -247,6 +259,17 @@ class PvTicket(models.Model):
         help='Tiempo de cierre definitivo: desde creación hasta cierre (interno)',
     )
 
+    is_ai_enabled = fields.Boolean(
+        compute='_compute_is_ai_enabled',
+        store=False,
+    )
+
+    def _compute_is_ai_enabled(self):
+        param = self.env['ir.config_parameter'].sudo().get_param('posventa.enable_ai_integration', 'False')
+        enabled = str(param).strip().lower() in ('true', '1')
+        for rec in self:
+            rec.is_ai_enabled = enabled
+
     # --- Color for kanban ---
     color = fields.Integer(string='Color')
     kanban_state = fields.Selection([
@@ -293,6 +316,27 @@ class PvTicket(models.Model):
             else:
                 rec.tipo_ticket = 'pre_pm'
 
+    @api.depends('maquina_id', 'maquina_id.certificado_ids', 'maquina_id.certificado_ids.active', 'tipo_ticket')
+    def _compute_certificado_id(self):
+        for rec in self:
+            if rec.certificado_id:
+                continue
+            if not rec.maquina_id:
+                rec.certificado_id = False
+                continue
+
+            active_certs = rec.maquina_id.certificado_ids.filtered(lambda c: c.active)
+            if rec.tipo_ticket == 'post_pm':
+                cpm = active_certs.filtered(lambda c: c.tipo == 'cpm')
+                rec.certificado_id = cpm[0] if cpm else False
+            else:  # pre_pm
+                feu = active_certs.filtered(lambda c: c.tipo == 'feu')
+                if feu:
+                    rec.certificado_id = feu[0]
+                else:
+                    fru = active_certs.filtered(lambda c: c.tipo == 'fru')
+                    rec.certificado_id = fru[0] if fru else False
+
     @api.constrains('tipo_ticket', 'maquina_id')
     def _check_tipo_ticket_coherence(self):
         for rec in self:
@@ -314,14 +358,40 @@ class PvTicket(models.Model):
                             'El campo %s es obligatorio.', campo.campo_nombre
                     ))
 
+    @api.model
+    def default_get(self, fields_list):
+        res = super().default_get(fields_list)
+        if self.env.context.get('default_certificado_id'):
+            res['certificado_id'] = self.env.context.get('default_certificado_id')
+        maquina_id = res.get('maquina_id') or self.env.context.get('default_maquina_id')
+        if maquina_id:
+            maquina = self.env['pv.maquina'].browse(maquina_id)
+            if maquina.exists() and maquina.estado in ('liberada', 'pendiente', 'cpm_vencido'):
+                estado_label = dict(ESTADO_MAQUINA).get(maquina.estado, maquina.estado)
+                raise UserError(_(
+                    'No se puede crear un ticket para la máquina %s porque se encuentra en estado "%s".'
+                ) % (maquina.name or maquina.of, estado_label))
+        return res
+
+    @api.onchange('maquina_id')
+    def _onchange_maquina_id_valida(self):
+        if self.maquina_id and self.maquina_id.estado in ('liberada', 'pendiente', 'cpm_vencido'):
+            estado_label = dict(ESTADO_MAQUINA).get(self.maquina_id.estado, self.maquina_id.estado)
+            return {
+                'warning': {
+                    'title': _('Máquina no válida'),
+                    'message': _('La máquina %s está en estado "%s". No se pueden crear tickets para máquinas en este estado.') % (self.maquina_id.name or self.maquina_id.of, estado_label),
+                }
+            }
+
     @api.constrains('maquina_id', 'estado')
-    def _check_maquina_cpm_vencido(self):
+    def _check_maquina_estado_valido(self):
         for rec in self:
-            if rec.maquina_id and rec.maquina_id.estado == 'cpm_vencido':
+            if rec.maquina_id and rec.maquina_id.estado in ('liberada', 'pendiente', 'cpm_vencido'):
+                estado_label = dict(ESTADO_MAQUINA).get(rec.maquina_id.estado, rec.maquina_id.estado)
                 raise ValidationError(_(
                     'No se puede crear ni tramitar un ticket para la máquina %s '
-                    'porque su Certificado de Puesta en Marcha (CPM) está vencido. '
-                    'Debe registrar un nuevo CPM en la máquina antes de poder crear o tramitar tickets.', rec.maquina_id.name
+                    'porque se encuentra en estado "%s".', rec.maquina_id.name or rec.maquina_id.of, estado_label
                 ))
 
     @api.constrains('responsable_id', 'estado')
@@ -333,13 +403,12 @@ class PvTicket(models.Model):
     @api.model_create_multi
     def create(self, vals_list):
         for vals in vals_list:
-            # Check CPM vencido on creation
             if vals.get('maquina_id'):
                 maquina = self.env['pv.maquina'].browse(vals['maquina_id'])
-                if maquina.exists() and maquina.estado == 'cpm_vencido':
+                if maquina.exists() and maquina.estado in ('liberada', 'pendiente', 'cpm_vencido'):
+                    estado_label = dict(ESTADO_MAQUINA).get(maquina.estado, maquina.estado)
                     raise ValidationError(_(
-                        'No se puede crear un ticket para la máquina %s porque su Certificado de Puesta en Marcha (CPM) está vencido. '
-                        'Debe registrar un nuevo CPM en la máquina antes de poder crear o tramitar tickets.', maquina.name
+                        'No se puede crear un ticket para la máquina %s porque se encuentra en estado "%s".', maquina.name or maquina.of, estado_label
                     ))
             if vals.get('name', _('Nuevo')) == _('Nuevo'):
                 vals['name'] = self.env['ir.sequence'].next_by_code('pv.ticket') or _('Nuevo')
@@ -372,10 +441,17 @@ class PvTicket(models.Model):
             self.campo_extra_ids = [(5, 0, 0)]
 
     def action_enviar_ticket(self):
-        """ Abre el Asistente de IA antes de enviar el ticket """
+        """ Envía el ticket (BORRADOR -> ABIERTO). Si la IA está activada abre el chat asistente; si no, lo envía directamente sin popup. """
         self.ensure_one()
         if self.estado != 'borrador':
             raise UserError(_('Solo se pueden enviar tickets en estado Borrador.'))
+
+        param = self.env['ir.config_parameter'].sudo().get_param('posventa.enable_ai_integration', 'False')
+        ai_enabled = str(param).strip().lower() in ('true', '1')
+
+        if not ai_enabled:
+            self._action_enviar_ticket_direct()
+            return {'type': 'ir.actions.act_window_close'}
             
         wizard = self.env['pv.ticket.chat.wizard'].create({
             'ticket_id': self.id,
@@ -447,6 +523,9 @@ class PvTicket(models.Model):
     def action_open_ai_chat(self):
         """ Abre el Asistente de IA para interactuar libremente en cualquier estado """
         self.ensure_one()
+        param = self.env['ir.config_parameter'].sudo().get_param('posventa.enable_ai_integration', 'True')
+        if str(param).lower() not in ('true', '1'):
+            raise UserError(_("La integración con Inteligencia Artificial se encuentra deshabilitada en los ajustes de Posventa."))
         wizard = self.env['pv.ticket.chat.wizard'].create({
             'ticket_id': self.id,
         })
@@ -635,6 +714,12 @@ class PvTicket(models.Model):
         return res
 
     def write(self, vals):
+        # 0. Restricción general para acciones_realizadas: Solo modificable en borrador por el concesionario
+        if 'acciones_realizadas' in vals and not self.env.su:
+            for rec in self:
+                if rec.estado != 'borrador':
+                    raise UserError(_("El campo 'Acciones realizadas' solo puede ser completado en estado Borrador."))
+
         # 1. EVALUACIÓN DINÁMICA: ¿El usuario que está ejecutando esto es Admin o el Sistema (su)?
         # Si es Admin o Sistema, lo dejamos pasar sin restricciones.
         if self.env.su or self.env.user.has_group('posventa.group_pv_admin'):
@@ -672,7 +757,6 @@ class PvTicket(models.Model):
                 'activity_ids', 
                 'message_ids', 
                 'message_follower_ids',
-                'acciones_realizadas',
                 'estado',
             ]
             for rec in self:

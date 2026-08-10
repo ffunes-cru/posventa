@@ -9,6 +9,7 @@
                 <field name="name"/>
                 <field name="tipo_ticket"/>
                 <field name="maquina_id"/>
+                <field name="certificado_id"/>
                 <field name="of"/>
                 <field name="concesionario_id"/>
                 <field name="sistema_id"/>
@@ -72,7 +73,7 @@
             <form string="Ticket de Reclamo">
                 <header>
                     <button name="action_enviar_ticket" string="Enviar Ticket" type="object" class="oe_highlight" invisible="estado != 'borrador'"/>
-                    <button name="action_open_ai_chat" string="Consultar IA" type="object" class="btn-info" invisible="estado == 'borrador'"/>
+                    <button name="action_open_ai_chat" string="Consultar IA" type="object" class="btn-info" invisible="estado == 'borrador' or not is_ai_enabled"/>
                     <button name="action_tomar_ticket" string="Tomar Ticket" type="object" class="oe_highlight" invisible="estado != 'abierto'" groups="posventa.group_pv_staff"/>
                     <button name="action_aceptar_ticket" string="Aceptar Reclamo" type="object" class="oe_highlight" invisible="estado != 'en_proceso'" groups="posventa.group_pv_staff"/>
                     <button name="action_rechazar_ticket" string="Rechazar Reclamo" type="object" class="btn-danger" invisible="estado != 'en_proceso'" groups="posventa.group_pv_staff"/>
@@ -86,6 +87,7 @@
                     <field name="estado" widget="statusbar" statusbar_visible="abierto,en_proceso,aceptado,cerrado"/>
                 </header>
                 <sheet>
+                    <field name="is_ai_enabled" invisible="1"/>
                     <div class="oe_button_box" name="button_box">
                         <button name="action_view_medidas" type="object" class="oe_stat_button" icon="fa-tasks">
                             <field name="medida_count" widget="statinfo" string="Medidas"/>
@@ -98,8 +100,9 @@
                     </div>
                     <group>
                         <group string="Datos de Máquina">
-                            <field name="maquina_id" readonly="estado != 'borrador'" domain="[('estado', '!=', 'liberada')]"/>
+                            <field name="maquina_id" readonly="estado != 'borrador'" domain="[('estado', 'not in', ('liberada', 'pendiente', 'cpm_vencido'))]"/>
                             <field name="tipo_ticket" readonly="1" force_save="1"/>
+                            <field name="certificado_id" readonly="1"/>
                             <field name="cliente_id" readonly="1"/>
                             <field name="concesionario_id" readonly="1"/>
                         </group>
@@ -142,7 +145,7 @@
                     <group string="Detalles del Reclamo">
                         <field name="placeholder_descripcion" invisible="not subsistema_id or not placeholder_descripcion"/>
                         <field name="descripcion" required="1" readonly="estado != 'borrador'" placeholder="Describa brevemente el problema..."/>
-                        <field name="acciones_realizadas" readonly="estado not in ('borrador', 'abierto', 'en_proceso')" placeholder="Indique qué acciones..."/>
+                        <field name="acciones_realizadas" readonly="estado != 'borrador'" placeholder="Indique qué acciones..."/>
                         <field name="motivo_rechazo" invisible="estado not in ('en_proceso', 'rechazado')" readonly="1" groups="!posventa.group_pv_staff"/>
                         <field name="motivo_rechazo" invisible="estado not in ('en_proceso', 'rechazado')" readonly="estado != 'en_proceso'" groups="posventa.group_pv_staff"/>
                     </group>
@@ -211,6 +214,7 @@
             <search>
                 <field name="name"/>
                 <field name="maquina_id"/>
+                <field name="certificado_id"/>
                 <field name="concesionario_id"/>
                 <field name="sistema_id"/>
                 <field name="subsistema_id"/>
@@ -223,6 +227,7 @@
                 <filter string="Prioridad Alta/Crítica" name="priority_high" domain="[('prioridad', 'in', ('alta', 'critica'))]"/>
                 <filter string="Medidas Vencidas" name="medidas_vencidas" domain="[('medidas_vencidas_count', '>', 0)]"/>
                 <filter string="Concesionario" name="group_concesionario" context="{'group_by': 'concesionario_id'}"/>
+                <filter string="Certificado" name="group_certificado" context="{'group_by': 'certificado_id'}"/>
                 <filter string="Sistema" name="group_sistema" context="{'group_by': 'sistema_id'}"/>
                 <filter string="Estado" name="group_estado" context="{'group_by': 'estado'}"/>
                 <filter string="Responsable" name="group_responsable" context="{'group_by': 'responsable_id'}"/>

@@ -200,7 +200,10 @@ class PvMaquina(models.Model):
             'res_model': 'pv.ticket',
             'view_mode': 'list,form',
             'domain': [('maquina_id', '=', self.id)],
-            'context': {'default_maquina_id': self.id},
+            'context': {
+                'default_maquina_id': self.id,
+                'create': self.estado not in ('liberada', 'pendiente', 'cpm_vencido'),
+            },
         }
 
     def action_transferir_concesionario(self):

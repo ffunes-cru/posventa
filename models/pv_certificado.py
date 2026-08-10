@@ -34,6 +34,7 @@ class PvCertificado(models.Model):
         'pv.maquina',
         string='Máquina',
         required=True,
+        domain="[('tiene_cpm', '=', False)]",
         ondelete='cascade',
         tracking=True,
     )
@@ -71,6 +72,36 @@ class PvCertificado(models.Model):
         related='maquina_id.concesionario_id',
         store=True,
     )
+
+    # --- Tickets / Reclamos ---
+    ticket_ids = fields.One2many(
+        'pv.ticket',
+        'certificado_id',
+        string='Tickets / Reclamos',
+    )
+    ticket_count = fields.Integer(
+        compute='_compute_ticket_count',
+        string='Cantidad de Tickets',
+    )
+
+    @api.depends('ticket_ids')
+    def _compute_ticket_count(self):
+        for rec in self:
+            rec.ticket_count = len(rec.ticket_ids)
+
+    def action_view_tickets(self):
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Tickets de %s', self.name),
+            'res_model': 'pv.ticket',
+            'view_mode': 'list,form',
+            'domain': [('certificado_id', '=', self.id)],
+            'context': {
+                'default_maquina_id': self.maquina_id.id,
+                'default_certificado_id': self.id,
+            },
+        }
 
     @api.depends('tipo', 'maquina_id.of')
     def _compute_name(self):
@@ -208,6 +239,23 @@ class PvCertificado(models.Model):
             if self.search_count(domain) > 0:
                 tipo_label = dict(TIPO_CERTIFICADO).get(rec.tipo, rec.tipo)
                 raise ValidationError(_('Ya existe un certificado activo de tipo "%s" para esta máquina.', tipo_label))
+
+    @api.constrains('maquina_id', 'active')
+    def _check_maquina_cpm_completa(self):
+        for rec in self:
+            if not rec.active or not rec.maquina_id:
+                continue
+            cpm_exists = self.search_count([
+                ('maquina_id', '=', rec.maquina_id.id),
+                ('tipo', '=', 'cpm'),
+                ('active', '=', True),
+                ('id', '!=', rec.id),
+            ])
+            if cpm_exists:
+                raise ValidationError(_(
+                    'La máquina %s ya posee un Certificado de Puesta en Marcha (CPM) activo. '
+                    'No se pueden agregar más certificados a una máquina completa.', rec.maquina_id.name
+                ))
 
     @api.constrains('archivo', 'archivo_nombre')
     def _check_archivo_pdf(self):

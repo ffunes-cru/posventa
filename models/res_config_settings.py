@@ -23,3 +23,8 @@ class ResConfigSettings(models.TransientModel):
         default=60,
         help='Días de validez para el Certificado de Puesta en Marcha (CPM) desde su fecha de carga.'
     )
+    pv_enable_ai_integration = fields.Boolean(
+        string='Habilitar Integración con IA',
+        config_parameter='posventa.enable_ai_integration',
+        help='Habilita o deshabilita las funcionalidades y asistencia con Inteligencia Artificial (Gemini) en los tickets.'
+    )

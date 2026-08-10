@@ -48,7 +48,7 @@
                         <button name="action_view_certificados" type="object" class="oe_stat_button" icon="fa-file-text-o">
                             <field name="certificado_count" widget="statinfo" string="Certificados"/>
                         </button>
-                        <button name="action_view_tickets" type="object" class="oe_stat_button" icon="fa-ticket">
+                        <button name="action_view_tickets" type="object" class="oe_stat_button" icon="fa-ticket" invisible="estado in ('liberada', 'pendiente')">
                             <field name="ticket_count" widget="statinfo" string="Tickets"/>
                         </button>
                     </div>

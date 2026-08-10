@@ -8,6 +8,11 @@
         <field name="arch" type="xml">
             <xpath expr="//form" position="inside">
                 <app data-string="Posventa" string="Posventa" name="posventa" groups="posventa.group_pv_admin">
+                    <block title="Inteligencia Artificial" id="pv_ai_setting_block">
+                        <setting id="pv_enable_ai" string="Asistente de IA (Gemini)" help="Habilita la integración de IA en el módulo de posventa para asistirte en los tickets">
+                            <field name="pv_enable_ai_integration"/>
+                        </setting>
+                    </block>
                     <block title="Vencimiento de Certificados" id="pv_certificados_setting_block">
                         <setting id="pv_fru_days" string="Vencimiento FRU" help="Días desde el ingreso de la máquina para que venza el FRU">
                             <field name="pv_fru_expiration_days"/>
