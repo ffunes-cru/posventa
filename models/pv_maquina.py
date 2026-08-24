@@ -135,18 +135,18 @@ class PvMaquina(models.Model):
             tipo_label = dict(TIPO_MAQUINA).get(rec.tipo, '')
             rec.name = f"{tipo_label} - {rec.of}" if rec.of else ''
 
-    @api.depends('certificado_ids', 'certificado_ids.tipo', 'certificado_ids.active')
+    @api.depends('certificado_ids', 'certificado_ids.tipo', 'certificado_ids.estado_certificado', 'certificado_ids.active')
     def _compute_tiene_certificados(self):
         for rec in self:
-            tipos = rec.certificado_ids.filtered(lambda l: l.active).mapped('tipo')
+            tipos = rec.certificado_ids.filtered(lambda l: l.active and l.estado_certificado == 'vigente').mapped('tipo')
             rec.tiene_cpm = 'cpm' in tipos
             rec.tiene_fru = 'fru' in tipos
             rec.tiene_feu = 'feu' in tipos
 
-    @api.depends('certificado_ids')
+    @api.depends('certificado_ids', 'certificado_ids.estado_certificado', 'certificado_ids.active')
     def _compute_certificado_count(self):
         for rec in self:
-            rec.certificado_count = len(rec.certificado_ids.filtered(lambda l: l.active))
+            rec.certificado_count = len(rec.certificado_ids.filtered(lambda l: l.active and l.estado_certificado == 'vigente'))
 
     @api.depends('ticket_ids')
     def _compute_ticket_count(self):
@@ -157,21 +157,6 @@ class PvMaquina(models.Model):
         """Track state changes and restrict modification permissions."""
         if 'estado' in vals and vals['estado'] == 'vendida':
             vals['fecha_venta'] = fields.Datetime.now()
-
-        # Si cambia el concesionario (transferencia o edición manual)
-        if 'concesionario_id' in vals:
-            for rec in self:
-                if rec.concesionario_id and rec.concesionario_id.id != vals['concesionario_id']:
-                    # Archivar certificados activos de forma segura (bypasseando reglas de registro del usuario)
-                    self.env['pv.certificado'].sudo().search([('maquina_id', '=', rec.id)]).write({'active': False})
-                    rec.modified(['certificado_ids'])
-            # Reseteamos los flags y devolvemos la máquina a estado liberada
-            vals.update({
-                'tiene_fru': False,
-                'tiene_feu': False,
-                'tiene_cpm': False,
-                'estado': 'liberada',
-            })
 
         # Restricción: Concesionarios o Staff no pueden cambiar datos básicos del registro
         campos_restringidos = {'of', 'tipo', 'concesionario_id', 'cliente_id', 'ciudad', 'provincia_id'}
@@ -228,3 +213,192 @@ class PvMaquina(models.Model):
             'target': 'new', # Abre el formato Pop-up
             'context': {'default_maquina_id': self.id}
         }
+
+    @api.model
+    def get_portal_list_data(self, search_term='', estado_filter=''):
+        """Return machine list data for the concesionario portal."""
+        concesionario = self.env['pv.concesionario'].search([('user_id', '=', self.env.uid)], limit=1)
+        if not concesionario:
+            return []
+
+        if estado_filter == 'pendiente':
+            domain = [
+                '|',
+                    '&', ('concesionario_id', '=', concesionario.id), ('estado', '=', 'pendiente'),
+                    '&', ('concesionario_destino_id', '=', concesionario.id), ('estado', '=', 'pendiente')
+            ]
+        else:
+            domain = [('concesionario_id', '=', concesionario.id)]
+            if estado_filter:
+                domain.append(('estado', '=', estado_filter))
+
+        if search_term:
+            domain.append('|')
+            domain.append(('of', 'ilike', search_term))
+            domain.append(('name', 'ilike', search_term))
+
+        maquinas = self.search(domain, order='create_date desc', limit=100)
+        result = []
+        for m in maquinas:
+            result.append({
+                'id': m.id,
+                'name': m.name or '',
+                'of': m.of or '',
+                'tipo': m.tipo or '',
+                'tipo_label': dict(TIPO_MAQUINA).get(m.tipo, ''),
+                'estado': m.estado or '',
+                'estado_label': dict(ESTADO_MAQUINA).get(m.estado, ''),
+                'cliente': m.cliente_id.name or '',
+                'tiene_fru': m.tiene_fru,
+                'tiene_feu': m.tiene_feu,
+                'tiene_cpm': m.tiene_cpm,
+                'es_pendiente_transferencia': m.estado == 'pendiente',
+            })
+        return result
+
+    def get_portal_detail_data(self):
+        """Return detailed machine data for the concesionario portal."""
+        self.ensure_one()
+        certificados = []
+        for c in self.certificado_ids.filtered(lambda x: x.active).sorted('fecha', reverse=True):
+            certificados.append({
+                'id': c.id,
+                'tipo': c.tipo,
+                'tipo_label': dict(self.env['pv.certificado']._fields['tipo'].selection).get(c.tipo, ''),
+                'fecha': str(c.fecha) if c.fecha else '',
+                'fecha_vencimiento': str(c.fecha_vencimiento) if c.fecha_vencimiento else '',
+                'dias_para_vencer': c.dias_para_vencer,
+                'estado_certificado': c.estado_certificado,
+                'estado_certificado_label': dict(self.env['pv.certificado']._fields['estado_certificado'].selection).get(c.estado_certificado, ''),
+                'concesionario_name': c.concesionario_id.name or '',
+                'archivo_nombre': c.archivo_nombre or '',
+                'active': c.active,
+            })
+        tickets = []
+        for t in self.ticket_ids.sorted('create_date', reverse=True)[:20]:
+            tickets.append({
+                'id': t.id,
+                'name': t.name or '',
+                'tipo_ticket': t.tipo_ticket or '',
+                'estado': t.estado or '',
+                'fecha_creacion': str(t.fecha_creacion) if t.fecha_creacion else '',
+                'sistema': t.sistema_id.name if t.sistema_id else '',
+                'descripcion': (t.descripcion or '')[:100],
+            })
+        puede_crear_ticket = self.estado not in ('liberada', 'pendiente', 'cpm_vencido')
+        puede_crear_certificado = not self.tiene_cpm
+        puede_transferir = self.estado not in ('liberada', 'pendiente', 'vendida', 'cpm_vencido')
+        puede_liberar_maquina = self.estado in ('stock', 'vendida', 'cpm_vencido')
+        es_concesionario_destino = self.es_concesionario_destino
+        es_concesionario_origen = self.concesionario_id.user_id == self.env.user if self.concesionario_id else False
+
+        return {
+            'id': self.id,
+            'name': self.name or '',
+            'of': self.of or '',
+            'tipo': self.tipo or '',
+            'tipo_label': dict(TIPO_MAQUINA).get(self.tipo, ''),
+            'estado': self.estado or '',
+            'estado_label': dict(ESTADO_MAQUINA).get(self.estado, ''),
+            'cliente': self.cliente_id.name or '',
+            'ciudad': self.ciudad or '',
+            'provincia': self.provincia_id.name if self.provincia_id else '',
+            'tiene_fru': self.tiene_fru,
+            'tiene_feu': self.tiene_feu,
+            'tiene_cpm': self.tiene_cpm,
+            'certificados': certificados,
+            'tickets': tickets,
+            'puede_crear_ticket': puede_crear_ticket,
+            'puede_crear_certificado': puede_crear_certificado,
+            'puede_transferir': puede_transferir,
+            'puede_liberar_maquina': puede_liberar_maquina,
+            'es_pendiente_transferencia': self.estado == 'pendiente',
+            'es_concesionario_destino': es_concesionario_destino,
+            'es_concesionario_origen': es_concesionario_origen,
+            'concesionario_destino_name': self.concesionario_destino_id.name if self.concesionario_destino_id else '',
+        }
+
+    def action_liberar_maquina(self):
+        """Retorna la máquina a estado LIBERADA y marca los certificados vigentes como 'archivado_manual'."""
+        self.ensure_one()
+        maquina_sudo = self.sudo()
+        if maquina_sudo.estado in ('liberada', 'pendiente'):
+            raise UserError(_("La máquina ya se encuentra en estado Liberada o Pendiente de transferencia."))
+
+        certificados_vigentes = maquina_sudo.certificado_ids.filtered(lambda c: c.estado_certificado == 'vigente')
+        if certificados_vigentes:
+            certificados_vigentes.write({'estado_certificado': 'archivado_manual'})
+
+        maquina_sudo.write({
+            'estado': 'liberada',
+        })
+        maquina_sudo._compute_tiene_certificados()
+        maquina_sudo.message_post(
+            body=_("La máquina ha sido LIBERADA por %s. Sus certificados vigentes anteriores fueron marcados como 'Archivado Manualmente'. Se puede iniciar una nueva carga de certificados."),
+            message_type='notification',
+            subtype_xmlid='mail.mt_note'
+        )
+        return True
+
+    def action_volver_a_stock(self):
+        return self.action_liberar_maquina()
+
+    def action_cancelar_transferencia(self):
+        """El concesionario de origen (o admin) cancela una propuesta de traslado pendiente."""
+        self.ensure_one()
+        maquina_sudo = self.sudo()
+        if maquina_sudo.estado != 'pendiente':
+            raise UserError(_("Solo se pueden cancelar traslados en estado Pendiente."))
+
+        # Restablecemos estado previo (stock si tenía FRU, vendida si CPM, o liberada)
+        prev_estado = 'liberada'
+        if maquina_sudo.tiene_cpm:
+            prev_estado = 'vendida'
+        elif maquina_sudo.tiene_fru:
+            prev_estado = 'stock'
+
+        maquina_sudo.write({
+            'estado': prev_estado,
+            'concesionario_destino_id': False,
+            'provincia_destino_id': False,
+            'ciudad_destino': False,
+        })
+        maquina_sudo.message_post(
+            body=_("Solicitud de traslado CANCELADA por el concesionario de origen (%s). La máquina vuelve a estado %s.",
+                   self.env.user.name, dict(ESTADO_MAQUINA).get(prev_estado, prev_estado)),
+            message_type='notification',
+            subtype_xmlid='mail.mt_note'
+        )
+        return True
+
+    @api.model
+    def get_transfer_catalog_data(self):
+        """Returns catalog of concesionarios and provinces for transfer modal."""
+        concesionarios = self.env['pv.concesionario'].search_read([('active', '=', True)], ['id', 'name'])
+        provincias = self.env['res.country.state'].search_read([('country_id.code', '=', 'AR')], ['id', 'name'])
+        if not provincias:
+            provincias = self.env['res.country.state'].search_read([], ['id', 'name'], limit=50)
+        return {
+            'concesionarios': concesionarios,
+            'provincias': provincias,
+        }
+
+    def action_iniciar_transferencia_portal(self, concesionario_destino_id, provincia_destino_id, ciudad_destino):
+        """Initiate transfer from portal."""
+        self.ensure_one()
+        if self.concesionario_id.id == concesionario_destino_id:
+            raise UserError(_("La máquina ya pertenece a este concesionario."))
+
+        self.sudo().write({
+            'concesionario_destino_id': concesionario_destino_id,
+            'provincia_destino_id': provincia_destino_id,
+            'ciudad_destino': ciudad_destino,
+            'estado': 'pendiente',
+        })
+        self.sudo().message_post(
+            body=_('Solicitud de traslado/transferencia iniciada desde el portal hacia el concesionario %s (Pendiente de aceptación)',
+                   self.env['pv.concesionario'].browse(concesionario_destino_id).name),
+            message_type='notification',
+            subtype_xmlid='mail.mt_note',
+        )
+        return True

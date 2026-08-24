@@ -316,7 +316,7 @@ class PvTicket(models.Model):
             else:
                 rec.tipo_ticket = 'pre_pm'
 
-    @api.depends('maquina_id', 'maquina_id.certificado_ids', 'maquina_id.certificado_ids.active', 'tipo_ticket')
+    @api.depends('maquina_id', 'maquina_id.certificado_ids', 'maquina_id.certificado_ids.estado_certificado', 'maquina_id.certificado_ids.active', 'tipo_ticket')
     def _compute_certificado_id(self):
         for rec in self:
             if rec.certificado_id:
@@ -325,7 +325,7 @@ class PvTicket(models.Model):
                 rec.certificado_id = False
                 continue
 
-            active_certs = rec.maquina_id.certificado_ids.filtered(lambda c: c.active)
+            active_certs = rec.maquina_id.certificado_ids.filtered(lambda c: c.active and c.estado_certificado == 'vigente')
             if rec.tipo_ticket == 'post_pm':
                 cpm = active_certs.filtered(lambda c: c.tipo == 'cpm')
                 rec.certificado_id = cpm[0] if cpm else False
@@ -476,7 +476,7 @@ class PvTicket(models.Model):
             
             # Al intentar enviar, Odoo ejecutará el @api.constrains automáticamente
             rec.write({'estado': 'abierto'})
-            rec.message_post(
+            rec.sudo().message_post(
                 body=_('Ticket enviado a revisión técnica por el concesionario.'),
                 message_type='notification',
                 subtype_xmlid='mail.mt_note',
@@ -766,3 +766,39 @@ class PvTicket(models.Model):
                         raise UserError(_("Acción denegada: No tienes permisos para modificar este documento una vez creado y enviado."))
 
         return super(PvTicket, self).write(vals)
+
+    @api.model
+    def get_wizard_catalog_data(self, sistema_id=None, subsistema_id=None):
+        """Helper for ticket wizard dropdowns and dynamic fields."""
+        sistemas = self.env['pv.sistema'].search_read([('active', '=', True)], ['id', 'name', 'codigo'])
+        subsistemas = []
+        if sistema_id:
+            subsistemas = self.env['pv.subsistema'].search_read(
+                [('active', '=', True), ('sistema_id', '=', sistema_id)],
+                ['id', 'name', 'codigo', 'placeholder_descripcion']
+            )
+
+        problemas = []
+        campos_extras = []
+        if subsistema_id:
+            problemas = self.env['pv.problema'].search_read(
+                [('active', '=', True), ('subsistema_id', '=', subsistema_id)],
+                ['id', 'name', 'codigo']
+            )
+            campos_rec = self.env['pv.subsistema.campo'].search([('subsistema_id', '=', subsistema_id)])
+            for c in campos_rec:
+                opciones_list = [o.strip() for o in (c.opciones or '').split('|') if o.strip()]
+                campos_extras.append({
+                    'id': c.id,
+                    'name': c.name,
+                    'tipo_campo': c.tipo_campo,
+                    'obligatorio': c.obligatorio,
+                    'opciones': opciones_list,
+                })
+
+        return {
+            'sistemas': sistemas,
+            'subsistemas': subsistemas,
+            'problemas': problemas,
+            'campos_extras': campos_extras,
+        }

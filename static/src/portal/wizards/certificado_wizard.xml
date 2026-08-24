@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <t t-name="posventa.CertificadoWizard">
+        <div class="pv-wizard-container">
+            <!-- Stepper Header -->
+            <div class="pv-wizard-stepper">
+                <t t-foreach="stepLabels" t-as="label" t-key="label_index">
+                    <div class="pv-wizard-step">
+                        <div class="pv-step-circle" t-att-class="{
+                            'active': state.currentStep === (label_index + 1),
+                            'completed': state.currentStep > (label_index + 1)
+                        }">
+                            <t t-if="state.currentStep > (label_index + 1)">
+                                <i class="fa fa-check"/>
+                            </t>
+                            <t t-else="">
+                                <t t-esc="label_index + 1"/>
+                            </t>
+                        </div>
+                        <span class="pv-step-label" t-att-class="{
+                            'active': state.currentStep === (label_index + 1),
+                            'completed': state.currentStep > (label_index + 1)
+                        }">
+                            <t t-esc="label"/>
+                        </span>
+                        <t t-if="label_index &lt; stepLabels.length - 1">
+                            <div class="pv-step-connector" t-att-class="{
+                                'completed': state.currentStep > (label_index + 1)
+                            }"/>
+                        </t>
+                    </div>
+                </t>
+            </div>
+
+            <!-- Step Content -->
+            <div class="pv-wizard-content">
+                <!-- STEP 1: Select Type -->
+                <t t-if="state.currentStep === 1">
+                    <h3><i class="fa fa-file-text-o text-primary me-2"/> Seleccionar Tipo de Certificado</h3>
+                    <p class="text-muted">Elija el certificado que desea cargar para la máquina <strong><t t-esc="props.maquina.of"/></strong>:</p>
+
+                    <div class="list-group mb-3">
+                        <t t-foreach="certificateTypes" t-as="typeObj" t-key="typeObj.value">
+                            <label class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+                                t-att-class="{
+                                    'active': state.tipo === typeObj.value and !typeObj.disabled,
+                                    'disabled opacity-50': typeObj.disabled
+                                }"
+                                style="cursor: pointer;">
+                                <div>
+                                    <input type="radio" name="tipoCertificado"
+                                        t-att-value="typeObj.value"
+                                        t-att-checked="state.tipo === typeObj.value"
+                                        t-att-disabled="typeObj.disabled"
+                                        t-on-change="() => this.state.tipo = typeObj.value"
+                                        class="me-2"/>
+                                    <strong t-esc="typeObj.label"/>
+                                </div>
+                                <t t-if="typeObj.disabled">
+                                    <span class="badge bg-warning text-dark" t-esc="typeObj.reason"/>
+                                </t>
+                            </label>
+                        </t>
+                    </div>
+
+                    <div class="pv-form-group col-md-6">
+                        <label>Fecha de Emisión / Carga</label>
+                        <input type="date" class="pv-form-input" t-model="state.fecha"/>
+                    </div>
+                </t>
+
+                <!-- STEP 2: Document File & Notes -->
+                <t t-if="state.currentStep === 2">
+                    <h3><i class="fa fa-cloud-upload text-primary me-2"/> Adjuntar Documento y Observaciones</h3>
+
+                    <div class="pv-form-group">
+                        <label>Archivo Adjunto (PDF o Imagen) <span class="required">*</span></label>
+                        <input type="file" class="pv-form-input" accept=".pdf,.jpg,.jpeg,.png" t-on-change="onFileChange"/>
+                        <t t-if="state.archivoNombre">
+                            <div class="mt-2 text-success font-weight-bold">
+                                <i class="fa fa-file-pdf-o me-1"/> Archivo cargado: <t t-esc="state.archivoNombre"/>
+                            </div>
+                        </t>
+                    </div>
+
+                    <div class="pv-form-group">
+                        <label>Observaciones / Notas Adicionales</label>
+                        <textarea class="pv-form-textarea" placeholder="Ingrese comentarios adicionales sobre este certificado..." t-model="state.notas"/>
+                    </div>
+                </t>
+
+                <!-- STEP 3: Review & Confirm -->
+                <t t-if="state.currentStep === 3">
+                    <h3><i class="fa fa-check-circle text-success me-2"/> Confirmar Carga de Certificado</h3>
+                    <p class="text-muted">Revise la información antes de guardar el certificado:</p>
+
+                    <div class="pv-detail-grid mb-4">
+                        <div class="pv-detail-field">
+                            <span class="pv-df-label">Máquina (OF)</span>
+                            <span class="pv-df-value" t-esc="props.maquina.of"/>
+                        </div>
+                        <div class="pv-detail-field">
+                            <span class="pv-df-label">Tipo de Certificado</span>
+                            <span class="pv-df-value text-uppercase" t-esc="state.tipo"/>
+                        </div>
+                        <div class="pv-detail-field">
+                            <span class="pv-df-label">Fecha</span>
+                            <span class="pv-df-value" t-esc="state.fecha"/>
+                        </div>
+                        <div class="pv-detail-field">
+                            <span class="pv-df-label">Archivo Adjunto</span>
+                            <span class="pv-df-value text-success" t-esc="state.archivoNombre"/>
+                        </div>
+                    </div>
+                </t>
+            </div>
+
+            <!-- Wizard Footer Buttons -->
+            <div class="pv-wizard-footer">
+                <div>
+                    <t t-if="state.currentStep &gt; 1">
+                        <button class="pv-btn pv-btn-secondary" t-on-click="() => this.prevStep()">
+                            <i class="fa fa-arrow-left"/> Anterior
+                        </button>
+                    </t>
+                    <t t-else="">
+                        <button class="pv-btn pv-btn-secondary" t-on-click="props.onClose">
+                            Cancelar
+                        </button>
+                    </t>
+                </div>
+
+                <div>
+                    <t t-if="state.currentStep &lt; 3">
+                        <button class="pv-btn pv-btn-primary" t-on-click="() => this.nextStep()">
+                            Siguiente <i class="fa fa-arrow-right"/>
+                        </button>
+                    </t>
+                    <t t-else="">
+                        <button class="pv-btn pv-btn-success" t-att-disabled="state.submitting" t-on-click="() => this.submitCertificado()">
+                            <i class="fa fa-upload"/> Cargar Certificado
+                        </button>
+                    </t>
+                </div>
+            </div>
+        </div>
+    </t>
+
+</templates>

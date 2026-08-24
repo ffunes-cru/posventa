@@ -105,3 +105,56 @@ class PvDashboard(models.TransientModel):
             'target': 'current',
             'context': self.env.context,
         }
+
+    @api.model
+    def get_concesionario_portal_data(self):
+        """Return all data needed by the concesionario OWL portal in a single RPC call."""
+        concesionario = self.env['pv.concesionario'].search([('user_id', '=', self.env.uid)], limit=1)
+        if not concesionario:
+            return {'error': 'No se encontró un concesionario vinculado a este usuario.'}
+
+        # Ticket counts by state (only concesionario's tickets)
+        Ticket = self.env['pv.ticket']
+        domain_base = [('concesionario_id', '=', concesionario.id)]
+        groups = Ticket._read_group(domain_base, ['estado'], ['__count'])
+        counts = {estado: count for estado, count in groups if estado}
+
+        # KPIs (averages for this concesionario)
+        self.env.cr.execute("""
+            SELECT AVG(t1_horas), AVG(t2_horas), AVG(t3_horas)
+            FROM pv_ticket
+            WHERE concesionario_id = %s
+        """, (concesionario.id,))
+        res = self.env.cr.fetchone()
+        avg_t1 = round(res[0] or 0.0, 1) if res else 0.0
+        avg_t2 = round(res[1] or 0.0, 1) if res else 0.0
+        avg_t3 = round(res[2] or 0.0, 1) if res else 0.0
+
+        # Machine count
+        maquina_count = self.env['pv.maquina'].search_count([('concesionario_id', '=', concesionario.id)])
+
+        # Pending transfers (machines where this concesionario is destination)
+        transferencias_pendientes = self.env['pv.maquina'].search_count([
+            ('concesionario_destino_id', '=', concesionario.id),
+            ('estado', '=', 'pendiente'),
+        ])
+
+        return {
+            'concesionario_id': concesionario.id,
+            'concesionario_name': concesionario.name,
+            'maquina_count': maquina_count,
+            'transferencias_pendientes': transferencias_pendientes,
+            'counts': {
+                'borrador': counts.get('borrador', 0),
+                'abierto': counts.get('abierto', 0),
+                'en_proceso': counts.get('en_proceso', 0),
+                'aceptado': counts.get('aceptado', 0),
+                'rechazado': counts.get('rechazado', 0),
+                'cerrado': counts.get('cerrado', 0),
+            },
+            'kpis': {
+                'avg_t1': avg_t1,
+                'avg_t2': avg_t2,
+                'avg_t3': avg_t3,
+            },
+        }

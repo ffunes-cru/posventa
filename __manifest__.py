@@ -49,10 +49,18 @@ Módulo para la gestión integral de reclamos de posventa:
         'views/pv_ticket_medida_views.xml',
         'views/pv_catalogo_views.xml',
         'views/pv_dashboard_views.xml',
+        'views/pv_portal_action.xml',
         'views/pv_menu.xml',
         # Report
         'report/pv_ticket_report.xml',
     ],
+    'assets': {
+        'web.assets_backend': [
+            'posventa/static/src/portal/**/*.scss',
+            'posventa/static/src/portal/**/*.js',
+            'posventa/static/src/portal/**/*.xml',
+        ],
+    },
     'external_dependencies': {
         'python': ['openpyxl'],
     },

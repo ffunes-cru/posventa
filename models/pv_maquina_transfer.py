@@ -28,24 +28,33 @@ class PvMaquina(models.Model):
 
         maquina_sudo = self.sudo()
 
-        self.env['pv.certificado'].sudo().search([('maquina_id', '=', self.id)]).write({'active': False})
+        # Determinamos el estado según los certificados vigentes que posee la máquina
+        certificados_vigentes = self.env['pv.certificado'].sudo().search([
+            ('maquina_id', '=', self.id),
+            ('active', '=', True),
+            ('estado_certificado', '=', 'vigente'),
+        ])
+        tipos_vigentes = certificados_vigentes.mapped('tipo')
+        if 'cpm' in tipos_vigentes:
+            new_estado = 'vendida'
+        elif 'fru' in tipos_vigentes:
+            new_estado = 'stock'
+        else:
+            new_estado = 'liberada'
 
-        # Hacemos efectiva la transferencia y reseteamos los booleanos de certificados
+        # Hacemos efectiva la transferencia manteniendo los certificados vigentes y su historial
         maquina_sudo.write({
             'concesionario_id': self.concesionario_destino_id.id,
             'provincia_id': self.provincia_destino_id.id,
             'ciudad': self.ciudad_destino,
-            'estado': 'liberada',
-            'tiene_fru': False,
-            'tiene_feu': False,
-            'tiene_cpm': False,
+            'estado': new_estado,
             # Limpiamos los campos temporales
             'concesionario_destino_id': False,
             'provincia_destino_id': False,
             'ciudad_destino': False,
         })
-        maquina_sudo.modified(['certificado_ids'])
-        maquina_sudo.message_post(body=_("Transferencia ACEPTADA. Nuevo dueño: %s") % self.concesionario_id.name)
+        maquina_sudo._compute_tiene_certificados()
+        maquina_sudo.message_post(body=_("Transferencia ACEPTADA. Nuevo dueño: %s. Los certificados existentes se conservan intactos.") % self.concesionario_destino_id.name)
 
     def action_rechazar_transferencia(self):
         self.ensure_one()
@@ -56,11 +65,18 @@ class PvMaquina(models.Model):
 
         maquina_sudo = self.sudo()
 
+        # Restablecemos estado previo (stock si tenía FRU, vendida si CPM, o liberada)
+        prev_estado = 'liberada'
+        if maquina_sudo.tiene_cpm:
+            prev_estado = 'vendida'
+        elif maquina_sudo.tiene_fru:
+            prev_estado = 'stock'
+
         # Cancelamos todo y vuelve a su estado normal con su dueño original
         maquina_sudo.write({
-            'estado': 'stock', # O el estado previo que consideres
+            'estado': prev_estado,
             'concesionario_destino_id': False,
             'provincia_destino_id': False,
             'ciudad_destino': False,
         })
-        maquina_sudo.message_post(body=_("Transferencia RECHAZADA por el concesionario %s. La máquina permanece con el dueño original.") % concesionario_que_rechazo)
+        maquina_sudo.message_post(body=_("Transferencia RECHAZADA por el concesionario %s. La máquina vuelve a estado %s con su dueño original.") % (concesionario_que_rechazo, prev_estado))

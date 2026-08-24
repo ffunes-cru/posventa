@@ -1,0 +1,472 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <t t-name="posventa.PortalConcesionario">
+        <div class="pv-portal">
+            <!-- Header & Breadcrumbs -->
+            <div class="pv-portal-header">
+                <div>
+                    <h2><i class="fa fa-handshake-o me-2"/> Portal Concesionario</h2>
+                    <div class="pv-breadcrumb">
+                        <t t-foreach="breadcrumbs" t-as="crumb" t-key="crumb_index">
+                            <t t-if="crumb.action">
+                                <a t-on-click="crumb.action" t-esc="crumb.label"/>
+                            </t>
+                            <t t-else="">
+                                <span class="current" t-esc="crumb.label"/>
+                            </t>
+                            <t t-if="crumb_index &lt; breadcrumbs.length - 1">
+                                <span class="separator">/</span>
+                            </t>
+                        </t>
+                    </div>
+                </div>
+
+                <div>
+                    <button class="pv-refresh-btn" t-on-click="() => this.goHome()">
+                        <i class="fa fa-refresh me-1"/> Actualizar
+                    </button>
+                </div>
+            </div>
+
+            <!-- Main Content Container -->
+            <div class="pv-portal-content">
+
+                <!-- Loading State -->
+                <t t-if="state.loading">
+                    <div class="pv-loading">
+                        <i class="fa fa-spinner fa-spin"/>
+                        <p>Cargando información del portal...</p>
+                    </div>
+                </t>
+
+                <!-- VIEW 1: HOME -->
+                <t t-elif="state.view === 'home'">
+                    <t t-if="state.portalData">
+                        <!-- Welcome Banner -->
+                        <div class="alert alert-light border shadow-sm p-4 mb-4 d-flex justify-content-between align-items-center rounded-3">
+                            <div>
+                                <h4 class="fw-bold text-primary mb-1">
+                                    ¡Bienvenido/a, <t t-esc="state.portalData.concesionario_name"/>!
+                                </h4>
+                                <p class="text-muted mb-0">Gestión simplificada de máquinas, certificados y reclamos de posventa.</p>
+                            </div>
+                            <div>
+                                <button class="pv-btn pv-btn-primary py-2 px-4" t-on-click="() => this.goToMaquinas()">
+                                    <i class="fa fa-truck me-2"/> Ver Mis Máquinas
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Big Action Cards -->
+                        <div class="pv-home-cards">
+                            <div class="pv-home-card pv-card-maquinas" t-on-click="() => this.goToMaquinas()">
+                                <i class="fa fa-cubes pv-card-icon"/>
+                                <div class="pv-card-count" t-esc="state.portalData.maquina_count"/>
+                                <div class="pv-card-label">Mis Máquinas</div>
+                            </div>
+
+                            <t t-if="state.portalData.transferencias_pendientes &gt; 0">
+                                <div class="pv-home-card pv-card-transferencias" t-on-click="() => this.setEstadoFilter('pendiente')">
+                                    <i class="fa fa-exchange pv-card-icon"/>
+                                    <div class="pv-card-count" t-esc="state.portalData.transferencias_pendientes"/>
+                                    <div class="pv-card-label">Transferencias Pendientes</div>
+                                </div>
+                            </t>
+                        </div>
+
+                        <!-- Ticket Counts by State -->
+                        <div class="pv-section-title">
+                            <i class="fa fa-ticket"/> Estado de Reclamos / Tickets
+                        </div>
+                        <div class="pv-ticket-cards">
+                            <div class="pv-ticket-card tc-borrador" t-on-click="() => this.openTicketsByEstado('borrador')">
+                                <div class="pv-tc-label">Borrador</div>
+                                <div class="pv-tc-count" t-esc="state.portalData.counts.borrador"/>
+                            </div>
+                            <div class="pv-ticket-card tc-abierto" t-on-click="() => this.openTicketsByEstado('abierto')">
+                                <div class="pv-tc-label">Abiertos</div>
+                                <div class="pv-tc-count" t-esc="state.portalData.counts.abierto"/>
+                            </div>
+                            <div class="pv-ticket-card tc-en_proceso" t-on-click="() => this.openTicketsByEstado('en_proceso')">
+                                <div class="pv-tc-label">En Proceso</div>
+                                <div class="pv-tc-count" t-esc="state.portalData.counts.en_proceso"/>
+                            </div>
+                            <div class="pv-ticket-card tc-aceptado" t-on-click="() => this.openTicketsByEstado('aceptado')">
+                                <div class="pv-tc-label">Aceptados</div>
+                                <div class="pv-tc-count" t-esc="state.portalData.counts.aceptado"/>
+                            </div>
+                            <div class="pv-ticket-card tc-rechazado" t-on-click="() => this.openTicketsByEstado('rechazado')">
+                                <div class="pv-tc-label">Rechazados</div>
+                                <div class="pv-tc-count" t-esc="state.portalData.counts.rechazado"/>
+                            </div>
+                            <div class="pv-ticket-card tc-cerrado" t-on-click="() => this.openTicketsByEstado('cerrado')">
+                                <div class="pv-tc-label">Cerrados</div>
+                                <div class="pv-tc-count" t-esc="state.portalData.counts.cerrado"/>
+                            </div>
+                        </div>
+
+                        <!-- KPIs -->
+                        <div class="pv-section-title mt-4">
+                            <i class="fa fa-bar-chart"/> Indicadores de Tiempo Promedio (KPIs)
+                        </div>
+                        <div class="pv-kpi-cards">
+                            <div class="pv-kpi-card pv-kpi-t1">
+                                <div class="pv-kpi-label">T1: Primera Atención</div>
+                                <div class="pv-kpi-value"><t t-esc="state.portalData.kpis.avg_t1"/>h</div>
+                                <div class="pv-kpi-desc">Tiempo hasta primera asignación</div>
+                            </div>
+                            <div class="pv-kpi-card pv-kpi-t2">
+                                <div class="pv-kpi-label">T2: Tiempo de Solución</div>
+                                <div class="pv-kpi-value"><t t-esc="state.portalData.kpis.avg_t2"/>h</div>
+                                <div class="pv-kpi-desc">Tiempo promedio de solución del reclamo</div>
+                            </div>
+                            <div class="pv-kpi-card pv-kpi-t3">
+                                <div class="pv-kpi-label">T3: Cierre Definitivo</div>
+                                <div class="pv-kpi-value"><t t-esc="state.portalData.kpis.avg_t3"/>h</div>
+                                <div class="pv-kpi-desc">Tiempo hasta cierre administrativo</div>
+                            </div>
+                        </div>
+                    </t>
+                </t>
+
+                <!-- VIEW 2: MAQUINAS LIST -->
+                <t t-elif="state.view === 'maquinas'">
+                    <div class="pv-section-title justify-content-between">
+                        <div><i class="fa fa-truck me-2"/> Mis Máquinas</div>
+                    </div>
+
+                    <!-- Search & Filters -->
+                    <div class="pv-maquina-filters">
+                        <div class="position-relative d-inline-block flex-grow-1" style="max-width: 420px;">
+                            <input type="text" class="pv-search-input w-100" placeholder="Buscar por Orden de Fabricación (OF) o modelo..."
+                                t-att-value="state.searchTerm" t-on-input="(ev) => this.onSearchInput(ev)"/>
+                            <t t-if="state.loadingMaquinas">
+                                <i class="fa fa-spinner fa-spin position-absolute text-muted" style="right: 14px; top: 12px; font-size: 14px;"/>
+                            </t>
+                        </div>
+
+                        <button class="pv-filter-btn" t-att-class="{'active': state.estadoFilter === ''}" t-on-click="() => this.setEstadoFilter('')">Todas</button>
+                        <button class="pv-filter-btn" t-att-class="{'active': state.estadoFilter === 'liberada'}" t-on-click="() => this.setEstadoFilter('liberada')">Liberada</button>
+                        <button class="pv-filter-btn" t-att-class="{'active': state.estadoFilter === 'stock'}" t-on-click="() => this.setEstadoFilter('stock')">Stock</button>
+                        <button class="pv-filter-btn" t-att-class="{'active': state.estadoFilter === 'vendida'}" t-on-click="() => this.setEstadoFilter('vendida')">Vendida</button>
+                        <button class="pv-filter-btn" t-att-class="{'active': state.estadoFilter === 'pendiente'}" t-on-click="() => this.setEstadoFilter('pendiente')">Pendiente Transferencia</button>
+                        <button class="pv-filter-btn" t-att-class="{'active': state.estadoFilter === 'cpm_vencido'}" t-on-click="() => this.setEstadoFilter('cpm_vencido')">CPM Vencido</button>
+                    </div>
+
+                    <!-- Grid -->
+                    <t t-if="state.maquinas.length &gt; 0">
+                        <div class="pv-maquina-grid">
+                            <t t-foreach="state.maquinas" t-as="m" t-key="m.id">
+                                <div class="pv-maquina-card" t-on-click="() => this.goToMaquinaDetail(m.id)">
+                                    <div class="pv-mc-header">
+                                        <div>
+                                            <div class="pv-mc-of"><t t-esc="m.of"/></div>
+                                            <div class="pv-mc-tipo"><t t-esc="m.tipo_label"/></div>
+                                        </div>
+                                        <span class="pv-badge" t-att-class="'pv-badge-' + m.estado" t-esc="m.estado_label"/>
+                                    </div>
+
+                                    <div class="text-muted small mb-2">
+                                        <i class="fa fa-user me-1"/> <t t-esc="m.cliente || 'Sin cliente asignado'"/>
+                                    </div>
+
+                                    <div class="pv-cert-indicators">
+                                        <span class="pv-cert-dot" t-att-class="m.tiene_fru ? 'active' : 'inactive'">
+                                            <i class="fa" t-att-class="m.tiene_fru ? 'fa-check-circle' : 'fa-circle-o'"/> FRU
+                                        </span>
+                                        <span class="pv-cert-dot" t-att-class="m.tiene_feu ? 'active' : 'inactive'">
+                                            <i class="fa" t-att-class="m.tiene_feu ? 'fa-check-circle' : 'fa-circle-o'"/> FEU
+                                        </span>
+                                        <span class="pv-cert-dot" t-att-class="m.tiene_cpm ? 'active' : 'inactive'">
+                                            <i class="fa" t-att-class="m.tiene_cpm ? 'fa-check-circle' : 'fa-circle-o'"/> CPM
+                                        </span>
+                                    </div>
+                                </div>
+                            </t>
+                        </div>
+                    </t>
+                    <t t-else="">
+                        <div class="pv-empty">
+                            <i class="fa fa-search"/>
+                            <p>No se encontraron máquinas con los filtros seleccionados.</p>
+                        </div>
+                    </t>
+                </t>
+
+                <!-- VIEW 3: MAQUINA DETAIL -->
+                <t t-elif="state.view === 'maquina_detail'">
+                    <t t-if="state.maquinaDetail">
+                        <div class="pv-detail-header">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <div class="pv-detail-title">
+                                        OF: <t t-esc="state.maquinaDetail.of"/> — <t t-esc="state.maquinaDetail.tipo_label"/>
+                                    </div>
+                                    <div class="pv-detail-subtitle">
+                                        <i class="fa fa-user me-1"/> <t t-esc="state.maquinaDetail.cliente || 'Sin cliente asignado'"/>
+                                        <t t-if="state.maquinaDetail.ciudad">
+                                            • <i class="fa fa-map-marker me-1"/> <t t-esc="state.maquinaDetail.ciudad"/>, <t t-esc="state.maquinaDetail.provincia"/>
+                                        </t>
+                                    </div>
+                                </div>
+                                <div>
+                                    <span class="pv-badge" t-att-class="'pv-badge-' + state.maquinaDetail.estado" t-esc="state.maquinaDetail.estado_label"/>
+                                </div>
+                            </div>
+
+                            <!-- Transfer Alerts -->
+                            <t t-if="state.maquinaDetail.es_pendiente_transferencia">
+                                <t t-if="state.maquinaDetail.es_concesionario_destino">
+                                    <div class="alert alert-warning mt-3 mb-0 d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <strong><i class="fa fa-exchange me-1"/> Propuesta de Transferencia Recibida:</strong> Esta máquina le ha sido transferida a su concesionario. Por favor confirme si acepta o rechaza el traslado.
+                                        </div>
+                                        <div class="d-flex gap-2">
+                                            <button class="pv-btn pv-btn-success py-1 px-3" t-on-click="() => this.aceptarTransferencia(state.maquinaDetail.id)">
+                                                <i class="fa fa-check"/> Aceptar
+                                            </button>
+                                            <button class="pv-btn pv-btn-secondary py-1 px-3 text-danger" t-on-click="() => this.rechazarTransferencia(state.maquinaDetail.id)">
+                                                <i class="fa fa-times"/> Rechazar
+                                            </button>
+                                        </div>
+                                    </div>
+                                </t>
+                                <t t-elif="state.maquinaDetail.es_concesionario_origen">
+                                    <div class="alert alert-info mt-3 mb-0 d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <strong><i class="fa fa-clock-o me-1"/> Solicitud de Traslado Enviada:</strong> Máquina en proceso de transferencia hacia el concesionario <strong><t t-esc="state.maquinaDetail.concesionario_destino_name"/></strong> (Pendiente de su aceptación).
+                                        </div>
+                                        <div>
+                                            <button class="pv-btn pv-btn-secondary py-1 px-3 text-danger" t-on-click="() => this.cancelarTransferencia(state.maquinaDetail.id)">
+                                                <i class="fa fa-ban me-1"/> Cancelar Traslado
+                                            </button>
+                                        </div>
+                                    </div>
+                                </t>
+                            </t>
+
+                            <!-- Primary Actions for this Machine -->
+                            <div class="pv-detail-actions">
+                                <button class="pv-btn pv-btn-primary" t-att-disabled="!state.maquinaDetail.puede_crear_ticket"
+                                    t-on-click="() => this.goToTicketWizard(state.maquinaDetail.id)">
+                                    <i class="fa fa-plus-circle"/> Crear Ticket de Reclamo
+                                </button>
+
+                                <button class="pv-btn pv-btn-success" t-att-disabled="!state.maquinaDetail.puede_crear_certificado"
+                                    t-on-click="() => this.goToCertificadoWizard(state.maquinaDetail.id)">
+                                    <i class="fa fa-upload"/>
+                                    <t t-if="state.maquinaDetail.tiene_cpm">Máquina Completa (CPM Activo)</t>
+                                    <t t-else="">Cargar Certificado</t>
+                                </button>
+                                <t t-if="state.maquinaDetail.puede_transferir">
+                                    <button class="pv-btn pv-btn-warning" t-on-click="() => this.openTransferModal()">
+                                        <i class="fa fa-exchange"/> Trasladar Máquina
+                                    </button>
+                                </t>
+                                <t t-if="state.maquinaDetail.puede_liberar_maquina">
+                                    <button class="pv-btn pv-btn-secondary text-dark" t-on-click="() => this.liberarMaquina(state.maquinaDetail.id)">
+                                        <i class="fa fa-undo me-1"/> Liberar Máquina (Canje / Reset)
+                                    </button>
+                                </t>
+                            </div>
+                        </div>
+
+                        <!-- Active & Historical Certificates -->
+                        <div class="card border-0 shadow-sm rounded-3 p-4 mb-4 bg-white">
+                            <h5 class="fw-bold mb-3"><i class="fa fa-file-text-o text-primary me-2"/> Historial de Certificados</h5>
+                            <t t-if="state.maquinaDetail.certificados.length &gt; 0">
+                                <div class="table-responsive">
+                                    <table class="table table-hover align-middle mb-0">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Tipo</th>
+                                                <th>Concesionario Emisor</th>
+                                                <th>Estado / Tag</th>
+                                                <th>Fecha Emisión</th>
+                                                <th>Vencimiento</th>
+                                                <th>Días Restantes</th>
+                                                <th>Archivo</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <t t-foreach="state.maquinaDetail.certificados" t-as="c" t-key="c.id">
+                                                <tr>
+                                                    <td class="fw-bold" t-esc="c.tipo_label"/>
+                                                    <td>
+                                                        <span class="text-secondary small fw-bold" t-esc="c.concesionario_name || '-'"/>
+                                                    </td>
+                                                    <td>
+                                                        <span class="badge" t-att-class="{
+                                                            'bg-success': c.estado_certificado === 'vigente',
+                                                            'bg-danger': c.estado_certificado === 'vencido',
+                                                            'bg-warning text-dark': c.estado_certificado === 'archivado_traslado',
+                                                            'bg-secondary': c.estado_certificado === 'archivado_manual' || c.estado_certificado === 'legacy'
+                                                        }" t-esc="c.estado_certificado_label"/>
+                                                    </td>
+                                                    <td t-esc="c.fecha"/>
+                                                    <td>
+                                                        <t t-if="c.fecha_vencimiento">
+                                                            <t t-esc="c.fecha_vencimiento"/>
+                                                        </t>
+                                                        <t t-else="">-</t>
+                                                    </td>
+                                                    <td>
+                                                        <t t-if="c.estado_certificado === 'vigente' and c.fecha_vencimiento">
+                                                            <t t-if="c.dias_para_vencer &gt; 0">
+                                                                <span class="badge bg-info text-dark">
+                                                                    <i class="fa fa-clock-o me-1"/> Quedan <t t-esc="c.dias_para_vencer"/> días
+                                                                </span>
+                                                            </t>
+                                                            <t t-elif="c.dias_para_vencer === 0">
+                                                                <span class="badge bg-warning text-dark">
+                                                                    <i class="fa fa-exclamation-triangle me-1"/> Vence Hoy
+                                                                </span>
+                                                            </t>
+                                                            <t t-else="">
+                                                                <span class="badge bg-danger">
+                                                                    Vencido hace <t t-esc="Math.abs(c.dias_para_vencer)"/> días
+                                                                </span>
+                                                            </t>
+                                                        </t>
+                                                        <t t-else="">
+                                                            <span class="text-muted">-</span>
+                                                        </t>
+                                                    </td>
+                                                    <td>
+                                                        <t t-if="c.archivo_nombre">
+                                                            <a t-attf-href="/web/content?model=pv.certificado&amp;id={{c.id}}&amp;field=archivo&amp;filename={{c.archivo_nombre}}&amp;download=true"
+                                                               target="_blank"
+                                                               class="text-danger text-decoration-none fw-bold d-inline-flex align-items-center"
+                                                               title="Descargar certificado">
+                                                                <i class="fa fa-download me-1"/> <t t-esc="c.archivo_nombre"/>
+                                                            </a>
+                                                        </t>
+                                                        <t t-else="">
+                                                            <span class="text-muted">-</span>
+                                                        </t>
+                                                    </td>
+                                                </tr>
+                                            </t>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </t>
+                            <t t-else="">
+                                <p class="text-muted mb-0">No posee certificados cargados aún.</p>
+                            </t>
+                        </div>
+
+                        <!-- Ticket History -->
+                        <div class="card border-0 shadow-sm rounded-3 p-4 mb-4 bg-white">
+                            <h5 class="fw-bold mb-3"><i class="fa fa-history text-primary me-2"/> Historial de Tickets</h5>
+                            <t t-if="state.maquinaDetail.tickets.length &gt; 0">
+                                <div class="table-responsive">
+                                    <table class="table table-hover align-middle mb-0">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Número</th>
+                                                <th>Tipo</th>
+                                                <th>Sistema</th>
+                                                <th>Fecha</th>
+                                                <th>Estado</th>
+                                                <th>Descripción</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <t t-foreach="state.maquinaDetail.tickets" t-as="t" t-key="t.id">
+                                                <tr>
+                                                    <td class="fw-bold text-primary" t-esc="t.name"/>
+                                                    <td t-esc="t.tipo_ticket"/>
+                                                    <td t-esc="t.sistema"/>
+                                                    <td t-esc="t.fecha_creacion"/>
+                                                    <td>
+                                                        <span class="pv-badge" t-att-class="'pv-badge-' + t.estado" t-esc="t.estado"/>
+                                                    </td>
+                                                    <td class="text-truncate" style="max-width: 250px;" t-esc="t.descripcion"/>
+                                                </tr>
+                                            </t>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </t>
+                            <t t-else="">
+                                <p class="text-muted mb-0">No se han registrado tickets para esta máquina.</p>
+                            </t>
+                        </div>
+                    </t>
+                </t>
+
+                <!-- VIEW 4: TICKET WIZARD -->
+                <t t-elif="state.view === 'ticket_wizard'">
+                    <t t-if="state.maquinaDetail">
+                        <TicketWizard maquina="state.maquinaDetail"
+                            onClose="() => this.goToMaquinaDetail(state.selectedMaquinaId)"
+                            onSuccess="(ticketId) => this.goToMaquinaDetail(state.selectedMaquinaId)"/>
+                    </t>
+                </t>
+
+                <!-- VIEW 5: CERTIFICADO WIZARD -->
+                <t t-elif="state.view === 'certificado_wizard'">
+                    <t t-if="state.maquinaDetail">
+                        <CertificadoWizard maquina="state.maquinaDetail"
+                            onClose="() => this.goToMaquinaDetail(state.selectedMaquinaId)"
+                            onSuccess="(certId) => this.goToMaquinaDetail(state.selectedMaquinaId)"/>
+                    </t>
+                </t>
+
+            </div>
+
+            <!-- Transfer Machine Modal -->
+            <t t-if="state.showTransferModal">
+                <div class="pv-modal-backdrop" t-on-click.self="() => this.closeTransferModal()">
+                    <div class="pv-modal-dialog">
+                        <div class="pv-modal-header">
+                            <h4><i class="fa fa-exchange me-2"/> Trasladar Máquina a otro Concesionario</h4>
+                            <button class="btn-close btn-close-white" t-on-click="() => this.closeTransferModal()"/>
+                        </div>
+                        <div class="pv-modal-body">
+                            <p class="text-muted small">
+                                Indique el concesionario de destino y su ubicación. La máquina pasará a estado <strong>PENDIENTE DE TRANSFERENCIA</strong> hasta que el concesionario receptor la acepte.
+                            </p>
+
+                            <div class="pv-form-group">
+                                <label>Concesionario Destino <span class="required">*</span></label>
+                                <select class="pv-form-select" t-model="state.transferConcesionarioId">
+                                    <option value="">-- Seleccione Concesionario --</option>
+                                    <t t-foreach="state.transferConcesionarios" t-as="conc" t-key="conc.id">
+                                        <option t-att-value="conc.id" t-esc="conc.name"/>
+                                    </t>
+                                </select>
+                            </div>
+
+                            <div class="pv-form-group">
+                                <label>Provincia Destino <span class="required">*</span></label>
+                                <select class="pv-form-select" t-model="state.transferProvinciaId">
+                                    <option value="">-- Seleccione Provincia --</option>
+                                    <t t-foreach="state.transferProvincias" t-as="prov" t-key="prov.id">
+                                        <option t-att-value="prov.id" t-esc="prov.name"/>
+                                    </t>
+                                </select>
+                            </div>
+
+                            <div class="pv-form-group">
+                                <label>Ciudad Destino <span class="required">*</span></label>
+                                <input type="text" class="pv-form-input" placeholder="Nombre de la ciudad..." t-model="state.transferCiudad"/>
+                            </div>
+                        </div>
+                        <div class="pv-modal-footer">
+                            <button class="pv-btn pv-btn-secondary" t-on-click="() => this.closeTransferModal()">
+                                Cancelar
+                            </button>
+                            <button class="pv-btn pv-btn-warning" t-att-disabled="state.submittingTransfer" t-on-click="() => this.submitTransferModal()">
+                                <i class="fa fa-paper-plane me-1"/> Enviar Solicitud de Traslado
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </t>
+        </div>
+    </t>
+
+</templates>

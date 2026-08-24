@@ -40,6 +40,12 @@
                         class="btn-secondary" 
                         invisible="estado != 'pendiente'"/>
 
+                    <button name="action_liberar_maquina" 
+                        string="Liberar Máquina (Canje)" 
+                        type="object" 
+                        class="btn-secondary" 
+                        invisible="estado not in ('stock', 'vendida', 'cpm_vencido')"/>
+
                     <field name="estado" widget="statusbar" statusbar_visible="liberada,stock,vendida,cpm_vencido"/>
                 </header>
                 <sheet>
@@ -75,7 +81,11 @@
                             <field name="certificado_ids" mode="list" readonly="1">
                                 <list>
                                     <field name="tipo"/>
+                                    <field name="concesionario_id" string="Concesionario Emisor"/>
+                                    <field name="estado_certificado" widget="badge" decoration-success="estado_certificado == 'vigente'" decoration-danger="estado_certificado == 'vencido'" decoration-warning="estado_certificado == 'archivado_traslado'"/>
                                     <field name="fecha"/>
+                                    <field name="fecha_vencimiento"/>
+                                    <field name="dias_para_vencer"/>
                                     <field name="archivo_nombre"/>
                                 </list>
                             </field>

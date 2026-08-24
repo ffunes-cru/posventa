@@ -9,7 +9,10 @@
                 <field name="name"/>
                 <field name="tipo"/>
                 <field name="maquina_id"/>
+                <field name="estado_certificado" widget="badge" decoration-success="estado_certificado == 'vigente'" decoration-danger="estado_certificado == 'vencido'" decoration-warning="estado_certificado == 'archivado_traslado'"/>
                 <field name="fecha"/>
+                <field name="fecha_vencimiento"/>
+                <field name="dias_para_vencer"/>
                 <field name="concesionario_id"/>
             </list>
         </field>
@@ -33,12 +36,14 @@
                             <field name="tipo" readonly="id"/>
                             <field name="maquina_id" domain="[('tiene_cpm', '=', False)]" readonly="context.get('default_maquina_id') or id"/>
                             <field name="fecha" readonly="id"/>
+                            <field name="estado_certificado" widget="badge"/>
                         </group>
                         <group>
                             <field name="archivo" filename="archivo_nombre" readonly="id"/>
                             <field name="archivo_nombre" invisible="1"/>
                             <field name="concesionario_id" readonly="1" force_save="1"/>
                             <field name="fecha_vencimiento" readonly="1"/>
+                            <field name="dias_para_vencer" readonly="1"/>
                             <field name="active" readonly="1"/>
                         </group>
                     </group>
