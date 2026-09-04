@@ -6,22 +6,28 @@ class ResConfigSettings(models.TransientModel):
     _inherit = 'res.config.settings'
 
     pv_fru_expiration_days = fields.Integer(
-        string='Días de Vencimiento FRU',
+        string='Plazo de Carga FRU (Días)',
         config_parameter='posventa.fru_expiration_days',
         default=10,
-        help='Días desde la fecha de ingreso (creación) de la máquina para que venza el certificado FRU.'
+        help='Días desde el ingreso/liberación de la máquina para que venza el plazo nominal de carga del FRU.'
+    )
+    pv_fru_grace_days = fields.Integer(
+        string='Días de Gracia / Vigencia FRU',
+        config_parameter='posventa.fru_grace_days',
+        default=3,
+        help='Días de gracia tras el vencimiento nominal durante los cuales el FRU sigue vigente para crear tickets antes de pasar a Vencido.'
     )
     pv_feu_expiration_days = fields.Integer(
-        string='Días de Vencimiento FEU',
+        string='Plazo de Carga FEU (Días)',
         config_parameter='posventa.feu_expiration_days',
         default=20,
-        help='Días desde la fecha de ingreso (creación) de la máquina para que venza el certificado FEU.'
+        help='Días desde el ingreso/liberación de la máquina para que venza el plazo nominal de carga del FEU.'
     )
-    pv_cpm_expiration_days = fields.Integer(
-        string='Días de Vencimiento CPM',
-        config_parameter='posventa.cpm_expiration_days',
-        default=60,
-        help='Días de validez para el Certificado de Puesta en Marcha (CPM) desde su fecha de carga.'
+    pv_feu_claims_validity_days = fields.Integer(
+        string='Validez de Reclamos FEU (Días)',
+        config_parameter='posventa.feu_claims_validity_days',
+        default=90,
+        help='Días desde la emisión/carga del FEU durante los cuales está vigente para crear tickets antes de vencer y requerir renovación.'
     )
     pv_enable_ai_integration = fields.Boolean(
         string='Habilitar Integración con IA',

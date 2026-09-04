@@ -54,8 +54,18 @@ class TestTicketWorkflow(TestPosventaCommon):
         self.assertEqual(ticket.estado, 'borrador')
         self.assertEqual(ticket.certificado_id, self.fru)
 
-        # Concessionaire sends ticket
-        ticket.with_user(self.user_concesionario_a)._action_enviar_ticket_direct()
+        # Attach standard ir.attachment
+        attachment = self.env['ir.attachment'].with_user(self.user_concesionario_a).create({
+            'name': 'foto_rotura.png',
+            'datas': DUMMY_PDF_BASE64,
+            'res_model': 'pv.ticket',
+            'res_id': ticket.id,
+            'mimetype': 'image/png',
+        })
+        self.assertTrue(attachment.id)
+
+        # Concessionaire sends ticket via public action_enviar_ticket_direct
+        ticket.with_user(self.user_concesionario_a).action_enviar_ticket_direct()
         self.assertEqual(ticket.estado, 'abierto')
 
         # 2. Concessionaire cannot modify acciones_realizadas once out of borrador
@@ -102,7 +112,7 @@ class TestTicketWorkflow(TestPosventaCommon):
         })
         self.assertEqual(ticket.certificado_id, self.cpm)
 
-        ticket.with_user(self.user_concesionario_a)._action_enviar_ticket_direct()
+        ticket.with_user(self.user_concesionario_a).action_enviar_ticket_direct()
         ticket.with_user(self.user_staff).action_tomar_ticket()
 
         # Staff rejects ticket

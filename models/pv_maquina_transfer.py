@@ -28,33 +28,29 @@ class PvMaquina(models.Model):
 
         maquina_sudo = self.sudo()
 
-        # Determinamos el estado según los certificados vigentes que posee la máquina
-        certificados_vigentes = self.env['pv.certificado'].sudo().search([
-            ('maquina_id', '=', self.id),
-            ('active', '=', True),
-            ('estado_certificado', '=', 'vigente'),
-        ])
-        tipos_vigentes = certificados_vigentes.mapped('tipo')
-        if 'cpm' in tipos_vigentes:
-            new_estado = 'vendida'
-        elif 'fru' in tipos_vigentes:
-            new_estado = 'stock'
-        else:
-            new_estado = 'liberada'
+        # Los certificados anteriores (vigentes o vencidos) pasan a 'archivado_traslado'
+        certificados_anteriores = maquina_sudo.certificado_ids.filtered(
+            lambda c: c.estado_certificado in ('vigente', 'vencido')
+        )
+        if certificados_anteriores:
+            certificados_anteriores.write({'estado_certificado': 'archivado_traslado'})
 
-        # Hacemos efectiva la transferencia manteniendo los certificados vigentes y su historial
+        # Hacemos efectiva la transferencia pasando la máquina a LIBERADA para que el nuevo dueño cargue sus certificados
         maquina_sudo.write({
             'concesionario_id': self.concesionario_destino_id.id,
             'provincia_id': self.provincia_destino_id.id,
             'ciudad': self.ciudad_destino,
-            'estado': new_estado,
+            'estado': 'liberada',
+            'fecha_liberacion': fields.Date.today(),
             # Limpiamos los campos temporales
             'concesionario_destino_id': False,
             'provincia_destino_id': False,
             'ciudad_destino': False,
         })
         maquina_sudo._compute_tiene_certificados()
-        maquina_sudo.message_post(body=_("Transferencia ACEPTADA. Nuevo dueño: %s. Los certificados existentes se conservan intactos.") % self.concesionario_destino_id.name)
+        maquina_sudo.message_post(
+            body=_("Transferencia ACEPTADA. Nuevo dueño: %s. Los certificados anteriores fueron marcados como 'Archivado por Traslado'. El nuevo concesionario debe iniciar la carga de certificados.") % self.concesionario_destino_id.name
+        )
 
     def action_rechazar_transferencia(self):
         self.ensure_one()

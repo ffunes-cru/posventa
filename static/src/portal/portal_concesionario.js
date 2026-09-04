@@ -30,9 +30,16 @@ export class PortalConcesionario extends Component {
             // Machine detail
             maquinaDetail: null,
             selectedMaquinaId: null,
+            // Certificates list
+            certificados: [],
+            loadingCertificados: false,
+            certSearchTerm: "",
+            certTipoFilter: "",
+            certEstadoFilter: "",
         });
 
         this.searchTimeout = null;
+        this.certSearchTimeout = null;
         onWillStart(() => this.loadPortalData());
     }
 
@@ -93,6 +100,14 @@ export class PortalConcesionario extends Component {
         this.state.selectedMaquinaId = maquinaId;
     }
 
+    async goToCertificados() {
+        this.state.view = "certificados";
+        this.state.certSearchTerm = "";
+        this.state.certTipoFilter = "";
+        this.state.certEstadoFilter = "";
+        await this.loadCertificados(true);
+    }
+
     // ==================== Data Loading ====================
 
     async loadMaquinas(showFullLoader = false) {
@@ -146,6 +161,52 @@ export class PortalConcesionario extends Component {
         this.state.estadoFilter = this.state.estadoFilter === estado ? "" : estado;
         this.state.view = "maquinas";
         this.loadMaquinas(false);
+    }
+
+    // ==================== Certificate List Actions ====================
+
+    async loadCertificados(showFullLoader = false) {
+        if (showFullLoader) {
+            this.state.loading = true;
+        } else {
+            this.state.loadingCertificados = true;
+        }
+        try {
+            const data = await this.orm.call("pv.certificado", "get_portal_list_data", [], {
+                search_term: this.state.certSearchTerm,
+                tipo_filter: this.state.certTipoFilter,
+                estado_filter: this.state.certEstadoFilter,
+            });
+            this.state.certificados = data;
+        } catch (e) {
+            this.notification.add(_t("Error al cargar certificados."), { type: "danger" });
+        } finally {
+            if (showFullLoader) {
+                this.state.loading = false;
+            } else {
+                this.state.loadingCertificados = false;
+            }
+        }
+    }
+
+    onCertSearchInput(ev) {
+        this.state.certSearchTerm = ev.target.value;
+        if (this.certSearchTimeout) {
+            clearTimeout(this.certSearchTimeout);
+        }
+        this.certSearchTimeout = setTimeout(() => {
+            this.loadCertificados(false);
+        }, 250);
+    }
+
+    setCertTipoFilter(tipo) {
+        this.state.certTipoFilter = this.state.certTipoFilter === tipo ? "" : tipo;
+        this.loadCertificados(false);
+    }
+
+    setCertEstadoFilter(estado) {
+        this.state.certEstadoFilter = this.state.certEstadoFilter === estado ? "" : estado;
+        this.loadCertificados(false);
     }
 
     // ==================== Transfer Actions ====================
@@ -246,6 +307,18 @@ export class PortalConcesionario extends Component {
 
     // ==================== Ticket navigation (opens standard Odoo view in readonly) ====================
 
+    openTicketDetail(ticketId) {
+        this.action.doAction({
+            type: "ir.actions.act_window",
+            name: _t("Detalle del Ticket"),
+            res_model: "pv.ticket",
+            res_id: ticketId,
+            views: [[false, "form"]],
+            target: "current",
+            context: { create: false },
+        });
+    }
+
     openTicketsByEstado(estado) {
         this.action.doAction({
             type: "ir.actions.act_window",
@@ -265,6 +338,8 @@ export class PortalConcesionario extends Component {
         const crumbs = [{ label: _t("Inicio"), action: () => this.goHome() }];
         if (this.state.view === "maquinas") {
             crumbs.push({ label: _t("Máquinas"), action: null });
+        } else if (this.state.view === "certificados") {
+            crumbs.push({ label: _t("Mis Certificados"), action: null });
         } else if (this.state.view === "maquina_detail") {
             crumbs.push({ label: _t("Máquinas"), action: () => this.goToMaquinas() });
             crumbs.push({ label: this.state.maquinaDetail?.name || "...", action: null });

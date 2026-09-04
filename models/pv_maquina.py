@@ -71,6 +71,11 @@ class PvMaquina(models.Model):
         required=True,
         tracking=True,
     )
+    fecha_liberacion = fields.Date(
+        string='Fecha de Liberación / Inicio Plazo',
+        default=fields.Date.context_today,
+        help='Fecha en la que la máquina fue liberada o transferida, base para cálculo de vencimientos de certificados.',
+    )
     fecha_venta = fields.Datetime(
         string='Fecha de Venta',
         readonly=True,
@@ -138,10 +143,11 @@ class PvMaquina(models.Model):
     @api.depends('certificado_ids', 'certificado_ids.tipo', 'certificado_ids.estado_certificado', 'certificado_ids.active')
     def _compute_tiene_certificados(self):
         for rec in self:
-            tipos = rec.certificado_ids.filtered(lambda l: l.active and l.estado_certificado == 'vigente').mapped('tipo')
-            rec.tiene_cpm = 'cpm' in tipos
-            rec.tiene_fru = 'fru' in tipos
-            rec.tiene_feu = 'feu' in tipos
+            tipos_cargados = rec.certificado_ids.filtered(lambda l: l.active and l.estado_certificado in ('vigente', 'vencido')).mapped('tipo')
+            tipos_vigentes = rec.certificado_ids.filtered(lambda l: l.active and l.estado_certificado == 'vigente').mapped('tipo')
+            rec.tiene_cpm = 'cpm' in tipos_vigentes
+            rec.tiene_fru = 'fru' in tipos_cargados
+            rec.tiene_feu = 'feu' in tipos_cargados
 
     @api.depends('certificado_ids', 'certificado_ids.estado_certificado', 'certificado_ids.active')
     def _compute_certificado_count(self):
@@ -253,23 +259,113 @@ class PvMaquina(models.Model):
                 'tiene_feu': m.tiene_feu,
                 'tiene_cpm': m.tiene_cpm,
                 'es_pendiente_transferencia': m.estado == 'pendiente',
+                'proximo_certificado': m._get_proximo_certificado_info(),
             })
         return result
+
+    def _get_proximo_certificado_info(self):
+        """Calcula el próximo certificado pendiente de cargar para la máquina y su countdown nominal."""
+        self.ensure_one()
+        from datetime import timedelta
+        hoy = fields.Date.today()
+        param_obj = self.env['ir.config_parameter'].sudo()
+        raw_base = self.fecha_liberacion or (fields.Date.to_date(self.create_date) if self.create_date else hoy)
+        base_date = fields.Date.to_date(raw_base) or hoy
+
+        if not self.tiene_fru:
+            try:
+                fru_days = int(param_obj.get_param('posventa.fru_expiration_days', 10))
+            except ValueError:
+                fru_days = 10
+            fecha_limite = base_date + timedelta(days=fru_days)
+            dias_restantes = (fecha_limite - hoy).days
+            if dias_restantes > 0:
+                estado = 'en_termino'
+            elif dias_restantes == 0:
+                estado = 'vence_hoy'
+            else:
+                estado = 'vencido'
+            return {
+                'tipo': 'fru',
+                'tipo_label': 'FRU — Formulario de Recepción de Unidad',
+                'fecha_limite': str(fecha_limite),
+                'dias_restantes': dias_restantes,
+                'estado': estado,
+            }
+        elif not self.tiene_feu:
+            try:
+                feu_days = int(param_obj.get_param('posventa.feu_expiration_days', 20))
+            except ValueError:
+                feu_days = 20
+            fecha_limite = base_date + timedelta(days=feu_days)
+            dias_restantes = (fecha_limite - hoy).days
+            if dias_restantes > 0:
+                estado = 'en_termino'
+            elif dias_restantes == 0:
+                estado = 'vence_hoy'
+            else:
+                estado = 'vencido'
+            return {
+                'tipo': 'feu',
+                'tipo_label': 'FEU — Formulario de Entrega de Unidad',
+                'fecha_limite': str(fecha_limite),
+                'dias_restantes': dias_restantes,
+                'estado': estado,
+            }
+        elif not self.tiene_cpm:
+            return {
+                'tipo': 'cpm',
+                'tipo_label': 'CPM — Certificado de Puesta en Marcha',
+                'fecha_limite': False,
+                'dias_restantes': 0,
+                'estado': 'cpm',
+            }
+        else:
+            return {
+                'tipo': False,
+                'tipo_label': 'Máquina Completa (CPM Activo)',
+                'fecha_limite': False,
+                'dias_restantes': 0,
+                'estado': 'completa',
+            }
 
     def get_portal_detail_data(self):
         """Return detailed machine data for the concesionario portal."""
         self.ensure_one()
         certificados = []
         for c in self.certificado_ids.filtered(lambda x: x.active).sorted('fecha', reverse=True):
+            if c.estado_certificado == 'vigente':
+                if c.dias_retraso_carga > 0:
+                    tag_label = _('Vencido hace %s días') % c.dias_retraso_carga
+                    tag_badge = 'danger'
+                else:
+                    tag_label = _('Vigente')
+                    tag_badge = 'success'
+            elif c.estado_certificado == 'vencido':
+                tag_label = _('Vencido')
+                tag_badge = 'danger'
+            elif c.estado_certificado == 'archivado_traslado':
+                tag_label = _('Archivado por Traslado')
+                tag_badge = 'warning'
+            elif c.estado_certificado in ('archivado_manual', 'legacy'):
+                tag_label = _('Archivado Manualmente')
+                tag_badge = 'secondary'
+            else:
+                tag_label = dict(self.env['pv.certificado']._fields['estado_certificado'].selection).get(c.estado_certificado, c.estado_certificado)
+                tag_badge = 'secondary'
+
             certificados.append({
                 'id': c.id,
                 'tipo': c.tipo,
                 'tipo_label': dict(self.env['pv.certificado']._fields['tipo'].selection).get(c.tipo, ''),
                 'fecha': str(c.fecha) if c.fecha else '',
                 'fecha_vencimiento': str(c.fecha_vencimiento) if c.fecha_vencimiento else '',
+                'fecha_limite_vigencia': str(c.fecha_limite_vigencia) if c.fecha_limite_vigencia else '',
                 'dias_para_vencer': c.dias_para_vencer,
+                'dias_retraso_carga': c.dias_retraso_carga,
                 'estado_certificado': c.estado_certificado,
-                'estado_certificado_label': dict(self.env['pv.certificado']._fields['estado_certificado'].selection).get(c.estado_certificado, ''),
+                'estado_certificado_label': tag_label,
+                'tag_badge': tag_badge,
                 'concesionario_name': c.concesionario_id.name or '',
                 'archivo_nombre': c.archivo_nombre or '',
                 'active': c.active,
@@ -285,7 +381,8 @@ class PvMaquina(models.Model):
                 'sistema': t.sistema_id.name if t.sistema_id else '',
                 'descripcion': (t.descripcion or '')[:100],
             })
-        puede_crear_ticket = self.estado not in ('liberada', 'pendiente', 'cpm_vencido')
+        tiene_cert_vigente = any(c.active and c.estado_certificado == 'vigente' for c in self.certificado_ids)
+        puede_crear_ticket = self.estado not in ('liberada', 'pendiente', 'cpm_vencido') and tiene_cert_vigente
         puede_crear_certificado = not self.tiene_cpm
         puede_transferir = self.estado not in ('liberada', 'pendiente', 'vendida', 'cpm_vencido')
         puede_liberar_maquina = self.estado in ('stock', 'vendida', 'cpm_vencido')
@@ -306,6 +403,7 @@ class PvMaquina(models.Model):
             'tiene_fru': self.tiene_fru,
             'tiene_feu': self.tiene_feu,
             'tiene_cpm': self.tiene_cpm,
+            'proximo_certificado': self._get_proximo_certificado_info(),
             'certificados': certificados,
             'tickets': tickets,
             'puede_crear_ticket': puede_crear_ticket,
@@ -319,22 +417,25 @@ class PvMaquina(models.Model):
         }
 
     def action_liberar_maquina(self):
-        """Retorna la máquina a estado LIBERADA y marca los certificados vigentes como 'archivado_manual'."""
+        """Retorna la máquina a estado LIBERADA y marca los certificados anteriores como 'archivado_manual'."""
         self.ensure_one()
         maquina_sudo = self.sudo()
         if maquina_sudo.estado in ('liberada', 'pendiente'):
             raise UserError(_("La máquina ya se encuentra en estado Liberada o Pendiente de transferencia."))
 
-        certificados_vigentes = maquina_sudo.certificado_ids.filtered(lambda c: c.estado_certificado == 'vigente')
-        if certificados_vigentes:
-            certificados_vigentes.write({'estado_certificado': 'archivado_manual'})
+        certificados_a_archivar = maquina_sudo.certificado_ids.filtered(
+            lambda c: c.estado_certificado in ('vigente', 'vencido')
+        )
+        if certificados_a_archivar:
+            certificados_a_archivar.write({'estado_certificado': 'archivado_manual'})
 
         maquina_sudo.write({
             'estado': 'liberada',
+            'fecha_liberacion': fields.Date.today(),
         })
         maquina_sudo._compute_tiene_certificados()
         maquina_sudo.message_post(
-            body=_("La máquina ha sido LIBERADA por %s. Sus certificados vigentes anteriores fueron marcados como 'Archivado Manualmente'. Se puede iniciar una nueva carga de certificados."),
+            body=_("La máquina ha sido LIBERADA por %s. Sus certificados anteriores fueron marcados como 'Archivado Manualmente'. Se puede iniciar una nueva carga de certificados."),
             message_type='notification',
             subtype_xmlid='mail.mt_note'
         )

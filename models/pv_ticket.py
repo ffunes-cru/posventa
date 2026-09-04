@@ -86,10 +86,10 @@ class PvTicket(models.Model):
         string='Certificado Asociado',
         compute='_compute_certificado_id',
         store=True,
-        readonly=True,
+        readonly=False,
         tracking=True,
         ondelete='restrict',
-        help='Certificado activo asociado al momento de la creación del ticket.'
+        help='Certificado vigente asociado al momento de la creación del ticket.'
     )
 
     # --- Operador ---
@@ -348,6 +348,15 @@ class PvTicket(models.Model):
                         'Debería ser %s.', rec.tipo_ticket, expected
                     ))
 
+    @api.constrains('certificado_id', 'maquina_id')
+    def _check_certificado_vigente(self):
+        for rec in self:
+            if not rec.certificado_id:
+                raise ValidationError(_('Todo ticket de reclamo debe estar asociado a un certificado de la máquina.'))
+            if rec.certificado_id.maquina_id != rec.maquina_id:
+                raise ValidationError(_('El certificado seleccionado (%s) no pertenece a la máquina %s.',
+                                        rec.certificado_id.name, rec.maquina_id.name))
+
     @api.constrains('campo_extra_ids')
     def _check_obligatory_extra_fields(self):
         for rec in self:
@@ -410,6 +419,13 @@ class PvTicket(models.Model):
                     raise ValidationError(_(
                         'No se puede crear un ticket para la máquina %s porque se encuentra en estado "%s".', maquina.name or maquina.of, estado_label
                     ))
+            if vals.get('certificado_id'):
+                cert = self.env['pv.certificado'].browse(vals['certificado_id'])
+                if cert.exists():
+                    if not cert.active or cert.estado_certificado != 'vigente':
+                        raise ValidationError(_('No se pueden crear reclamos sobre el certificado %s porque su estado no es Vigente.', cert.name))
+                    if cert.fecha_limite_vigencia and cert.fecha_limite_vigencia < fields.Date.today():
+                        raise ValidationError(_('No se pueden crear reclamos sobre el certificado %s porque su período de vigencia para reclamos expiró el %s.', cert.name, cert.fecha_limite_vigencia))
             if vals.get('name', _('Nuevo')) == _('Nuevo'):
                 vals['name'] = self.env['ir.sequence'].next_by_code('pv.ticket') or _('Nuevo')
         return super().create(vals_list)
@@ -468,7 +484,7 @@ class PvTicket(models.Model):
             'context': self.env.context,
         }
 
-    def _action_enviar_ticket_direct(self):
+    def action_enviar_ticket_direct(self):
         """ El concesionario envía el ticket al Staff (BORRADOR -> ABIERTO) """
         for rec in self:
             if rec.estado != 'borrador':
@@ -482,6 +498,9 @@ class PvTicket(models.Model):
                 subtype_xmlid='mail.mt_note',
             )
             rec._send_notification_to_staff()
+
+    def _action_enviar_ticket_direct(self):
+        return self.action_enviar_ticket_direct()
 
     def action_aceptar_ticket_direct(self):
         """ Acepta el reclamo programáticamente sin abrir el wizard interactivo de correo """

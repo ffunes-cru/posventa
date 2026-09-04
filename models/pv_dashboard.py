@@ -133,6 +133,9 @@ class PvDashboard(models.TransientModel):
         # Machine count
         maquina_count = self.env['pv.maquina'].search_count([('concesionario_id', '=', concesionario.id)])
 
+        # Certificate count (only certificates accessible by this concesionario)
+        certificado_count = self.env['pv.certificado'].search_count([('active', '=', True)])
+
         # Pending transfers (machines where this concesionario is destination)
         transferencias_pendientes = self.env['pv.maquina'].search_count([
             ('concesionario_destino_id', '=', concesionario.id),
@@ -143,6 +146,7 @@ class PvDashboard(models.TransientModel):
             'concesionario_id': concesionario.id,
             'concesionario_name': concesionario.name,
             'maquina_count': maquina_count,
+            'certificado_count': certificado_count,
             'transferencias_pendientes': transferencias_pendientes,
             'counts': {
                 'borrador': counts.get('borrador', 0),

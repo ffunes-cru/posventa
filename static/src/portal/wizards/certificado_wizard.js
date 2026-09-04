@@ -18,10 +18,12 @@ export class CertificadoWizard extends Component {
         const maquina = this.props.maquina;
 
         // Determine default recommended tipo
+        const certs = maquina.certificados || [];
+        const hasVigenteFEU = certs.some(c => c.tipo === "feu" && c.estado_certificado === "vigente");
         let defaultTipo = "fru";
-        if (maquina.tiene_fru && !maquina.tiene_feu) {
+        if (maquina.tiene_fru && !hasVigenteFEU) {
             defaultTipo = "feu";
-        } else if (maquina.tiene_feu && !maquina.tiene_cpm) {
+        } else if (hasVigenteFEU && !maquina.tiene_cpm) {
             defaultTipo = "cpm";
         }
 
@@ -55,14 +57,14 @@ export class CertificadoWizard extends Component {
             {
                 value: "fru",
                 label: _t("FRU — Formulario de Recepción de Unidad"),
-                disabled: activeTypes.includes("fru"),
-                reason: activeTypes.includes("fru") ? _t("Ya existe un FRU cargado") : "",
+                disabled: Boolean(m.tiene_fru),
+                reason: m.tiene_fru ? _t("El FRU ya fue cargado y no se puede renovar. Debe cargar el FEU.") : "",
             },
             {
                 value: "feu",
-                label: _t("FEU — Formulario de Entrega de Unidad"),
+                label: activeTypes.includes("feu") ? _t("FEU — Formulario de Entrega de Unidad") : (certs.some(c => c.tipo === 'feu') ? _t("FEU — Formulario de Entrega de Unidad (Renovación)") : _t("FEU — Formulario de Entrega de Unidad")),
                 disabled: activeTypes.includes("feu") || !m.tiene_fru,
-                reason: activeTypes.includes("feu") ? _t("Ya existe un FEU cargado") : (!m.tiene_fru ? _t("Requiere cargar primero el FRU") : ""),
+                reason: activeTypes.includes("feu") ? _t("Ya existe un FEU vigente cargado") : (!m.tiene_fru ? _t("Requiere cargar primero el FRU") : ""),
             },
             {
                 value: "cpm",

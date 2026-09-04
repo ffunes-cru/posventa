@@ -13,17 +13,21 @@
                             <field name="pv_enable_ai_integration"/>
                         </setting>
                     </block>
-                    <block title="Vencimiento de Certificados" id="pv_certificados_setting_block">
-                        <setting id="pv_fru_days" string="Vencimiento FRU" help="Días desde el ingreso de la máquina para que venza el FRU">
+                    <block title="Vencimiento y Vigencia de Certificados" id="pv_certificados_setting_block">
+                        <setting id="pv_fru_days" string="Plazo Nominal de Carga FRU" help="Días desde el ingreso/liberación de la máquina para que venza el plazo de carga del FRU">
                             <field name="pv_fru_expiration_days"/>
                             <span> días</span>
                         </setting>
-                        <setting id="pv_feu_days" string="Vencimiento FEU" help="Días desde el ingreso de la máquina para que venza el FEU">
+                        <setting id="pv_fru_grace" string="Días de Gracia / Vigencia FRU" help="Días de tolerancia tras el vencimiento nominal para cargar reclamos antes de pasar a Vencido">
+                            <field name="pv_fru_grace_days"/>
+                            <span> días</span>
+                        </setting>
+                        <setting id="pv_feu_days" string="Plazo Nominal de Carga FEU" help="Días desde el ingreso/liberación de la máquina para que venza el plazo de carga del FEU">
                             <field name="pv_feu_expiration_days"/>
                             <span> días</span>
                         </setting>
-                        <setting id="pv_cpm_days" string="Vencimiento CPM" help="Días de validez para el CPM desde la fecha de carga">
-                            <field name="pv_cpm_expiration_days"/>
+                        <setting id="pv_feu_claims_validity" string="Validez de Reclamos FEU" help="Días desde la emisión/carga del FEU durante los cuales está vigente para crear tickets y renovar">
+                            <field name="pv_feu_claims_validity_days"/>
                             <span> días</span>
                         </setting>
                     </block>

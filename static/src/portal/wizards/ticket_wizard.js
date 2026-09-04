@@ -18,10 +18,15 @@ export class TicketWizard extends Component {
         const maquina = this.props.maquina;
         const tipoTicket = maquina.tiene_cpm ? "post_pm" : "pre_pm";
 
+        const availableCerts = (maquina && maquina.certificados) ?
+            maquina.certificados.filter(c => c.active && c.estado_certificado === "vigente" && (tipoTicket === "post_pm" ? c.tipo === "cpm" : (c.tipo === "fru" || c.tipo === "feu"))) : [];
+        const initialCertId = availableCerts.length > 0 ? availableCerts[0].id : false;
+
         this.state = useState({
             currentStepIndex: 0, // 0-indexed: 0..N
             submitting: false,
             tipoTicket: tipoTicket,
+            certificadoId: initialCertId,
             // Step Classification
             sistemaId: false,
             subsistemaId: false,
@@ -40,11 +45,26 @@ export class TicketWizard extends Component {
             descripcion: "",
             accionesRealizadas: "",
             multimediaUrl: "",
+            attachments: [], // [{ name, size, type, data }]
         });
 
         onWillStart(async () => {
             await this.loadCatalogs();
         });
+    }
+
+    get availableCertificates() {
+        const certs = (this.props.maquina && this.props.maquina.certificados) || [];
+        if (this.state.tipoTicket === "post_pm") {
+            return certs.filter(c => c.active && c.estado_certificado === "vigente" && c.tipo === "cpm");
+        } else {
+            return certs.filter(c => c.active && c.estado_certificado === "vigente" && (c.tipo === "fru" || c.tipo === "feu"));
+        }
+    }
+
+    get selectedCertificado() {
+        const certs = (this.props.maquina && this.props.maquina.certificados) || [];
+        return certs.find(c => c.id === parseInt(this.state.certificadoId));
     }
 
     async loadCatalogs() {
@@ -96,10 +116,46 @@ export class TicketWizard extends Component {
         this.state.camposValues[campoId] = val;
     }
 
+    // Attachments Handling
+    async onFilesChange(ev) {
+        const files = Array.from(ev.target.files || []);
+        for (const file of files) {
+            const base64Data = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const res = reader.result;
+                    const base64 = res.split(",")[1] || "";
+                    resolve(base64);
+                };
+                reader.onerror = error => reject(error);
+                reader.readAsDataURL(file);
+            });
+            this.state.attachments.push({
+                name: file.name,
+                size: file.size,
+                type: file.type || "application/octet-stream",
+                data: base64Data,
+            });
+        }
+        ev.target.value = "";
+    }
+
+    removeAttachment(index) {
+        this.state.attachments.splice(index, 1);
+    }
+
+    formatFileSize(bytes) {
+        if (!bytes) return "0 B";
+        const k = 1024;
+        const sizes = ["B", "KB", "MB", "GB"];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
+    }
+
     // Dynamic Step Definitions
     get steps() {
         const list = [
-            { key: "machine", label: _t("1. Máquina") },
+            { key: "machine", label: _t("1. Máquina y Certificado") },
             { key: "classification", label: _t("2. Clasificación") },
         ];
         let idx = 3;
@@ -107,7 +163,7 @@ export class TicketWizard extends Component {
             list.push({ key: "extra_fields", label: `${idx}. Info Adicional` });
             idx++;
         }
-        list.push({ key: "description", label: `${idx}. Descripción` });
+        list.push({ key: "description", label: `${idx}. Descripción y Fotos` });
         idx++;
         list.push({ key: "summary", label: `${idx}. Confirmar` });
         return list;
@@ -120,7 +176,13 @@ export class TicketWizard extends Component {
 
     validateCurrentStep() {
         const key = this.currentStepKey;
-        if (key === "machine") return true;
+        if (key === "machine") {
+            if (!this.state.certificadoId) {
+                this.notification.add(_t("Debe seleccionar un Certificado Vigente para asociar al reclamo."), { type: "warning" });
+                return false;
+            }
+            return true;
+        }
 
         if (key === "classification") {
             if (this.state.tipoTicket === "post_pm") {
@@ -209,6 +271,7 @@ export class TicketWizard extends Component {
         try {
             const ticketVals = {
                 maquina_id: this.props.maquina.id,
+                certificado_id: parseInt(this.state.certificadoId),
                 tipo_ticket: this.state.tipoTicket,
                 descripcion: this.state.descripcion,
                 acciones_realizadas: this.state.accionesRealizadas || "",
@@ -243,8 +306,24 @@ export class TicketWizard extends Component {
             const resIds = await this.orm.create("pv.ticket", [ticketVals]);
             const ticketId = resIds[0];
 
+            // Guardamos adjuntos reales en el documento como en el estándar
+            for (const att of this.state.attachments) {
+                try {
+                    await this.orm.create("ir.attachment", [{
+                        name: att.name,
+                        datas: att.data,
+                        res_model: "pv.ticket",
+                        res_id: ticketId,
+                        mimetype: att.type,
+                    }]);
+                } catch (attErr) {
+                    console.warn("Error uploading attachment", att.name, attErr);
+                }
+            }
+
             if (enviarDirecto) {
-                await this.orm.call("pv.ticket", "_action_enviar_ticket_direct", [[ticketId]]);
+                // Invocamos el método público sin guion bajo
+                await this.orm.call("pv.ticket", "action_enviar_ticket_direct", [[ticketId]]);
                 this.notification.add(_t("Ticket creado y enviado a revisión técnica."), { type: "success" });
             } else {
                 this.notification.add(_t("Ticket guardado en estado Borrador."), { type: "info" });

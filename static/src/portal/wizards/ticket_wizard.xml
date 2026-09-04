@@ -35,12 +35,12 @@
 
             <!-- Step Content -->
             <div class="pv-wizard-content">
-                <!-- STEP: Machine -->
+                <!-- STEP: Machine & Certificate -->
                 <t t-if="currentStepKey === 'machine'">
-                    <h3><i class="fa fa-cogs text-primary me-2"/> Confirmación de Máquina</h3>
-                    <p class="text-muted">Por favor verifique los datos de la máquina para la cual va a registrar el reclamo:</p>
+                    <h3><i class="fa fa-cogs text-primary me-2"/> Máquina y Certificado Asociado</h3>
+                    <p class="text-muted">Verifique los datos de la máquina y seleccione el certificado vigente al cual corresponderá este reclamo:</p>
 
-                    <div class="pv-detail-grid">
+                    <div class="pv-detail-grid mb-4">
                         <div class="pv-detail-field">
                             <span class="pv-df-label">Orden de Fabricación (OF)</span>
                             <span class="pv-df-value" t-esc="props.maquina.of"/>
@@ -54,12 +54,58 @@
                             <span class="pv-df-value" t-esc="props.maquina.cliente || 'Sin cliente asignado'"/>
                         </div>
                         <div class="pv-detail-field">
-                            <span class="pv-df-label">Tipo de Ticket Detectado</span>
+                            <span class="pv-df-label">Tipo de Reclamo Detectado</span>
                             <span class="pv-df-value fw-bold text-primary">
                                 <t t-if="state.tipoTicket === 'post_pm'">Post Puesta en Marcha (CPM Activo)</t>
                                 <t t-else="">Pre Puesta en Marcha (En proceso de entrega)</t>
                             </span>
                         </div>
+                    </div>
+
+                    <!-- Certificate Selector -->
+                    <div class="card border rounded-3 p-3 bg-light">
+                        <label class="fw-bold mb-2 text-dark">
+                            <i class="fa fa-certificate text-danger me-1"/> Seleccionar Certificado Asociado <span class="text-danger">*</span>
+                        </label>
+
+                        <t t-if="availableCertificates.length &gt; 0">
+                            <div class="d-flex flex-column gap-2">
+                                <t t-foreach="availableCertificates" t-as="cert" t-key="cert.id">
+                                    <label class="border rounded-3 p-3 bg-white d-flex align-items-center justify-content-between cursor-pointer"
+                                           t-att-class="{'border-danger shadow-sm': state.certificadoId === cert.id}">
+                                        <div class="d-flex align-items-center">
+                                            <input type="radio" name="certificadoSelector" class="form-check-input me-3"
+                                                   t-att-value="cert.id"
+                                                   t-att-checked="state.certificadoId === cert.id"
+                                                   t-on-change="() => state.certificadoId = cert.id"/>
+                                            <div>
+                                                <div class="fw-bold text-dark"><t t-esc="cert.tipo_label"/></div>
+                                                <div class="text-muted small">
+                                                    <span>Fecha de Emisión: <t t-esc="cert.fecha || '-'"/></span>
+                                                    <t t-if="cert.concesionario_name">
+                                                        <span class="ms-2">| Emisor: <t t-esc="cert.concesionario_name"/></span>
+                                                    </t>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <span class="badge bg-success">Vigente</span>
+                                            <t t-if="cert.fecha_vencimiento">
+                                                <span class="badge bg-info text-dark ms-1">
+                                                    Vence: <t t-esc="cert.fecha_vencimiento"/>
+                                                </span>
+                                            </t>
+                                        </div>
+                                    </label>
+                                </t>
+                            </div>
+                        </t>
+                        <t t-else="">
+                            <div class="alert alert-warning mb-0">
+                                <i class="fa fa-exclamation-triangle me-2"/>
+                                <strong>Atención:</strong> Esta máquina no posee certificados vigentes para el tipo de reclamo seleccionado. No se pueden crear tickets sobre certificados vencidos o no cargados.
+                            </div>
+                        </t>
                     </div>
                 </t>
 
@@ -184,9 +230,9 @@
                     </t>
                 </t>
 
-                <!-- STEP: Description & Details -->
+                <!-- STEP: Description, Photos & Attachments -->
                 <t t-if="currentStepKey === 'description'">
-                    <h3><i class="fa fa-pencil-square-o text-primary me-2"/> Detalles del Reclamo</h3>
+                    <h3><i class="fa fa-pencil-square-o text-primary me-2"/> Detalles y Adjuntos del Reclamo</h3>
 
                     <t t-if="state.placeholderDescripcion">
                         <div class="alert alert-info py-2 px-3 mb-3 small">
@@ -204,10 +250,31 @@
                         <textarea class="pv-form-textarea" placeholder="Indique qué acciones preliminares o pruebas ha realizado en la máquina..." t-model="state.accionesRealizadas"/>
                     </div>
 
+                    <!-- Direct File Attachments -->
+                    <div class="pv-form-group border rounded-3 p-3 bg-light">
+                        <label class="fw-bold mb-1"><i class="fa fa-paperclip me-1 text-primary"/> Adjuntar Archivos / Fotos (Estándar Odoo)</label>
+                        <p class="text-muted small mb-2">Suba fotos o documentos de respaldo que quedarán guardados directamente en el reclamo:</p>
+                        
+                        <input type="file" multiple="multiple" class="form-control mb-2" t-on-change="onFilesChange" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"/>
+
+                        <t t-if="state.attachments.length &gt; 0">
+                            <div class="d-flex flex-wrap gap-2 mt-2">
+                                <t t-foreach="state.attachments" t-as="att" t-key="att_index">
+                                    <div class="badge bg-white text-dark border p-2 d-flex align-items-center">
+                                        <i class="fa fa-file me-2 text-secondary"/>
+                                        <span class="me-2 text-truncate" style="max-width: 180px;" t-esc="att.name"/>
+                                        <span class="text-muted small me-2">(<t t-esc="formatFileSize(att.size)"/>)</span>
+                                        <button type="button" class="btn-close btn-close-sm" t-on-click="() => this.removeAttachment(att_index)" style="font-size: 8px;"/>
+                                    </div>
+                                </t>
+                            </div>
+                        </t>
+                    </div>
+
                     <div class="pv-form-group">
-                        <label>Enlace Multimedia (Google Drive / Fotos / Videos)</label>
+                        <label>Enlace Multimedia Adicional (Google Drive / Fotos / Videos)</label>
                         <input type="url" class="pv-form-input" placeholder="https://drive.google.com/drive/folders/..." t-model="state.multimediaUrl"/>
-                        <span class="text-muted small">Copie y pegue aquí el enlace a la carpeta con fotos y videos de la falla.</span>
+                        <span class="text-muted small">Copie y pegue aquí un enlace a carpeta externa si los archivos superan el tamaño máximo.</span>
                     </div>
                 </t>
 
@@ -224,6 +291,15 @@
                         <div class="pv-detail-field">
                             <span class="pv-df-label">Tipo de Máquina</span>
                             <span class="pv-df-value" t-esc="props.maquina.tipo_label"/>
+                        </div>
+                        <div class="pv-detail-field">
+                            <span class="pv-df-label">Certificado Asociado</span>
+                            <span class="pv-df-value text-danger fw-bold">
+                                <t t-if="selectedCertificado">
+                                    <t t-esc="selectedCertificado.tipo_label"/>
+                                </t>
+                                <t t-else="">-</t>
+                            </span>
                         </div>
                         <div class="pv-detail-field">
                             <span class="pv-df-label">Tipo de Ticket</span>
@@ -293,6 +369,19 @@
                         <div class="pv-form-group mb-3">
                             <label class="fw-bold">Acciones Realizadas por el Concesionario:</label>
                             <div class="p-3 bg-white rounded border text-break" t-esc="state.accionesRealizadas"/>
+                        </div>
+                    </t>
+
+                    <t t-if="state.attachments.length &gt; 0">
+                        <div class="pv-form-group mb-3">
+                            <label class="fw-bold">Archivos Adjuntos a Cargar:</label>
+                            <div class="d-flex flex-wrap gap-2 p-2 bg-white rounded border">
+                                <t t-foreach="state.attachments" t-as="att" t-key="att_index">
+                                    <span class="badge bg-light text-dark border p-2">
+                                        <i class="fa fa-file me-1 text-primary"/> <t t-esc="att.name"/> (<t t-esc="formatFileSize(att.size)"/>)
+                                    </span>
+                                </t>
+                            </div>
                         </div>
                     </t>
 

@@ -58,14 +58,27 @@ class TestTransferenciaMaquina(TestPosventaCommon):
         self.maquina.with_user(self.user_concesionario_b).action_aceptar_transferencia()
 
         self.assertEqual(self.maquina.concesionario_id, self.concesionario_b)
-        self.assertEqual(self.maquina.estado, 'stock')
-        self.assertEqual(self.fru.estado_certificado, 'vigente')
+        self.assertEqual(self.maquina.estado, 'liberada')
+        self.assertEqual(self.fru.estado_certificado, 'archivado_traslado')
         self.assertEqual(self.fru.concesionario_id, self.concesionario_a)
-        self.assertTrue(self.maquina.tiene_fru)
+        self.assertFalse(self.maquina.tiene_fru)
 
-        # Concesionario B can now read the certificate issued by A on their machine
+        # Concesionario B can see the archived certificate issued by A on their machine
         certs_b = self.env['pv.certificado'].with_user(self.user_concesionario_b).search([('maquina_id', '=', self.maquina.id)])
         self.assertIn(self.fru, certs_b)
+
+        # Concesionario B can now upload a new FRU from scratch
+        new_fru_b = self.env['pv.certificado'].with_user(self.user_concesionario_b).create({
+            'maquina_id': self.maquina.id,
+            'tipo': 'fru',
+            'fecha': fields.Date.today(),
+            'archivo': DUMMY_PDF_BASE64,
+            'archivo_nombre': 'fru_b.pdf',
+        })
+        self.assertEqual(new_fru_b.estado_certificado, 'vigente')
+        self.assertEqual(new_fru_b.concesionario_id, self.concesionario_b)
+        self.assertEqual(self.maquina.estado, 'stock')
+        self.assertTrue(self.maquina.tiene_fru)
 
     def test_03_reject_transfer_workflow(self):
         """Concesionario B rejects transfer; machine returns to A in stock."""
@@ -79,3 +92,20 @@ class TestTransferenciaMaquina(TestPosventaCommon):
         self.assertEqual(self.maquina.concesionario_id, self.concesionario_a)
         self.assertEqual(self.maquina.estado, 'stock')
         self.assertFalse(self.maquina.concesionario_destino_id)
+
+    def test_04_transfer_archives_previous_certificates(self):
+        """Previous certificates are marked as 'archivado_traslado', machine returns to liberada, fecha_liberacion resets."""
+        self.fru.sudo().write({'estado_certificado': 'vencido'})
+
+        self.maquina.with_user(self.user_concesionario_a).action_iniciar_transferencia_portal(
+            concesionario_destino_id=self.concesionario_b.id,
+            provincia_destino_id=self.state_cba.id,
+            ciudad_destino='Marcos Juárez'
+        )
+
+        self.maquina.with_user(self.user_concesionario_b).action_aceptar_transferencia()
+
+        self.assertEqual(self.maquina.concesionario_id, self.concesionario_b)
+        self.assertEqual(self.fru.estado_certificado, 'archivado_traslado')
+        self.assertEqual(self.maquina.estado, 'liberada')
+        self.assertEqual(self.maquina.fecha_liberacion, fields.Date.today())

@@ -145,3 +145,267 @@ class TestMaquinaCertificados(TestPosventaCommon):
         self.assertEqual(new_fru.estado_certificado, 'vigente')
         self.assertEqual(maquina.estado, 'stock')
         self.assertTrue(maquina.tiene_fru)
+        self.assertEqual(maquina.fecha_liberacion, today)
+
+    def test_04_cpm_never_expires_and_protects_other_certificates_from_expiration(self):
+        """Test that CPM has no expiration and once CPM is loaded, prior certificates do not expire."""
+        today = fields.Date.today()
+        # Machine 1: Without CPM, released 30 days ago -> FRU should expire
+        maquina_sin_cpm = self.env['pv.maquina'].create({
+            'tipo': 'plantor',
+            'of': 'OF-TEST-CRON-NO-CPM',
+            'concesionario_id': self.concesionario_a.id,
+            'fecha_liberacion': today - timedelta(days=30),
+        })
+        fru_expirable = self.env['pv.certificado'].create({
+            'maquina_id': maquina_sin_cpm.id,
+            'tipo': 'fru',
+            'fecha': today - timedelta(days=30),
+            'archivo': DUMMY_PDF_BASE64,
+            'archivo_nombre': 'fru_exp.pdf',
+        })
+        self.assertTrue(fru_expirable.fecha_limite_vigencia < today)
+
+        # Machine 2: With CPM, released 30 days ago -> FRU should NOT expire because CPM is active
+        maquina_con_cpm = self.env['pv.maquina'].create({
+            'tipo': 'plantor',
+            'of': 'OF-TEST-CRON-WITH-CPM',
+            'concesionario_id': self.concesionario_a.id,
+            'fecha_liberacion': today - timedelta(days=30),
+        })
+        fru_protected = self.env['pv.certificado'].create({
+            'maquina_id': maquina_con_cpm.id,
+            'tipo': 'fru',
+            'fecha': today - timedelta(days=30),
+            'archivo': DUMMY_PDF_BASE64,
+            'archivo_nombre': 'fru_prot.pdf',
+        })
+        feu_protected = self.env['pv.certificado'].create({
+            'maquina_id': maquina_con_cpm.id,
+            'tipo': 'feu',
+            'fecha': today,
+            'archivo': DUMMY_PDF_BASE64,
+            'archivo_nombre': 'feu_prot.pdf',
+        })
+        cpm = self.env['pv.certificado'].create({
+            'maquina_id': maquina_con_cpm.id,
+            'tipo': 'cpm',
+            'fecha': today,
+            'archivo': DUMMY_PDF_BASE64,
+            'archivo_nombre': 'cpm.pdf',
+        })
+        self.assertFalse(cpm.fecha_vencimiento)
+        self.assertFalse(cpm.fecha_limite_vigencia)
+        self.assertEqual(maquina_con_cpm.estado, 'vendida')
+
+        # Run cron
+        self.env['pv.certificado']._archive_expired_certificates()
+
+        # Machine without CPM has its FRU expired
+        self.assertEqual(fru_expirable.estado_certificado, 'vencido')
+
+        # Machine with CPM maintains its certificates as vigente
+        self.assertEqual(fru_protected.estado_certificado, 'vigente')
+        self.assertEqual(feu_protected.estado_certificado, 'vigente')
+        self.assertEqual(cpm.estado_certificado, 'vigente')
+
+    def test_05_cannot_create_ticket_on_expired_certificate_and_fru_not_renewable(self):
+        """Test that tickets cannot be created against expired certificates and FRU cannot be renewed."""
+        maquina = self.env['pv.maquina'].create({
+            'tipo': 'plantor',
+            'of': 'OF-TEST-EXP-001',
+            'concesionario_id': self.concesionario_a.id,
+        })
+        today = fields.Date.today()
+        fru = self.env['pv.certificado'].create({
+            'maquina_id': maquina.id,
+            'tipo': 'fru',
+            'fecha': today,
+            'archivo': DUMMY_PDF_BASE64,
+            'archivo_nombre': 'fru.pdf',
+        })
+
+        # Mark FRU as expired
+        fru.sudo().write({'estado_certificado': 'vencido'})
+
+        # Creating ticket with expired certificate raises ValidationError
+        with self.assertRaises(ValidationError):
+            self.env['pv.ticket'].create({
+                'maquina_id': maquina.id,
+                'certificado_id': fru.id,
+                'tipo_ticket': 'pre_pm',
+                'desvio_tipo': 'rotura',
+                'descripcion': 'Test error con certificado vencido',
+            })
+
+        # FRU cannot be re-uploaded/renewed on this machine
+        with self.assertRaises(ValidationError):
+            self.env['pv.certificado'].create({
+                'maquina_id': maquina.id,
+                'tipo': 'fru',
+                'fecha': today,
+                'archivo': DUMMY_PDF_BASE64,
+                'archivo_nombre': 'fru_renovar.pdf',
+            })
+
+    def test_06_feu_expiration_and_renewal_workflow(self):
+        """Test FEU 90-day validity, expiration, and renewal workflow."""
+        maquina = self.env['pv.maquina'].create({
+            'tipo': 'drilor',
+            'of': 'OF-TEST-FEU-001',
+            'concesionario_id': self.concesionario_a.id,
+        })
+        today = fields.Date.today()
+        fru = self.env['pv.certificado'].create({
+            'maquina_id': maquina.id,
+            'tipo': 'fru',
+            'fecha': today,
+            'archivo': DUMMY_PDF_BASE64,
+            'archivo_nombre': 'fru.pdf',
+        })
+
+        validity_days = int(self.env['ir.config_parameter'].sudo().get_param('posventa.feu_claims_validity_days', 90))
+
+        # Upload initial FEU
+        feu_1 = self.env['pv.certificado'].create({
+            'maquina_id': maquina.id,
+            'tipo': 'feu',
+            'fecha': today,
+            'archivo': DUMMY_PDF_BASE64,
+            'archivo_nombre': 'feu_1.pdf',
+        })
+        self.assertEqual(feu_1.estado_certificado, 'vigente')
+        self.assertEqual(feu_1.fecha_limite_vigencia, today + timedelta(days=validity_days))
+
+        # Can create ticket with FEU 1
+        ticket = self.env['pv.ticket'].create({
+            'maquina_id': maquina.id,
+            'certificado_id': feu_1.id,
+            'tipo_ticket': 'pre_pm',
+            'desvio_tipo': 'rotura',
+            'descripcion': 'Reclamo sobre FEU 1',
+        })
+        self.assertEqual(ticket.estado, 'borrador')
+
+        # Expire FEU 1 (past 90 days)
+        feu_1.sudo().write({'estado_certificado': 'vencido'})
+
+        # Cannot create new tickets on expired FEU 1
+        with self.assertRaises(ValidationError):
+            self.env['pv.ticket'].create({
+                'maquina_id': maquina.id,
+                'certificado_id': feu_1.id,
+                'tipo_ticket': 'pre_pm',
+                'desvio_tipo': 'rotura',
+                'descripcion': 'Reclamo sobre FEU vencido',
+            })
+
+        # FEU SÍ se puede renovar: concessionaire uploads FEU 2
+        feu_2 = self.env['pv.certificado'].create({
+            'maquina_id': maquina.id,
+            'tipo': 'feu',
+            'fecha': today,
+            'archivo': DUMMY_PDF_BASE64,
+            'archivo_nombre': 'feu_2_renovado.pdf',
+        })
+        self.assertEqual(feu_2.estado_certificado, 'vigente')
+        self.assertEqual(feu_2.fecha_limite_vigencia, today + timedelta(days=validity_days))
+
+        # Now can create tickets again with renewed FEU 2
+        ticket_2 = self.env['pv.ticket'].create({
+            'maquina_id': maquina.id,
+            'certificado_id': feu_2.id,
+            'tipo_ticket': 'pre_pm',
+            'desvio_tipo': 'rotura',
+            'descripcion': 'Reclamo sobre FEU 2 renovado',
+        })
+        self.assertEqual(ticket_2.estado, 'borrador')
+
+    def test_07_portal_proximo_certificado_countdown_and_retraso_carga(self):
+        """Test the upcoming certificate countdown and delayed upload tracking."""
+        today = fields.Date.today()
+        param_obj = self.env['ir.config_parameter'].sudo()
+        fru_days = int(param_obj.get_param('posventa.fru_expiration_days', 10))
+        feu_days = int(param_obj.get_param('posventa.feu_expiration_days', 20))
+        fru_grace_days = int(param_obj.get_param('posventa.fru_grace_days', 3))
+
+        # 1. New machine: waiting for FRU
+        maquina = self.env['pv.maquina'].create({
+            'tipo': 'plantor',
+            'of': 'OF-TEST-PROX-001',
+            'concesionario_id': self.concesionario_a.id,
+            'fecha_liberacion': today,
+        })
+        info = maquina._get_proximo_certificado_info()
+        self.assertEqual(info['tipo'], 'fru')
+        self.assertEqual(info['dias_restantes'], fru_days)
+        self.assertEqual(info['estado'], 'en_termino')
+
+        # 2. Upload FRU on time (today)
+        fru_ontime = self.env['pv.certificado'].create({
+            'maquina_id': maquina.id,
+            'tipo': 'fru',
+            'fecha': today,
+            'archivo': DUMMY_PDF_BASE64,
+            'archivo_nombre': 'fru_ontime.pdf',
+        })
+        self.assertEqual(fru_ontime.dias_retraso_carga, 0)
+        # FRU expiration is its grace date (today + fru_grace_days), NOT the upload deadline
+        self.assertEqual(fru_ontime.fecha_vencimiento, today + timedelta(days=fru_grace_days))
+        self.assertEqual(fru_ontime.dias_para_vencer, fru_grace_days)
+
+        # Next pending certificate is now FEU
+        info_feu = maquina._get_proximo_certificado_info()
+        self.assertEqual(info_feu['tipo'], 'feu')
+        self.assertEqual(info_feu['dias_restantes'], feu_days)
+        self.assertEqual(info_feu['estado'], 'en_termino')
+
+        # 3. Test machine where nominal upload expired (created fru_days + 5 days ago)
+        maquina_tardia = self.env['pv.maquina'].create({
+            'tipo': 'drilor',
+            'of': 'OF-TEST-TARDIA-001',
+            'concesionario_id': self.concesionario_a.id,
+            'fecha_liberacion': today - timedelta(days=fru_days + 5),
+        })
+        info_tardia = maquina_tardia._get_proximo_certificado_info()
+        self.assertEqual(info_tardia['tipo'], 'fru')
+        self.assertEqual(info_tardia['dias_restantes'], -5) # 5 days overdue
+        self.assertEqual(info_tardia['estado'], 'vencido')
+
+        # Concessionaire uploads FRU 5 days late
+        fru_tardio = self.env['pv.certificado'].create({
+            'maquina_id': maquina_tardia.id,
+            'tipo': 'fru',
+            'fecha': today,
+            'archivo': DUMMY_PDF_BASE64,
+            'archivo_nombre': 'fru_tardio.pdf',
+        })
+        self.assertEqual(fru_tardio.dias_retraso_carga, 5)
+        # Still gets fru_grace_days grace days to create claims!
+        self.assertEqual(fru_tardio.fecha_vencimiento, today + timedelta(days=fru_grace_days))
+        self.assertEqual(fru_tardio.dias_para_vencer, fru_grace_days)
+
+        portal_data = maquina_tardia.get_portal_detail_data()
+        cert_data = next(c for c in portal_data['certificados'] if c['id'] == fru_tardio.id)
+        self.assertIn('Vencido hace 5 días', cert_data['estado_certificado_label'])
+        self.assertEqual(cert_data['tag_badge'], 'danger')
+
+    def test_08_upload_certificate_with_string_dates(self):
+        """Test creating certificates where fecha is passed as string, exactly as sent from JS frontend."""
+        maquina = self.env['pv.maquina'].create({
+            'tipo': 'plantor',
+            'of': 'OF-TEST-STR-DATE-001',
+            'concesionario_id': self.concesionario_a.id,
+            'fecha_liberacion': '2026-09-01',
+        })
+        # Pass fecha as string '2026-09-02' (from frontend wizard)
+        fru = self.env['pv.certificado'].create({
+            'maquina_id': maquina.id,
+            'tipo': 'fru',
+            'fecha': '2026-09-02',
+            'archivo': DUMMY_PDF_BASE64,
+            'archivo_nombre': 'fru_str_date.pdf',
+        })
+        self.assertEqual(fru.estado_certificado, 'vigente')
+        self.assertTrue(fru.fecha_vencimiento)
+        self.assertTrue(fru.fecha_limite_carga)

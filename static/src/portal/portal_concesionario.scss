@@ -154,6 +154,10 @@
 .pv-home-card.pv-card-maquinas .pv-card-icon { color: var(--pv-red-primary); }
 .pv-home-card.pv-card-maquinas .pv-card-count { color: var(--pv-red-dark); }
 
+.pv-home-card.pv-card-certificados::before { background: #0284c7; }
+.pv-home-card.pv-card-certificados .pv-card-icon { color: #0284c7; }
+.pv-home-card.pv-card-certificados .pv-card-count { color: #0369a1; }
+
 .pv-home-card.pv-card-transferencias::before { background: #f59e0b; }
 .pv-home-card.pv-card-transferencias .pv-card-icon { color: #f59e0b; }
 .pv-home-card.pv-card-transferencias .pv-card-count { color: #b45309; }
@@ -765,4 +769,220 @@
     .pv-step-connector {
         display: none;
     }
+}
+
+/* ===================== Ultra-Clear ADP Countdown Banner ===================== */
+.pv-adp-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 18px 22px;
+    border-radius: 12px;
+    background: #ffffff;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+    border: 1px solid #e2e8f0;
+    border-left-width: 6px;
+    flex-wrap: wrap;
+    transition: all 0.2s ease;
+}
+
+.pv-adp-banner-icon {
+    font-size: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 52px;
+    height: 52px;
+    border-radius: 12px;
+    flex-shrink: 0;
+}
+
+.pv-adp-banner-pretitle {
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.9px;
+    color: #64748b;
+    margin-bottom: 2px;
+}
+
+.pv-adp-banner-title {
+    font-size: 17px;
+    font-weight: 800;
+    color: #0f172a;
+    line-height: 1.3;
+}
+
+.pv-adp-banner-meta {
+    font-size: 13px;
+    color: #334155;
+    margin-top: 4px;
+    font-weight: 500;
+}
+
+.pv-adp-banner-badge-wrap {
+    flex-shrink: 0;
+}
+
+.pv-adp-badge {
+    padding: 10px 22px;
+    border-radius: 9999px;
+    font-size: 14px;
+    font-weight: 800;
+    display: inline-flex;
+    align-items: center;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    letter-spacing: 0.2px;
+    white-space: nowrap;
+}
+
+/* ADP Banner Themes */
+.pv-banner-en_termino {
+    border-left-color: #0284c7 !important;
+    background: linear-gradient(to right, #f0f9ff 0%, #ffffff 100%) !important;
+    border-color: #bae6fd;
+}
+.pv-banner-en_termino .pv-adp-banner-icon {
+    background: #e0f2fe;
+    color: #0284c7;
+}
+.pv-adp-badge-info {
+    background: #0284c7;
+    color: #ffffff;
+}
+
+.pv-banner-vence_hoy {
+    border-left-color: #f59e0b !important;
+    background: linear-gradient(to right, #fffbeb 0%, #ffffff 100%) !important;
+    border-color: #fde68a;
+}
+.pv-banner-vence_hoy .pv-adp-banner-icon {
+    background: #fef3c7;
+    color: #d97706;
+}
+.pv-adp-badge-warning {
+    background: #f59e0b;
+    color: #ffffff;
+}
+
+.pv-banner-vencido {
+    border-left-color: #dc2626 !important;
+    background: linear-gradient(to right, #fef2f2 0%, #ffffff 100%) !important;
+    border-color: #fecaca;
+}
+.pv-banner-vencido .pv-adp-banner-icon {
+    background: #fee2e2;
+    color: #dc2626;
+}
+.pv-banner-vencido .pv-adp-banner-title {
+    color: #991b1b;
+}
+.pv-adp-badge-danger {
+    background: #dc2626;
+    color: #ffffff;
+    animation: pv-pulse-danger 2s infinite ease-in-out;
+}
+
+@keyframes pv-pulse-danger {
+    0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4); }
+    70% { transform: scale(1.02); box-shadow: 0 0 0 8px rgba(220, 38, 38, 0); }
+    100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+}
+
+.pv-banner-cpm {
+    border-left-color: #6366f1 !important;
+    background: linear-gradient(to right, #eef2ff 0%, #ffffff 100%) !important;
+    border-color: #c7d2fe;
+}
+.pv-banner-cpm .pv-adp-banner-icon {
+    background: #e0e7ff;
+    color: #4f46e5;
+}
+.pv-adp-badge-primary {
+    background: #4f46e5;
+    color: #ffffff;
+}
+
+/* ===================== Table Fonts & High-Contrast Readability ===================== */
+.pv-detail-header {
+    border: 1px solid #e2e8f0;
+    background: #ffffff;
+}
+
+.pv-concesionario-emisor {
+    color: #0f172a !important;
+    font-weight: 700;
+    font-size: 13px;
+    background: #f1f5f9;
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: 1px solid #e2e8f0;
+    display: inline-block;
+}
+
+/* High contrast badges in table */
+.pv-badge-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 14px;
+    border-radius: 9999px;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.pv-badge-pill.pill-success {
+    background: #dcfce7 !important;
+    color: #15803d !important;
+    border: 1px solid #86efac;
+}
+
+.pv-badge-pill.pill-info {
+    background: #e0f2fe !important;
+    color: #0369a1 !important;
+    border: 1px solid #7dd3fc;
+}
+
+.pv-badge-pill.pill-warning {
+    background: #fef3c7 !important;
+    color: #b45309 !important;
+    border: 1px solid #fcd34d;
+}
+
+.pv-badge-pill.pill-danger {
+    background: #fee2e2 !important;
+    color: #b91c1c !important;
+    border: 1px solid #fca5a5;
+}
+
+.pv-badge-pill.pill-secondary {
+    background: #f1f5f9 !important;
+    color: #475569 !important;
+    border: 1px solid #cbd5e1;
+}
+
+/* File link download button */
+.pv-file-link {
+    color: #b91c1c !important;
+    background: #fff1f2;
+    border: 1px solid #fecdd3;
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-weight: 700;
+    font-size: 13px;
+    text-decoration: none !important;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+}
+
+.pv-file-link:hover {
+    background: #ffe4e6;
+    border-color: #fda4af;
+    color: #991b1b !important;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(220, 38, 38, 0.15);
 }

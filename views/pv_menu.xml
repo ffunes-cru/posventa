@@ -8,10 +8,21 @@
 
     <menuitem id="menu_pv_portal_concesionario" name="Portal Concesionario" parent="menu_pv_operacion" action="action_pv_portal_concesionario" sequence="5" groups="posventa.group_pv_concesionario"/>
     <menuitem id="menu_pv_dashboard" name="Tablero de Control" parent="menu_pv_operacion" action="action_pv_dashboard_server" sequence="10" groups="posventa.group_pv_staff,posventa.group_pv_admin"/>
-    <menuitem id="menu_pv_ticket" name="Tickets de Reclamo" parent="menu_pv_operacion" action="action_pv_ticket" sequence="20"/>
-    <menuitem id="menu_pv_maquina" name="Máquinas" parent="menu_pv_operacion" action="action_pv_maquina" sequence="30" groups="posventa.group_pv_staff,posventa.group_pv_admin"/>
-    <menuitem id="menu_pv_certificado" name="Certificados" parent="menu_pv_operacion" action="action_pv_certificado" sequence="40" groups="posventa.group_pv_staff,posventa.group_pv_admin"/>
-    <menuitem id="menu_pv_ticket_medida" name="Medidas y Seguimiento" parent="menu_pv_operacion" action="action_pv_ticket_medida" sequence="50"/>
+    <menuitem id="menu_pv_ticket" name="Tickets de Reclamo" parent="menu_pv_operacion" action="action_pv_ticket" sequence="20" groups="posventa.group_pv_concesionario,posventa.group_pv_staff,posventa.group_pv_admin"/>
+    <menuitem id="menu_pv_maquina" name="Máquinas" parent="menu_pv_operacion" action="action_pv_maquina" sequence="30" groups="posventa.group_pv_staff,posventa.group_pv_admin,-posventa.group_pv_concesionario"/>
+    <menuitem id="menu_pv_certificado" name="Certificados" parent="menu_pv_operacion" action="action_pv_certificado" sequence="40" groups="posventa.group_pv_staff,posventa.group_pv_admin,-posventa.group_pv_concesionario"/>
+    <menuitem id="menu_pv_ticket_medida" name="Medidas y Seguimiento" parent="menu_pv_operacion" action="action_pv_ticket_medida" sequence="50" groups="posventa.group_pv_staff,posventa.group_pv_admin"/>
+
+    <!-- Explicit group assignment via <record> to guarantee complete reset of groups in existing databases -->
+    <record id="menu_pv_maquina" model="ir.ui.menu">
+        <field name="group_ids" eval="[(6, 0, [ref('group_pv_staff'), ref('group_pv_admin')])]"/>
+    </record>
+    <record id="menu_pv_certificado" model="ir.ui.menu">
+        <field name="group_ids" eval="[(6, 0, [ref('group_pv_staff'), ref('group_pv_admin')])]"/>
+    </record>
+    <record id="menu_pv_ticket_medida" model="ir.ui.menu">
+        <field name="group_ids" eval="[(6, 0, [ref('group_pv_staff'), ref('group_pv_admin')])]"/>
+    </record>
 
     <!-- Configuration Category -->
     <menuitem id="menu_pv_config" name="Configuración" parent="menu_pv_root" sequence="90" groups="posventa.group_pv_admin"/>
