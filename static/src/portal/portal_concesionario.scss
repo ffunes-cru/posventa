@@ -27,47 +27,29 @@
     --pv-badge-bg-neutral: #f1f5f9;
 }
 
-/* Automatic Dark Mode Fallback via Media Query & Bootstrap attributes */
-@media (prefers-color-scheme: dark) {
-    :root:not([data-color-mode="light"]):not([data-bs-theme="light"]) {
-        --pv-bg: #151521;
-        --pv-card-bg: #1e1e2d;
-        --pv-card-border: #2e2e42;
-        --pv-text-main: #f1f5f9;
-        --pv-text-muted: #94a3b8;
-        --pv-text-subtle: #64748b;
-        --pv-input-bg: #1b1b28;
-        --pv-input-border: #383852;
-        --pv-input-text: #ffffff;
-        --pv-table-header-bg: #181826;
-        --pv-table-row-bg: #1e1e2d;
-        --pv-table-row-hover: #26263b;
-        --pv-table-border: #2e2e42;
-        --pv-modal-bg: #1e1e2d;
-        --pv-modal-footer-bg: #181826;
-        --pv-badge-bg-neutral: #28283c;
-    }
-}
-
+/* Dark Mode Variables — Only when Dark Mode is explicitly active in Odoo DOM */
 :root[data-color-mode="dark"],
 :root[data-bs-theme="dark"],
-body.o_web_client_dark_mode {
-    --pv-bg: #151521;
-    --pv-card-bg: #1e1e2d;
-    --pv-card-border: #2e2e42;
-    --pv-text-main: #f1f5f9;
-    --pv-text-muted: #94a3b8;
-    --pv-text-subtle: #64748b;
-    --pv-input-bg: #1b1b28;
-    --pv-input-border: #383852;
+body.o_web_client_dark_mode,
+body.o-dark-mode,
+html.o-dark-mode {
+    --pv-bg: #212534;
+    --pv-card-bg: #2b3044;
+    --pv-card-border: #3d435e;
+    --pv-card-hover-border: #c8102e;
+    --pv-text-main: #f8fafc;
+    --pv-text-muted: #a0aec0;
+    --pv-text-subtle: #718096;
+    --pv-input-bg: #252a3c;
+    --pv-input-border: #3f4664;
     --pv-input-text: #ffffff;
-    --pv-table-header-bg: #181826;
-    --pv-table-row-bg: #1e1e2d;
-    --pv-table-row-hover: #26263b;
-    --pv-table-border: #2e2e42;
-    --pv-modal-bg: #1e1e2d;
-    --pv-modal-footer-bg: #181826;
-    --pv-badge-bg-neutral: #28283c;
+    --pv-table-header-bg: #252a3c;
+    --pv-table-row-bg: #2b3044;
+    --pv-table-row-hover: #343a52;
+    --pv-table-border: #3d435e;
+    --pv-modal-bg: #2b3044;
+    --pv-modal-footer-bg: #252a3c;
+    --pv-badge-bg-neutral: #353b54;
 }
 
 .pv-portal {
@@ -144,6 +126,32 @@ body.o_web_client_dark_mode {
     background: rgba(255,255,255,0.25);
 }
 
+.pv-portal-header .pv-back-btn {
+    background: rgba(255, 255, 255, 0.18);
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    color: #fff;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all 0.2s ease;
+
+    &:hover {
+        background: rgba(255, 255, 255, 0.3);
+        transform: translateX(-2px);
+    }
+
+    &:active {
+        background: rgba(255, 255, 255, 0.4);
+        transform: scale(0.92);
+    }
+}
+
 /* ===================== Scrollable Content Area ===================== */
 .pv-portal-content {
     flex: 1;
@@ -155,6 +163,18 @@ body.o_web_client_dark_mode {
     box-sizing: border-box;
 }
 
+/* ===================== Welcome Banner ===================== */
+.pv-portal .alert-light {
+    background: var(--pv-card-bg);
+    border: 1px solid var(--pv-card-border) !important;
+    color: var(--pv-text-main);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
+}
+
+.pv-portal .alert-light h4 {
+    color: var(--pv-red-primary) !important;
+}
+
 /* ===================== Home — Big Action Cards ===================== */
 .pv-home-cards {
     display: grid;
@@ -164,12 +184,12 @@ body.o_web_client_dark_mode {
 }
 
 .pv-home-card {
-    background: #fff;
+    background: var(--pv-card-bg);
     border-radius: 12px;
     padding: 24px 20px;
     text-align: center;
     box-shadow: 0 2px 10px rgba(0,0,0,0.04);
-    border: 1px solid #e2e8f0;
+    border: 1px solid var(--pv-card-border);
     cursor: pointer;
     transition: all 0.25s ease;
     position: relative;
@@ -209,7 +229,7 @@ body.o_web_client_dark_mode {
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.8px;
-    color: #64748b;
+    color: var(--pv-text-muted);
 }
 
 .pv-home-card.pv-card-maquinas::before { background: var(--pv-red-primary); }
@@ -233,12 +253,12 @@ body.o_web_client_dark_mode {
 }
 
 .pv-ticket-card {
-    background: #fff;
+    background: var(--pv-card-bg);
     border-radius: 10px;
     padding: 16px 12px;
     text-align: center;
     box-shadow: 0 1px 6px rgba(0,0,0,0.04);
-    border: 1px solid #e2e8f0;
+    border: 1px solid var(--pv-card-border);
     border-top: 4px solid;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -327,7 +347,7 @@ body.o_web_client_dark_mode {
 .pv-section-title {
     font-size: 15px;
     font-weight: 700;
-    color: #1e293b;
+    color: var(--pv-text-main);
     margin-bottom: 12px;
     display: flex;
     align-items: center;
@@ -395,11 +415,11 @@ body.o_web_client_dark_mode {
 }
 
 .pv-maquina-card {
-    background: #fff;
+    background: var(--pv-card-bg);
     border-radius: 10px;
     padding: 18px;
     box-shadow: 0 1px 6px rgba(0,0,0,0.04);
-    border: 1px solid #e2e8f0;
+    border: 1px solid var(--pv-card-border);
     cursor: pointer;
     transition: all 0.2s ease;
 }
@@ -470,18 +490,18 @@ body.o_web_client_dark_mode {
 
 /* ===================== Machine Detail ===================== */
 .pv-detail-header {
-    background: #fff;
+    background: var(--pv-card-bg);
     border-radius: 12px;
     padding: 24px;
     box-shadow: 0 2px 10px rgba(0,0,0,0.04);
-    border: 1px solid #e2e8f0;
+    border: 1px solid var(--pv-card-border);
     margin-bottom: 20px;
 }
 
 .pv-detail-header .pv-detail-title {
     font-size: 22px;
     font-weight: 800;
-    color: #1e293b;
+    color: var(--pv-text-main);
     margin-bottom: 4px;
 }
 
@@ -840,11 +860,25 @@ body.o_web_client_dark_mode {
             max-width: 220px;
         }
 
+        .pv-back-btn {
+            width: 34px;
+            height: 34px;
+            font-size: 13px;
+        }
+
         .pv-refresh-btn {
             padding: 6px 10px;
             font-size: 12px;
             white-space: nowrap;
         }
+    }
+
+    /* Seamless Outer Cards on Mobile */
+    .pv-portal .card.bg-white {
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        padding: 0 !important;
     }
 
     /* Content Area */
@@ -1428,8 +1462,8 @@ body.o_web_client_dark_mode {
 }
 
 .pv-mobile-card {
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
+    background: var(--pv-card-bg);
+    border: 1px solid var(--pv-card-border);
     border-radius: 10px;
     padding: 14px;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
@@ -1442,7 +1476,7 @@ body.o_web_client_dark_mode {
         font-size: 14px;
         font-weight: 700;
         line-height: 1.35;
-        color: #0f172a;
+        color: var(--pv-text-main);
     }
 
     .pv-mc-countdown-box {
@@ -1479,7 +1513,7 @@ body.o_web_client_dark_mode {
 
     &:active {
         transform: scale(0.985);
-        background: #f8fafc;
+        background: var(--pv-table-row-hover);
     }
 
     .pv-tc-name {
@@ -1489,10 +1523,10 @@ body.o_web_client_dark_mode {
     }
 
     .pv-ticket-desc-box {
-        background: #f1f5f9;
-        color: #334155;
+        background: var(--pv-table-row-hover);
+        color: var(--pv-text-main);
         line-height: 1.4;
-        border: 1px solid #e2e8f0;
+        border: 1px solid var(--pv-card-border);
     }
 }
 

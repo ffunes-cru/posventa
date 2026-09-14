@@ -337,6 +337,26 @@ export class PortalConcesionario extends Component {
         });
     }
 
+    // ==================== Navigation helper ====================
+
+    get canGoBack() {
+        return this.state.view !== "home";
+    }
+
+    goBack() {
+        if (this.state.view === "ticket_wizard" || this.state.view === "certificado_wizard") {
+            if (this.state.selectedMaquinaId) {
+                this.goToMaquinaDetail(this.state.selectedMaquinaId);
+            } else {
+                this.goToMaquinas();
+            }
+        } else if (this.state.view === "maquina_detail") {
+            this.goToMaquinas();
+        } else {
+            this.goHome();
+        }
+    }
+
     // ==================== Breadcrumb helper ====================
 
     get breadcrumbs() {

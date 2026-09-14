@@ -5,20 +5,27 @@
         <div class="pv-portal">
             <!-- Header & Breadcrumbs -->
             <div class="pv-portal-header">
-                <div>
-                    <h2><i class="fa fa-handshake-o me-2"/> Portal Concesionario</h2>
-                    <div class="pv-breadcrumb">
-                        <t t-foreach="breadcrumbs" t-as="crumb" t-key="crumb_index">
-                            <t t-if="crumb.action">
-                                <a t-on-click="crumb.action" t-esc="crumb.label"/>
+                <div class="d-flex align-items-center gap-2">
+                    <t t-if="canGoBack">
+                        <button class="pv-back-btn" t-on-click="() => this.goBack()" title="Volver">
+                            <i class="fa fa-arrow-left"/>
+                        </button>
+                    </t>
+                    <div>
+                        <h2><i class="fa fa-handshake-o me-2" t-if="!canGoBack"/> Portal Concesionario</h2>
+                        <div class="pv-breadcrumb">
+                            <t t-foreach="breadcrumbs" t-as="crumb" t-key="crumb_index">
+                                <t t-if="crumb.action">
+                                    <a t-on-click="crumb.action" t-esc="crumb.label"/>
+                                </t>
+                                <t t-else="">
+                                    <span class="current" t-esc="crumb.label"/>
+                                </t>
+                                <t t-if="crumb_index &lt; breadcrumbs.length - 1">
+                                    <span class="separator">/</span>
+                                </t>
                             </t>
-                            <t t-else="">
-                                <span class="current" t-esc="crumb.label"/>
-                            </t>
-                            <t t-if="crumb_index &lt; breadcrumbs.length - 1">
-                                <span class="separator">/</span>
-                            </t>
-                        </t>
+                        </div>
                     </div>
                 </div>
 

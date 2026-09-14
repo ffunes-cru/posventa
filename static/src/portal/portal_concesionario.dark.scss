@@ -4,23 +4,23 @@
    ========================================================================== */
 
 :root {
-    --pv-bg: #151521;
-    --pv-card-bg: #1e1e2d;
-    --pv-card-border: #2e2e42;
+    --pv-bg: #212534;
+    --pv-card-bg: #2b3044;
+    --pv-card-border: #3d435e;
     --pv-card-hover-border: #c8102e;
-    --pv-text-main: #f1f5f9;
-    --pv-text-muted: #94a3b8;
-    --pv-text-subtle: #64748b;
-    --pv-input-bg: #1b1b28;
-    --pv-input-border: #383852;
+    --pv-text-main: #f8fafc;
+    --pv-text-muted: #a0aec0;
+    --pv-text-subtle: #718096;
+    --pv-input-bg: #252a3c;
+    --pv-input-border: #3f4664;
     --pv-input-text: #ffffff;
-    --pv-table-header-bg: #181826;
-    --pv-table-row-bg: #1e1e2d;
-    --pv-table-row-hover: #26263b;
-    --pv-table-border: #2e2e42;
-    --pv-modal-bg: #1e1e2d;
-    --pv-modal-footer-bg: #181826;
-    --pv-badge-bg-neutral: #28283c;
+    --pv-table-header-bg: #252a3c;
+    --pv-table-row-bg: #2b3044;
+    --pv-table-row-hover: #343a52;
+    --pv-table-border: #3d435e;
+    --pv-modal-bg: #2b3044;
+    --pv-modal-footer-bg: #252a3c;
+    --pv-badge-bg-neutral: #353b54;
 }
 
 .pv-portal {
@@ -43,10 +43,20 @@
     background: rgba(255, 255, 255, 0.2) !important;
 }
 
+.pv-portal-header .pv-back-btn {
+    background: rgba(255, 255, 255, 0.15) !important;
+    border-color: rgba(255, 255, 255, 0.25) !important;
+    color: #ffffff !important;
+}
+
+.pv-portal-header .pv-back-btn:hover {
+    background: rgba(255, 255, 255, 0.28) !important;
+}
+
 /* Welcome Banner */
 .pv-portal .alert-light {
-    background: #1e1e2d !important;
-    border-color: #2e2e42 !important;
+    background: var(--pv-card-bg) !important;
+    border-color: var(--pv-card-border) !important;
     color: var(--pv-text-main) !important;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2) !important;
 }
@@ -279,21 +289,21 @@
 .pv-adp-banner-meta { color: #cbd5e1 !important; }
 
 .pv-banner-en_termino {
-    background: linear-gradient(to right, #082f49 0%, #1e1e2d 100%) !important;
+    background: linear-gradient(to right, #082f49 0%, var(--pv-card-bg) 100%) !important;
     border-color: #0369a1 !important;
     border-left-color: #38bdf8 !important;
 }
 .pv-banner-en_termino .pv-adp-banner-icon { background: rgba(56, 189, 248, 0.2) !important; color: #38bdf8 !important; }
 
 .pv-banner-vence_hoy {
-    background: linear-gradient(to right, #451a03 0%, #1e1e2d 100%) !important;
+    background: linear-gradient(to right, #451a03 0%, var(--pv-card-bg) 100%) !important;
     border-color: #b45309 !important;
     border-left-color: #fbbf24 !important;
 }
 .pv-banner-vence_hoy .pv-adp-banner-icon { background: rgba(245, 158, 11, 0.2) !important; color: #fbbf24 !important; }
 
 .pv-banner-vencido {
-    background: linear-gradient(to right, #450a0a 0%, #1e1e2d 100%) !important;
+    background: linear-gradient(to right, #450a0a 0%, var(--pv-card-bg) 100%) !important;
     border-color: #b91c1c !important;
     border-left-color: #ef4444 !important;
 }
@@ -301,7 +311,7 @@
 .pv-banner-vencido .pv-adp-banner-title { color: #fca5a5 !important; }
 
 .pv-banner-cpm {
-    background: linear-gradient(to right, #1e1b4b 0%, #1e1e2d 100%) !important;
+    background: linear-gradient(to right, #1e1b4b 0%, var(--pv-card-bg) 100%) !important;
     border-color: #4338ca !important;
     border-left-color: #818cf8 !important;
 }
@@ -354,12 +364,12 @@
 }
 
 .pv-wizard-container .card.bg-light {
-    background: #181826 !important;
+    background: #252a3c !important;
     border-color: var(--pv-card-border) !important;
 }
 
 .pv-wizard-container .card label.bg-white {
-    background: #1e1e2d !important;
+    background: var(--pv-card-bg) !important;
     border-color: var(--pv-card-border) !important;
     color: var(--pv-text-main) !important;
 }
@@ -433,30 +443,30 @@
 
 /* ===================== Mobile Cards (Dark Mode) ===================== */
 .pv-mobile-card {
-    background: #1e1e2d !important;
-    border-color: #2e2e42 !important;
+    background: var(--pv-card-bg) !important;
+    border-color: var(--pv-card-border) !important;
     box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25) !important;
 
     .pv-mc-title {
-        color: #f1f5f9 !important;
+        color: #f8fafc !important;
     }
 
     .pv-mc-countdown-box {
         &.bg-info-subtle {
-            background: rgba(2, 132, 199, 0.15) !important;
-            border-color: rgba(56, 189, 248, 0.35) !important;
+            background: rgba(2, 132, 199, 0.2) !important;
+            border-color: rgba(56, 189, 248, 0.4) !important;
             color: #7dd3fc !important;
             strong { color: #ffffff !important; }
         }
         &.bg-warning-subtle {
-            background: rgba(245, 158, 11, 0.15) !important;
-            border-color: rgba(251, 191, 36, 0.35) !important;
+            background: rgba(245, 158, 11, 0.2) !important;
+            border-color: rgba(251, 191, 36, 0.4) !important;
             color: #fde68a !important;
             strong { color: #ffffff !important; }
         }
         &.bg-danger-subtle {
-            background: rgba(220, 38, 38, 0.18) !important;
-            border-color: rgba(248, 113, 113, 0.35) !important;
+            background: rgba(220, 38, 38, 0.22) !important;
+            border-color: rgba(248, 113, 113, 0.4) !important;
             color: #fca5a5 !important;
             strong { color: #ffffff !important; }
         }
@@ -467,7 +477,7 @@
     border-left-color: #f87171 !important;
 
     &:active {
-        background: #26263b !important;
+        background: #343a52 !important;
     }
 
     .pv-tc-name {
@@ -475,15 +485,15 @@
     }
 
     .pv-ticket-desc-box {
-        background: #151521 !important;
+        background: #252a3c !important;
         color: #cbd5e1 !important;
-        border-color: #2e2e42 !important;
+        border-color: #3d435e !important;
     }
 
     .badge.bg-light {
-        background: #28283c !important;
+        background: #353b54 !important;
         color: #e2e8f0 !important;
-        border-color: #383852 !important;
+        border-color: #454c6b !important;
     }
 }
 
