@@ -1,7 +1,16 @@
 # Part of Crucianelli Posventa Module
+import os
+import shutil
+import subprocess
+import threading
+import logging
+import mimetypes
+from markupsafe import Markup, escape
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError, ValidationError
 from .pv_maquina import ESTADO_MAQUINA
+
+_logger = logging.getLogger(__name__)
 
 
 ESTADO_TICKET = [
@@ -146,6 +155,18 @@ class PvTicket(models.Model):
     multimedia_url = fields.Char(
         string='Multimedia (link Google Drive)',
     )
+    drive_folder_url = fields.Char(
+        string='Carpeta en Google Drive',
+    )
+    multimedia_ids = fields.One2many(
+        'pv.ticket.multimedia',
+        'ticket_id',
+        string='Archivos Multimedia Pesados',
+    )
+    multimedia_count = fields.Integer(
+        string='Cantidad de Archivos Multimedia',
+        compute='_compute_multimedia_count',
+    )
 
     # --- Estado y asignación ---
     estado = fields.Selection(
@@ -180,6 +201,11 @@ class PvTicket(models.Model):
     sap_numero_orden = fields.Char(
         string='Nro. Orden SAP',
         tracking=True,
+    )
+    sap_numero_pedido = fields.Char(
+        string='Nro. Pedido SAP',
+        tracking=True,
+        help='Número de pedido registrado en SAP para repuestos o insumos.',
     )
     sap_centro = fields.Char(
         string='Centro SAP',
@@ -282,6 +308,11 @@ class PvTicket(models.Model):
     def _group_expand_estados(self, states, domain):
         """Show all states in kanban even if empty."""
         return [key for key, _ in ESTADO_TICKET]
+
+    @api.depends('multimedia_ids')
+    def _compute_multimedia_count(self):
+        for rec in self:
+            rec.multimedia_count = len(rec.multimedia_ids)
 
     @api.depends('medida_ids', 'medida_ids.estado')
     def _compute_medida_count(self):
@@ -578,21 +609,22 @@ class PvTicket(models.Model):
             )
 
     def action_aceptar_ticket(self):
-        """Abre el asistente (popup) para aceptar el reclamo y registrar la garantía."""
-        self.ensure_one()
-        if self.estado != 'en_proceso':
-            raise UserError(_('Solo se pueden aceptar tickets EN PROCESO.'))
-            
-        return {
-            'name': _('Aceptar Reclamo / Garantía'),
-            'type': 'ir.actions.act_window',
-            'res_model': 'pv.aceptar.ticket.wizard',
-            'view_mode': 'form',
-            'target': 'new',
-            'context': {
-                'default_ticket_id': self.id,
-            }
-        }
+        """Acepta el reclamo directamente sin abrir popup (el registro de garantía se traslada al Cierre si hay Orden SAP)."""
+        for rec in self:
+            if rec.estado != 'en_proceso':
+                raise UserError(_('Solo se pueden aceptar tickets EN PROCESO.'))
+            rec.write({
+                'estado': 'aceptado',
+                'fecha_solucion': fields.Datetime.now(),
+            })
+            rec.message_post(
+                body=_('Reclamo aceptado y validado.'),
+                message_type='notification',
+                subtype_xmlid='mail.mt_note',
+            )
+            template = self.env.ref('posventa.mail_template_ticket_aceptado', raise_if_not_found=False)
+            if template:
+                template.send_mail(rec.id, force_send=True)
 
     def action_rechazar_ticket(self):
         """Reject the claim and open the email wizard like standard Sales does."""
@@ -641,19 +673,36 @@ class PvTicket(models.Model):
         }
         
     def action_cerrar_ticket(self):
-        """Close the ticket (ACEPTADO -> CERRADO)."""
-        for rec in self:
-            if rec.estado != 'aceptado':
-                raise UserError(_('Solo se pueden cerrar tickets ACEPTADOS.'))
-            rec.write({
-                'estado': 'cerrado',
-                'fecha_cierre': fields.Datetime.now(),
-            })
-            rec.message_post(
-                body=_('Ticket cerrado. Expediente completo.'),
-                message_type='notification',
-                subtype_xmlid='mail.mt_note',
-            )
+        """Close the ticket (ACEPTADO -> CERRADO).
+        Si el ticket cuenta con un número de Orden de SAP cargado (indica orden de devolución de pieza),
+        abre el asistente para registrar la garantía y el adjunto correspondiente.
+        Si no cuenta con Nro. de Orden SAP, se cierra directamente.
+        """
+        self.ensure_one()
+        if self.estado != 'aceptado':
+            raise UserError(_('Solo se pueden cerrar tickets ACEPTADOS.'))
+
+        if self.sap_numero_orden:
+            return {
+                'name': _('Cierre de Reclamo / Garantía y Devolución'),
+                'type': 'ir.actions.act_window',
+                'res_model': 'pv.cerrar.ticket.wizard',
+                'view_mode': 'form',
+                'target': 'new',
+                'context': {
+                    'default_ticket_id': self.id,
+                }
+            }
+
+        self.write({
+            'estado': 'cerrado',
+            'fecha_cierre': fields.Datetime.now(),
+        })
+        self.message_post(
+            body=_('Ticket cerrado. Expediente completo.'),
+            message_type='notification',
+            subtype_xmlid='mail.mt_note',
+        )
 
     # --- rollback actions for administrator ---
     def action_back_to_borrador(self):
@@ -777,6 +826,9 @@ class PvTicket(models.Model):
                 'message_ids', 
                 'message_follower_ids',
                 'estado',
+                'multimedia_ids',
+                'multimedia_url',
+                'drive_folder_url',
             ]
             for rec in self:
                 if rec.estado != 'borrador':
@@ -815,9 +867,307 @@ class PvTicket(models.Model):
                     'opciones': opciones_list,
                 })
 
+        chunk_size_kb = int(self.env['ir.config_parameter'].sudo().get_param('posventa.chunk_size_kb', 768))
+        max_file_size_mb = int(self.env['ir.config_parameter'].sudo().get_param('posventa.max_file_size_mb', 1024))
+        is_configured, rclone_msg = self._is_rclone_configured()
+
         return {
             'sistemas': sistemas,
             'subsistemas': subsistemas,
             'problemas': problemas,
             'campos_extras': campos_extras,
+            'chunk_size_bytes': chunk_size_kb * 1024,
+            'max_file_size_bytes': max_file_size_mb * 1024 * 1024,
+            'rclone_configured': is_configured,
+            'rclone_msg': rclone_msg,
+        }
+
+    def action_abrir_carpeta_drive(self):
+        """Abre la carpeta de Google Drive del ticket o su enlace multimedia."""
+        self.ensure_one()
+        url = self.drive_folder_url or self.multimedia_url
+        if not url:
+            for m in self.multimedia_ids:
+                if m.drive_folder_url:
+                    url = m.drive_folder_url
+                    break
+                elif m.drive_url:
+                    url = m.drive_url
+                    break
+        if not url:
+            pending_count = self.multimedia_ids.filtered(lambda m: m.estado_sync in ('procesando', 'subiendo'))
+            if pending_count:
+                raise UserError(_(
+                    "Los archivos multimedia se están transfiriendo actualmente a Google Drive. "
+                    "Por favor aguarde unos instantes mientras finaliza la sincronización (puede consultar el estado en la pestaña Multimedia)."
+                ))
+            raise UserError(_("No hay una carpeta o archivo de Google Drive asociado a este ticket todavía."))
+        return {
+            'type': 'ir.actions.act_url',
+            'url': url,
+            'target': 'new',
+        }
+
+    @api.model
+    def _is_rclone_configured(self):
+        """Verifica si el binario de rclone y el remoto de Google Drive están configurados."""
+        import shutil
+        import subprocess
+        import os
+
+        rclone_bin = shutil.which('rclone') or os.path.expanduser('~/.local/bin/rclone')
+        if not rclone_bin or not os.path.exists(rclone_bin):
+            return False, _("Binario rclone no encontrado en el servidor (~/.local/bin/rclone).")
+
+        remote = self.env['ir.config_parameter'].sudo().get_param('posventa.rclone_remote', 'crucianelli_drive')
+        try:
+            res = subprocess.run([rclone_bin, "listremotes"], capture_output=True, text=True, timeout=10)
+            remotes = [r.strip().rstrip(':') for r in res.stdout.splitlines() if r.strip()]
+            if remote not in remotes:
+                return False, _(
+                    "El almacenamiento de Google Drive no está configurado en el servidor "
+                    "(el remoto '%s' no existe en rclone). "
+                    "Debe ejecutar 'rclone config' para vincular la cuenta de Google Drive."
+                ) % remote
+        except Exception as e:
+            return False, _("Error al consultar configuración de rclone: %s") % str(e)
+
+        return True, "OK"
+
+    @api.model
+    def _cron_sync_pending_multimedia(self):
+        """Cron periódico para sincronizar archivos multimedia pendientes o estancados."""
+        import os
+        from datetime import datetime, timedelta
+        threshold = datetime.now() - timedelta(minutes=2)
+        pending_records = self.env['pv.ticket.multimedia'].search([
+            ('estado_sync', 'in', ['procesando', 'subiendo']),
+            ('create_date', '<', threshold),
+        ])
+        for m in pending_records:
+            target_path = m.staging_path
+            if not target_path or not os.path.exists(target_path):
+                staging_root = os.path.expanduser('~/posventa_staging')
+                candidate = os.path.join(staging_root, str(m.id), m.name)
+                if os.path.exists(candidate):
+                    target_path = candidate
+
+            if target_path and os.path.exists(target_path):
+                _logger.info("Cron sincronizando archivo pendiente: %s (ticket %s)", m.name, m.ticket_id.id)
+                try:
+                    m.ticket_id._run_rclone_sync(m, temp_filepath=target_path)
+                except Exception as e:
+                    _logger.exception("Error en cron sync para multimedia %s: %s", m.id, e)
+
+    def _trigger_drive_sync(self, multimedia_rec, temp_filepath=None):
+        """Inicia la sincronización con Google Drive mediante rclone en segundo plano."""
+        self.ensure_one()
+        ticket_id = self.id
+        multimedia_id = multimedia_rec.id
+        db_name = self.env.cr.dbname
+
+        def worker():
+            import time
+            # Espera breve para asegurar que la transacción HTTP principal haya hecho commit
+            time.sleep(1.5)
+            max_attempts = 3
+            for attempt in range(max_attempts):
+                try:
+                    from odoo.modules.registry import Registry
+                    from odoo import SUPERUSER_ID, api
+                    registry = Registry(db_name)
+                    with registry.cursor() as cr:
+                        env = api.Environment(cr, SUPERUSER_ID, {})
+                        ticket = env['pv.ticket'].browse(ticket_id)
+                        multimedia = env['pv.ticket.multimedia'].browse(multimedia_id)
+                        if ticket.exists() and multimedia.exists():
+                            ticket._run_rclone_sync(multimedia, temp_filepath)
+                        cr.commit()
+                    break
+                except Exception as e:
+                    _logger.warning("Intento %s/%s de sincronización Drive falló para ticket %s: %s", attempt + 1, max_attempts, ticket_id, e)
+                    if attempt < max_attempts - 1:
+                        time.sleep(2.0 * (attempt + 1))
+                        continue
+                    _logger.exception("Error final en worker de sincronización con Google Drive: %s", e)
+                    try:
+                        from odoo.modules.registry import Registry
+                        from odoo import SUPERUSER_ID, api
+                        registry = Registry(db_name)
+                        with registry.cursor() as cr:
+                            env = api.Environment(cr, SUPERUSER_ID, {})
+                            multimedia = env['pv.ticket.multimedia'].browse(multimedia_id)
+                            if multimedia.exists():
+                                multimedia.write({
+                                    'estado_sync': 'error',
+                                    'error_message': f"Error interno en worker: {str(e)[:400]}",
+                                })
+                            cr.commit()
+                    except Exception:
+                        pass
+
+        thread = threading.Thread(target=worker, daemon=True)
+        thread.start()
+
+    def _run_rclone_sync(self, multimedia, temp_filepath=None):
+        """Ejecuta la sincronización con rclone de forma directa (utilizable sincrónicamente o en thread)."""
+        self.ensure_one()
+        import subprocess
+        import shutil
+        import os
+
+        # 1. Verificar si rclone y el remoto están configurados
+        is_configured, config_msg = self._is_rclone_configured()
+        if not is_configured:
+            multimedia.write({
+                'estado_sync': 'error',
+                'error_message': config_msg,
+                'staging_path': temp_filepath,
+            })
+            self.message_post(
+                body=Markup(_(
+                    "⚠️ <b>Fallo en sincronización a Google Drive:</b> %s<br/>"
+                    "El archivo <i>%s</i> quedó almacenado en el servidor y podrá reintentarse una vez configurado rclone."
+                )) % (escape(config_msg), escape(multimedia.name or '')),
+                message_type='comment',
+                subtype_xmlid='mail.mt_note',
+            )
+            return False
+
+        # Determinar archivo temporal si no vino explícito
+        if not temp_filepath:
+            staging_dir = os.path.expanduser('~/posventa_staging')
+            possible_file = os.path.join(staging_dir, str(multimedia.id), multimedia.name)
+            if os.path.exists(possible_file):
+                temp_filepath = possible_file
+
+        rclone_bin = shutil.which('rclone') or os.path.expanduser('~/.local/bin/rclone')
+        remote = self.env['ir.config_parameter'].sudo().get_param('posventa.rclone_remote', 'crucianelli_drive')
+        drive_base = self.env['ir.config_parameter'].sudo().get_param('posventa.rclone_drive_folder', 'Crucianelli_Posventa/Reclamos')
+        of_str = (self.maquina_id.of or 'MAQ').replace(' ', '_').replace('/', '_')
+        ticket_str = (self.name or f"TICKET_{self.id}").replace(' ', '_').replace('/', '_')
+        folder_name = f"{of_str}_{ticket_str}"
+        dest_dir = f"{remote}:{drive_base}/{folder_name}"
+
+        if not temp_filepath or not os.path.exists(temp_filepath):
+            multimedia.write({
+                'estado_sync': 'error',
+                'error_message': _("Archivo temporal no encontrado para sincronización."),
+            })
+            return False
+
+        multimedia.write({'estado_sync': 'procesando', 'error_message': False})
+
+        try:
+            dest_file_path = f"{dest_dir}/{multimedia.name}"
+            # Asegurar mimetype correcto para video/webm u otros formatos para que Google Drive reproduzca como video
+            mime = (multimedia.mimetype or '').lower()
+            if multimedia.name.lower().endswith('.webm') and ('audio' in mime or not mime):
+                mime = 'video/webm'
+            elif not mime:
+                mime, _enc = mimetypes.guess_type(multimedia.name)
+            mime = mime or 'application/octet-stream'
+
+            cmd = [rclone_bin, "move", temp_filepath, dest_dir, "-M", "--metadata-set", f"content-type={mime}"]
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=1200)
+
+            if res.returncode != 0:
+                err_text = (res.stderr or res.stdout or _("Error al ejecutar rclone move."))[:500]
+                multimedia.write({
+                    'estado_sync': 'error',
+                    'error_message': err_text,
+                    'staging_path': temp_filepath,
+                })
+                self.message_post(
+                    body=Markup(_(
+                        "⚠️ <b>Error al transferir a Google Drive:</b> %s<br/>"
+                        "Archivo: <i>%s</i>"
+                    )) % (escape(err_text), escape(multimedia.name or '')),
+                    message_type='comment',
+                    subtype_xmlid='mail.mt_note',
+                )
+                return False
+
+            # Obtener enlace público/compartido del archivo
+            link_cmd = [rclone_bin, "link", dest_file_path]
+            link_res = subprocess.run(link_cmd, capture_output=True, text=True, timeout=60)
+            drive_url = link_res.stdout.strip() if link_res.returncode == 0 and link_res.stdout.strip() else ""
+
+            # Obtener enlace de la carpeta
+            folder_cmd = [rclone_bin, "link", dest_dir]
+            folder_res = subprocess.run(folder_cmd, capture_output=True, text=True, timeout=60)
+            folder_url = folder_res.stdout.strip() if folder_res.returncode == 0 and folder_res.stdout.strip() else ""
+
+            if not drive_url:
+                drive_url = folder_url or f"https://drive.google.com/drive/search?q={multimedia.name}"
+
+            multimedia.write({
+                'estado_sync': 'disponible',
+                'drive_url': drive_url,
+                'drive_folder_url': folder_url,
+                'staging_path': False,
+                'mimetype': mime,
+            })
+
+            ticket_vals = {}
+            if not self.multimedia_url:
+                ticket_vals['multimedia_url'] = drive_url
+            if folder_url and not self.drive_folder_url:
+                ticket_vals['drive_folder_url'] = folder_url
+            if ticket_vals:
+                self.write(ticket_vals)
+
+            # Crear ir.attachment tipo URL en Odoo para que aparezca en el chatter
+            att_vals = {
+                'name': multimedia.name,
+                'type': 'url',
+                'url': drive_url,
+                'res_model': 'pv.ticket',
+                'res_id': self.id,
+                'mimetype': mime,
+            }
+            att = self.env['ir.attachment'].sudo().create(att_vals)
+            multimedia.ir_attachment_id = att.id
+
+            # Mensaje en chatter
+            self.message_post(
+                body=Markup(_(
+                    "📁 <b>Archivo multimedia disponible en Google Drive:</b> %s (%s)<br/>"
+                    "<a href='%s' target='_blank' class='btn btn-sm btn-primary mt-1'>▶ Ver en Google Drive</a>"
+                )) % (escape(multimedia.name or ''), escape(multimedia.file_size_display or ''), escape(drive_url)),
+                message_type='comment',
+                subtype_xmlid='mail.mt_note',
+            )
+
+            # Limpieza del directorio staging local
+            parent_dir = os.path.dirname(temp_filepath)
+            if os.path.exists(parent_dir) and not os.listdir(parent_dir):
+                try:
+                    os.rmdir(parent_dir)
+                except Exception:
+                    pass
+
+            return True
+
+        except Exception as e:
+            _logger.exception("Error al sincronizar multimedia a Drive con rclone: %s", e)
+            multimedia.write({
+                'estado_sync': 'error',
+                'error_message': str(e)[:500],
+                'staging_path': temp_filepath,
+            })
+            return False
+
+    def action_adjuntar_multimedia(self):
+        """Abre el asistente para adjuntar un archivo multimedia o enlace de Google Drive."""
+        self.ensure_one()
+        return {
+            'name': _('Adjuntar Video / Archivo Multimedia'),
+            'type': 'ir.actions.act_window',
+            'res_model': 'pv.ticket.multimedia.wizard',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {
+                'default_ticket_id': self.id,
+            },
         }

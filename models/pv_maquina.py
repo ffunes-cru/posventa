@@ -335,8 +335,8 @@ class PvMaquina(models.Model):
         certificados = []
         for c in self.certificado_ids.filtered(lambda x: x.active).sorted('fecha', reverse=True):
             if c.estado_certificado == 'vigente':
-                if c.dias_retraso_carga > 0:
-                    tag_label = _('Vencido hace %s días') % c.dias_retraso_carga
+                if (c.dias_retraso_carga or 0) > 0:
+                    tag_label = _('Vencido luego de 1 día') if c.dias_retraso_carga == 1 else _('Vencido luego de %s días') % c.dias_retraso_carga
                     tag_badge = 'danger'
                 else:
                     tag_label = _('Vigente')

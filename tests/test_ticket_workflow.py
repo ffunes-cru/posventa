@@ -119,3 +119,64 @@ class TestTicketWorkflow(TestPosventaCommon):
         ticket.with_user(self.user_staff).action_rechazar_ticket_direct('Falla por mal uso del operador.')
         self.assertEqual(ticket.estado, 'rechazado')
         self.assertIn('mal uso', ticket.motivo_rechazo)
+
+    def test_03_accept_and_close_with_sap_order_wizard(self):
+        """Test accepting directly without popup, and closing with wizard when SAP order exists."""
+        from .common import DUMMY_PDF_BASE64
+        ticket = self.env['pv.ticket'].with_user(self.user_concesionario_a).create({
+            'maquina_id': self.maquina_stock.id,
+            'tipo_ticket': 'pre_pm',
+            'desvio_tipo': 'faltante',
+            'descripcion': 'Falta manual y bulón',
+        })
+        ticket.with_user(self.user_concesionario_a).action_enviar_ticket_direct()
+        ticket.with_user(self.user_staff).action_tomar_ticket()
+
+        # 1. Staff accepts directly (no popup)
+        ticket.with_user(self.user_staff).action_aceptar_ticket()
+        self.assertEqual(ticket.estado, 'aceptado')
+        self.assertTrue(ticket.fecha_solucion)
+
+        # 2. Case A: Close without SAP order -> closes directly
+        ticket_no_sap = self.env['pv.ticket'].with_user(self.user_concesionario_a).create({
+            'maquina_id': self.maquina_stock.id,
+            'tipo_ticket': 'pre_pm',
+            'desvio_tipo': 'faltante',
+            'descripcion': 'Falta calco lateral',
+        })
+        ticket_no_sap.with_user(self.user_concesionario_a).action_enviar_ticket_direct()
+        ticket_no_sap.with_user(self.user_staff).action_tomar_ticket()
+        ticket_no_sap.with_user(self.user_staff).action_aceptar_ticket()
+        res_no_sap = ticket_no_sap.with_user(self.user_staff).action_cerrar_ticket()
+        self.assertIsNone(res_no_sap)
+        self.assertEqual(ticket_no_sap.estado, 'cerrado')
+        self.assertTrue(ticket_no_sap.fecha_cierre)
+
+        # 3. Case B: Close with SAP order and Pedido SAP -> triggers pv.cerrar.ticket.wizard
+        ticket.with_user(self.user_staff).write({
+            'sap_numero_orden': 'ORD-SAP-8877',
+            'sap_numero_pedido': 'PED-SAP-5544',
+        })
+        self.assertEqual(ticket.sap_numero_pedido, 'PED-SAP-5544')
+
+        res_with_sap = ticket.with_user(self.user_staff).action_cerrar_ticket()
+        self.assertIsInstance(res_with_sap, dict)
+        self.assertEqual(res_with_sap.get('res_model'), 'pv.cerrar.ticket.wizard')
+
+        wizard = self.env['pv.cerrar.ticket.wizard'].with_user(self.user_staff).create({
+            'ticket_id': ticket.id,
+            'garantia_aceptada': True,
+            'garantia_observaciones': 'Pieza defectuosa devuelta a planta y validada.',
+            'garantia_adjunto': DUMMY_PDF_BASE64,
+            'garantia_adjunto_name': 'devolucion_comprobante.pdf',
+        })
+        wizard.action_confirmar()
+
+        self.assertEqual(ticket.estado, 'cerrado')
+        self.assertTrue(ticket.fecha_cierre)
+        self.assertTrue(ticket.garantia_aceptada)
+        self.assertEqual(ticket.garantia_observaciones, 'Pieza defectuosa devuelta a planta y validada.')
+        # Attachment created
+        att = self.env['ir.attachment'].search([('res_model', '=', 'pv.ticket'), ('res_id', '=', ticket.id)])
+        self.assertTrue(att.exists())
+

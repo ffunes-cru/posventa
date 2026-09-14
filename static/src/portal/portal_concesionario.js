@@ -320,12 +320,17 @@ export class PortalConcesionario extends Component {
     }
 
     openTicketsByEstado(estado) {
+        const isMobile = Boolean(this.env.isSmall);
+        const views = isMobile
+            ? [[false, "kanban"], [false, "list"], [false, "form"]]
+            : [[false, "list"], [false, "kanban"], [false, "form"]];
+        const viewMode = isMobile ? "kanban,list,form" : "list,kanban,form";
         this.action.doAction({
             type: "ir.actions.act_window",
             name: _t("Mis Tickets — %s", estado.toUpperCase()),
             res_model: "pv.ticket",
-            view_mode: "list,form",
-            views: [[false, "list"], [false, "form"]],
+            view_mode: viewMode,
+            views: views,
             domain: [["estado", "=", estado]],
             target: "current",
             context: { create: false },

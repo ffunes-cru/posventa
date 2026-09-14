@@ -39,7 +39,8 @@ Módulo para la gestión integral de reclamos de posventa:
         'wizard/pv_import_maquinas_views.xml',
         'wizard/pv_transferir_maquina_wizard_views.xml',
         'wizard/pv_ticket_chat_wizard_views.xml',
-        'wizard/pv_aceptar_ticket_wizard_views.xml',
+        'wizard/pv_cerrar_ticket_wizard_views.xml',
+        'wizard/pv_adjuntar_multimedia_wizard_views.xml',
         # Views
         'views/res_config_settings_views.xml',
         'views/pv_concesionario_views.xml',
@@ -59,6 +60,10 @@ Módulo para la gestión integral de reclamos de posventa:
             'posventa/static/src/portal/**/*.scss',
             'posventa/static/src/portal/**/*.js',
             'posventa/static/src/portal/**/*.xml',
+            ('remove', 'posventa/static/src/**/*.dark.scss'),
+        ],
+        'web.assets_web_dark': [
+            'posventa/static/src/**/*.dark.scss',
         ],
     },
     'external_dependencies': {

@@ -44,7 +44,7 @@
                 <t t-elif="state.view === 'home'">
                     <t t-if="state.portalData">
                         <!-- Welcome Banner -->
-                        <div class="alert alert-light border shadow-sm p-4 mb-4 d-flex justify-content-between align-items-center rounded-3">
+                        <div class="alert alert-light border shadow-sm p-3 p-md-4 mb-4 d-flex justify-content-between align-items-center rounded-3">
                             <div>
                                 <h4 class="fw-bold text-primary mb-1">
                                     ¡Bienvenido/a, <t t-esc="state.portalData.concesionario_name"/>!
@@ -139,7 +139,7 @@
 
                     <!-- Search & Filters -->
                     <div class="pv-maquina-filters">
-                        <div class="position-relative d-inline-block flex-grow-1" style="max-width: 420px;">
+                        <div class="position-relative d-inline-block flex-grow-1 pv-search-wrap" style="max-width: 420px;">
                             <input type="text" class="pv-search-input w-100" placeholder="Buscar por Orden de Fabricación (OF) o modelo..."
                                 t-att-value="state.searchTerm" t-on-input="(ev) => this.onSearchInput(ev)"/>
                             <t t-if="state.loadingMaquinas">
@@ -147,12 +147,14 @@
                             </t>
                         </div>
 
-                        <button class="pv-filter-btn" t-att-class="{'active': state.estadoFilter === ''}" t-on-click="() => this.setEstadoFilter('')">Todas</button>
-                        <button class="pv-filter-btn" t-att-class="{'active': state.estadoFilter === 'liberada'}" t-on-click="() => this.setEstadoFilter('liberada')">Liberada</button>
-                        <button class="pv-filter-btn" t-att-class="{'active': state.estadoFilter === 'stock'}" t-on-click="() => this.setEstadoFilter('stock')">Stock</button>
-                        <button class="pv-filter-btn" t-att-class="{'active': state.estadoFilter === 'vendida'}" t-on-click="() => this.setEstadoFilter('vendida')">Vendida</button>
-                        <button class="pv-filter-btn" t-att-class="{'active': state.estadoFilter === 'pendiente'}" t-on-click="() => this.setEstadoFilter('pendiente')">Pendiente Transferencia</button>
-                        <button class="pv-filter-btn" t-att-class="{'active': state.estadoFilter === 'cpm_vencido'}" t-on-click="() => this.setEstadoFilter('cpm_vencido')">CPM Vencido</button>
+                        <div class="pv-filter-scroll-row">
+                            <button class="pv-filter-btn" t-att-class="{'active': state.estadoFilter === ''}" t-on-click="() => this.setEstadoFilter('')">Todas</button>
+                            <button class="pv-filter-btn" t-att-class="{'active': state.estadoFilter === 'liberada'}" t-on-click="() => this.setEstadoFilter('liberada')">Liberada</button>
+                            <button class="pv-filter-btn" t-att-class="{'active': state.estadoFilter === 'stock'}" t-on-click="() => this.setEstadoFilter('stock')">Stock</button>
+                            <button class="pv-filter-btn" t-att-class="{'active': state.estadoFilter === 'vendida'}" t-on-click="() => this.setEstadoFilter('vendida')">Vendida</button>
+                            <button class="pv-filter-btn" t-att-class="{'active': state.estadoFilter === 'pendiente'}" t-on-click="() => this.setEstadoFilter('pendiente')">Pendiente Transferencia</button>
+                            <button class="pv-filter-btn" t-att-class="{'active': state.estadoFilter === 'cpm_vencido'}" t-on-click="() => this.setEstadoFilter('cpm_vencido')">CPM Vencido</button>
+                        </div>
                     </div>
 
                     <!-- Grid -->
@@ -230,7 +232,7 @@
 
                     <!-- Search & Filters -->
                     <div class="pv-maquina-filters flex-wrap gap-2">
-                        <div class="position-relative d-inline-block flex-grow-1" style="min-width: 260px; max-width: 380px;">
+                        <div class="position-relative d-inline-block flex-grow-1 pv-search-wrap" style="min-width: 260px; max-width: 380px;">
                             <input type="text" class="pv-search-input w-100" placeholder="Buscar por Orden de Fabricación (OF) o archivo..."
                                 t-att-value="state.certSearchTerm" t-on-input="(ev) => this.onCertSearchInput(ev)"/>
                             <t t-if="state.loadingCertificados">
@@ -239,8 +241,8 @@
                         </div>
 
                         <!-- Type Filters -->
-                        <div class="d-flex flex-wrap gap-1 align-items-center">
-                            <span class="text-muted small me-1 fw-semibold">Tipo:</span>
+                        <div class="pv-filter-scroll-row align-items-center">
+                            <span class="text-muted small me-1 fw-semibold flex-shrink-0">Tipo:</span>
                             <button class="pv-filter-btn" t-att-class="{'active': state.certTipoFilter === ''}" t-on-click="() => this.setCertTipoFilter('')">Todos</button>
                             <button class="pv-filter-btn" t-att-class="{'active': state.certTipoFilter === 'fru'}" t-on-click="() => this.setCertTipoFilter('fru')">FRU</button>
                             <button class="pv-filter-btn" t-att-class="{'active': state.certTipoFilter === 'feu'}" t-on-click="() => this.setCertTipoFilter('feu')">FEU</button>
@@ -250,8 +252,8 @@
                         </div>
 
                         <!-- State Filters -->
-                        <div class="d-flex flex-wrap gap-1 align-items-center">
-                            <span class="text-muted small me-1 fw-semibold">Estado:</span>
+                        <div class="pv-filter-scroll-row align-items-center">
+                            <span class="text-muted small me-1 fw-semibold flex-shrink-0">Estado:</span>
                             <button class="pv-filter-btn" t-att-class="{'active': state.certEstadoFilter === ''}" t-on-click="() => this.setCertEstadoFilter('')">Todos</button>
                             <button class="pv-filter-btn" t-att-class="{'active': state.certEstadoFilter === 'vigente'}" t-on-click="() => this.setCertEstadoFilter('vigente')">Vigente</button>
                             <button class="pv-filter-btn" t-att-class="{'active': state.certEstadoFilter === 'vencido'}" t-on-click="() => this.setCertEstadoFilter('vencido')">Vencido</button>
@@ -262,8 +264,9 @@
 
                     <!-- Certificates Table -->
                     <t t-if="state.certificados.length &gt; 0">
-                        <div class="card border-0 shadow-sm rounded-3 p-4 mb-4 bg-white">
-                            <div class="table-responsive">
+                        <div class="card border-0 shadow-sm rounded-3 p-3 p-md-4 mb-4 bg-white">
+                            <!-- Desktop Table (>= 768px) -->
+                            <div class="table-responsive d-none d-md-block">
                                 <table class="table table-hover align-middle mb-0">
                                     <thead class="table-light">
                                         <tr>
@@ -354,6 +357,65 @@
                                         </t>
                                     </tbody>
                                 </table>
+                            </div>
+
+                            <!-- Mobile Cards (< 768px): All info at a glance, NO horizontal scroll -->
+                            <div class="d-md-none pv-mobile-cards-list">
+                                <t t-foreach="state.certificados" t-as="c" t-key="c.id">
+                                    <div class="pv-mobile-card">
+                                        <div class="d-flex justify-content-between align-items-start gap-2">
+                                            <div>
+                                                <t t-if="c.puede_ver_maquina and c.maquina_id">
+                                                    <button class="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1 py-1 px-2"
+                                                        t-on-click="() => this.goToMaquinaDetail(c.maquina_id)"
+                                                        title="Ver detalle de la máquina">
+                                                        <i class="fa fa-truck"/>
+                                                        <strong>OF <t t-esc="c.maquina_of"/></strong>
+                                                        <span class="text-muted small">(<t t-esc="c.maquina_tipo_label"/>)</span>
+                                                    </button>
+                                                </t>
+                                                <t t-else="">
+                                                    <span class="badge bg-light text-secondary border py-1 px-2 d-inline-flex align-items-center gap-1">
+                                                        <i class="fa fa-truck"/>
+                                                        <strong>OF <t t-esc="c.maquina_of"/></strong>
+                                                        <span class="small">(<t t-esc="c.maquina_tipo_label"/>)</span>
+                                                    </span>
+                                                </t>
+                                            </div>
+                                            <span class="pv-badge-pill flex-shrink-0" t-attf-class="pill-{{c.tag_badge || 'secondary'}}" t-esc="c.estado_certificado_label"/>
+                                        </div>
+                                        <div class="pv-mc-title fw-bold text-dark" t-esc="c.tipo_label"/>
+                                        <div class="d-flex flex-wrap gap-2 text-muted small align-items-center">
+                                            <span class="pv-concesionario-emisor">
+                                                <i class="fa fa-building-o me-1"/> <t t-esc="c.concesionario_name || '-'"/>
+                                            </span>
+                                            <span>
+                                                <i class="fa fa-calendar-o me-1"/> Carga: <strong class="text-dark"><t t-esc="c.fecha"/></strong>
+                                            </span>
+                                        </div>
+                                        <t t-if="c.fecha_vencimiento">
+                                            <div class="pv-mc-countdown-box"
+                                                 t-attf-class="{{c.dias_para_vencer &gt; 0 ? 'bg-info-subtle text-info-emphasis' : (c.dias_para_vencer === 0 ? 'bg-warning-subtle text-warning-emphasis' : 'bg-danger-subtle text-danger-emphasis')}}">
+                                                <span><i class="fa fa-clock-o me-1"/> Vence: <strong><t t-esc="c.fecha_vencimiento"/></strong></span>
+                                                <t t-if="c.estado_certificado === 'vigente' or c.estado_certificado === 'vencido'">
+                                                    <span class="pv-badge-pill py-0 px-2" t-attf-class="pill-{{c.dias_para_vencer &gt; 0 ? 'info' : (c.dias_para_vencer === 0 ? 'warning' : 'danger')}}">
+                                                        <t t-if="c.dias_para_vencer &gt; 0">Quedan <t t-esc="c.dias_para_vencer"/> días</t>
+                                                        <t t-elif="c.dias_para_vencer === 0">Vence Hoy</t>
+                                                        <t t-else="">Vencido</t>
+                                                    </span>
+                                                </t>
+                                            </div>
+                                        </t>
+                                        <t t-if="c.archivo_nombre">
+                                            <a t-attf-href="/web/content?model=pv.certificado&amp;id={{c.id}}&amp;field=archivo&amp;filename={{c.archivo_nombre}}&amp;download=true"
+                                               target="_blank"
+                                               class="pv-file-link w-100 justify-content-center text-decoration-none"
+                                               title="Descargar certificado PDF">
+                                                <i class="fa fa-file-pdf-o text-danger me-1"/> <t t-esc="c.archivo_nombre"/>
+                                            </a>
+                                        </t>
+                                    </div>
+                                </t>
                             </div>
                         </div>
                     </t>
@@ -502,10 +564,11 @@
                         </div>
 
                         <!-- Active & Historical Certificates -->
-                        <div class="card border-0 shadow-sm rounded-3 p-4 mb-4 bg-white">
+                        <div class="card border-0 shadow-sm rounded-3 p-3 p-md-4 mb-4 bg-white">
                             <h5 class="fw-bold mb-3 text-dark"><i class="fa fa-file-text-o text-primary me-2"/> Historial de Certificados</h5>
                             <t t-if="state.maquinaDetail.certificados.length &gt; 0">
-                                <div class="table-responsive">
+                                <!-- Desktop Table (>= 768px) -->
+                                <div class="table-responsive d-none d-md-block">
                                     <table class="table table-hover align-middle mb-0">
                                         <thead class="table-light">
                                             <tr>
@@ -577,6 +640,47 @@
                                         </tbody>
                                     </table>
                                 </div>
+
+                                <!-- Mobile Cards (< 768px): All info at a glance, NO horizontal scroll -->
+                                <div class="d-md-none pv-mobile-cards-list">
+                                    <t t-foreach="state.maquinaDetail.certificados" t-as="c" t-key="c.id">
+                                        <div class="pv-mobile-card">
+                                            <div class="d-flex justify-content-between align-items-start gap-2">
+                                                <div class="pv-mc-title fw-bold text-dark flex-grow-1" t-esc="c.tipo_label"/>
+                                                <span class="pv-badge-pill flex-shrink-0" t-attf-class="pill-{{c.tag_badge || 'secondary'}}" t-esc="c.estado_certificado_label"/>
+                                            </div>
+                                            <div class="d-flex flex-wrap gap-2 text-muted small align-items-center">
+                                                <span class="pv-concesionario-emisor">
+                                                    <i class="fa fa-building-o me-1"/> <t t-esc="c.concesionario_name || '-'"/>
+                                                </span>
+                                                <span>
+                                                    <i class="fa fa-calendar-o me-1"/> Emisión: <strong class="text-dark"><t t-esc="c.fecha"/></strong>
+                                                </span>
+                                            </div>
+                                            <t t-if="c.fecha_vencimiento">
+                                                <div class="pv-mc-countdown-box"
+                                                     t-attf-class="{{c.dias_para_vencer &gt; 0 ? 'bg-info-subtle text-info-emphasis' : (c.dias_para_vencer === 0 ? 'bg-warning-subtle text-warning-emphasis' : 'bg-danger-subtle text-danger-emphasis')}}">
+                                                    <span><i class="fa fa-clock-o me-1"/> Vence: <strong><t t-esc="c.fecha_vencimiento"/></strong></span>
+                                                    <t t-if="!state.maquinaDetail.tiene_cpm and (c.estado_certificado === 'vigente' or c.estado_certificado === 'vencido')">
+                                                        <span class="pv-badge-pill py-0 px-2" t-attf-class="pill-{{c.dias_para_vencer &gt; 0 ? 'info' : (c.dias_para_vencer === 0 ? 'warning' : 'danger')}}">
+                                                            <t t-if="c.dias_para_vencer &gt; 0">Quedan <t t-esc="c.dias_para_vencer"/> días</t>
+                                                            <t t-elif="c.dias_para_vencer === 0">Vence Hoy</t>
+                                                            <t t-else="">Vencido</t>
+                                                        </span>
+                                                    </t>
+                                                </div>
+                                            </t>
+                                            <t t-if="c.archivo_nombre">
+                                                <a t-attf-href="/web/content?model=pv.certificado&amp;id={{c.id}}&amp;field=archivo&amp;filename={{c.archivo_nombre}}&amp;download=true"
+                                                   target="_blank"
+                                                   class="pv-file-link w-100 justify-content-center"
+                                                   title="Descargar certificado">
+                                                    <i class="fa fa-file-pdf-o text-danger me-1"/> <t t-esc="c.archivo_nombre"/>
+                                                </a>
+                                            </t>
+                                        </div>
+                                    </t>
+                                </div>
                             </t>
                             <t t-else="">
                                 <p class="text-muted mb-0">No posee certificados cargados aún.</p>
@@ -584,10 +688,11 @@
                         </div>
 
                         <!-- Ticket History -->
-                        <div class="card border-0 shadow-sm rounded-3 p-4 mb-4 bg-white">
+                        <div class="card border-0 shadow-sm rounded-3 p-3 p-md-4 mb-4 bg-white">
                             <h5 class="fw-bold mb-3"><i class="fa fa-history text-primary me-2"/> Historial de Tickets</h5>
                             <t t-if="state.maquinaDetail.tickets.length &gt; 0">
-                                <div class="table-responsive">
+                                <!-- Desktop Table (>= 768px) -->
+                                <div class="table-responsive d-none d-md-block">
                                     <table class="table table-hover align-middle mb-0">
                                         <thead class="table-light">
                                             <tr>
@@ -616,6 +721,41 @@
                                             </t>
                                         </tbody>
                                     </table>
+                                </div>
+
+                                <!-- Mobile Cards (< 768px): All info at a glance, NO horizontal scroll -->
+                                <div class="d-md-none pv-mobile-cards-list">
+                                    <t t-foreach="state.maquinaDetail.tickets" t-as="t" t-key="t.id">
+                                        <div class="pv-mobile-card pv-mobile-ticket-card cursor-pointer"
+                                             t-on-click="() => this.openTicketDetail(t.id)"
+                                             title="Tocar para abrir el ticket">
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <div class="pv-tc-name d-flex align-items-center">
+                                                    <i class="fa fa-external-link me-2 small"/>
+                                                    <t t-esc="t.name"/>
+                                                </div>
+                                                <span class="pv-badge" t-att-class="'pv-badge-' + t.estado" t-esc="t.estado"/>
+                                            </div>
+                                            <div class="d-flex flex-wrap gap-2 text-muted small align-items-center">
+                                                <span class="badge bg-light text-dark border py-1 px-2">
+                                                    <i class="fa fa-tag me-1"/> <t t-esc="t.tipo_ticket"/>
+                                                </span>
+                                                <t t-if="t.sistema">
+                                                    <span class="badge bg-light text-dark border py-1 px-2">
+                                                        <i class="fa fa-cogs me-1"/> <t t-esc="t.sistema"/>
+                                                    </span>
+                                                </t>
+                                                <span class="ms-auto text-muted">
+                                                    <i class="fa fa-calendar-o me-1"/> <t t-esc="t.fecha_creacion"/>
+                                                </span>
+                                            </div>
+                                            <t t-if="t.descripcion">
+                                                <div class="pv-ticket-desc-box p-2 rounded-2 small">
+                                                    <t t-esc="t.descripcion"/>
+                                                </div>
+                                            </t>
+                                        </div>
+                                    </t>
                                 </div>
                             </t>
                             <t t-else="">

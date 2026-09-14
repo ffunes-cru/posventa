@@ -168,11 +168,29 @@ class PvCertificado(models.Model):
         for rec in self:
             if not rec.active or rec.estado_certificado != 'vigente':
                 continue
+            if not rec.maquina_id:
+                continue
+
+            # Bloqueo si la máquina está en proceso de transferencia
+            if rec.maquina_id.estado == 'pendiente':
+                raise ValidationError(_(
+                    'No se pueden cargar certificados en la máquina %s porque se encuentra en proceso de transferencia pendiente.',
+                    rec.maquina_id.name
+                ))
+
+            # Si es concesionario, validar que la máquina pertenezca a su concesionario
+            if self.env.user.has_group('posventa.group_pv_concesionario') and not self.env.user.has_group('posventa.group_pv_staff'):
+                concesionario = self.env['pv.concesionario'].search([('user_id', '=', self.env.uid)], limit=1)
+                if not concesionario or rec.maquina_id.concesionario_id.id != concesionario.id:
+                    raise ValidationError(_('No puede cargar certificados para una máquina que no pertenece a su concesionario actual.'))
+
             if rec.tipo == 'feu':
                 fru_exists = self.search_count([
                     ('maquina_id', '=', rec.maquina_id.id),
                     ('tipo', '=', 'fru'),
+                    ('estado_certificado', 'in', ('vigente', 'vencido')),
                     ('active', '=', True),
+                    ('id', '!=', rec.id),
                 ])
                 if not fru_exists:
                     raise ValidationError(_(
@@ -180,15 +198,24 @@ class PvCertificado(models.Model):
                         'el Formulario de Recepción de Unidad (FRU) para la máquina %s.', rec.maquina_id.name
                     ))
             elif rec.tipo == 'cpm':
+                fru_exists = self.search_count([
+                    ('maquina_id', '=', rec.maquina_id.id),
+                    ('tipo', '=', 'fru'),
+                    ('estado_certificado', 'in', ('vigente', 'vencido')),
+                    ('active', '=', True),
+                    ('id', '!=', rec.id),
+                ])
                 feu_exists = self.search_count([
                     ('maquina_id', '=', rec.maquina_id.id),
                     ('tipo', '=', 'feu'),
+                    ('estado_certificado', 'in', ('vigente', 'vencido')),
                     ('active', '=', True),
+                    ('id', '!=', rec.id),
                 ])
-                if not feu_exists:
+                if not fru_exists or not feu_exists:
                     raise ValidationError(_(
                         'No se puede cargar un Certificado de Puesta en Marcha (CPM) sin antes haber cargado '
-                        'el Formulario de Entrega de Unidad (FEU) para la máquina %s.', rec.maquina_id.name
+                        'tanto el Formulario de Recepción (FRU) como el Formulario de Entrega (FEU) para la máquina %s.', rec.maquina_id.name
                     ))
 
     def _get_calculated_vencimiento(self, tipo, fecha, maquina):
@@ -241,7 +268,7 @@ class PvCertificado(models.Model):
     @api.model_create_multi
     def create(self, vals_list):
         for vals in vals_list:
-            maquina = self.env['pv.maquina'].browse(vals.get('maquina_id'))
+            maquina = self.env['pv.maquina'].sudo().browse(vals.get('maquina_id'))
             if not vals.get('concesionario_id'):
                 concesionario = self.env['pv.concesionario'].search([('user_id', '=', self.env.uid)], limit=1)
                 if concesionario:
@@ -446,7 +473,7 @@ class PvCertificado(models.Model):
             retraso = c.dias_retraso_carga or 0
             if c.estado_certificado == 'vigente':
                 if retraso > 0:
-                    tag_label = _('Vencido hace %s días') % retraso
+                    tag_label = _('Vencido luego de 1 día') if retraso == 1 else _('Vencido luego de %s días') % retraso
                     tag_badge = 'danger'
                 else:
                     tag_label = _('Vigente')

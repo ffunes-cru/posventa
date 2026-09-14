@@ -6,59 +6,55 @@
         <field name="model">pv.ticket</field>
         <field name="arch" type="xml">
             <list string="Tickets de Reclamo">
-                <field name="name"/>
-                <field name="tipo_ticket"/>
+                <field name="name" decoration-bf="1"/>
                 <field name="maquina_id"/>
-                <field name="certificado_id"/>
-                <field name="of"/>
-                <field name="concesionario_id"/>
-                <field name="sistema_id"/>
-                <field name="subsistema_id"/>
                 <field name="prioridad" widget="badge" decoration-danger="prioridad == 'critica'" decoration-warning="prioridad == 'alta'" decoration-info="prioridad == 'media'"/>
                 <field name="estado" widget="badge" decoration-info="estado == 'abierto'" decoration-warning="estado == 'en_proceso'" decoration-success="estado == 'aceptado'" decoration-danger="estado == 'rechazado'" decoration-muted="estado == 'cerrado'"/>
-                <field name="responsable_id"/>
-                <field name="t1_horas" string="T1 (h)"/>
-                <field name="t2_horas" string="T2 (h)"/>
-                <field name="t3_horas" string="T3 (h)"/>
+                <field name="fecha_creacion" optional="show"/>
+                <field name="of" optional="show"/>
+                <field name="tipo_ticket" optional="hide"/>
+                <field name="certificado_id" optional="hide"/>
+                <field name="concesionario_id" optional="hide"/>
+                <field name="sistema_id" optional="hide"/>
+                <field name="subsistema_id" optional="hide"/>
+                <field name="responsable_id" widget="many2one_avatar_user" optional="hide"/>
+                <field name="t1_horas" string="T1 (h)" optional="hide"/>
+                <field name="t2_horas" string="T2 (h)" optional="hide"/>
+                <field name="t3_horas" string="T3 (h)" optional="hide"/>
             </list>
         </field>
     </record>
 
-    <!-- Kanban View -->
+    <!-- Kanban View (Mobile friendly, like sales orders) -->
     <record id="pv_ticket_view_kanban" model="ir.ui.view">
         <field name="name">pv.ticket.view.kanban</field>
         <field name="model">pv.ticket</field>
         <field name="arch" type="xml">
-            <kanban default_group_by="estado" class="o_kanban_small_column" quick_create="false" records_draggable="false">
+            <kanban class="o_kanban_mobile" sample="1" quick_create="false" records_draggable="false">
                 <field name="name"/>
                 <field name="maquina_id"/>
-                <field name="sistema_id"/>
+                <field name="of"/>
+                <field name="tipo_ticket"/>
                 <field name="prioridad"/>
                 <field name="responsable_id"/>
                 <field name="estado"/>
+                <field name="fecha_creacion"/>
                 <field name="color"/>
                 <templates>
                     <t t-name="card">
-                        <div class="oe_kanban_card oe_kanban_global_click">
-                            <div class="oe_kanban_content">
-                                <div class="o_kanban_record_title font-weight-bold">
-                                    <strong><field name="name"/></strong>
-                                </div>
-                                <div>
-                                    <span class="text-muted">OF: </span><field name="of"/>
-                                </div>
-                                <div>
-                                    <span>MÁQ: </span><field name="maquina_id"/>
-                                </div>
-                                <div t-if="record.sistema_id.raw_value">
-                                    <span>SIS: </span><field name="sistema_id"/>
-                                </div>
-                                <div class="o_kanban_record_bottom mt-2 d-flex justify-content-between align-items-center">
-                                    <field name="prioridad" widget="label_selection" options="{'classes': {'baja': 'info', 'media': 'warning', 'alta': 'danger', 'critica': 'danger'}}"/>
-                                    <field name="responsable_id" widget="many2one_avatar_user" readonly="1"/>
-                                </div>
-                            </div>
+                        <div class="d-flex align-items-baseline mb-2">
+                            <field name="maquina_id" class="fw-bolder fs-5 me-2"/>
+                            <field name="prioridad" widget="label_selection" options="{'classes': {'baja': 'info', 'media': 'warning', 'alta': 'danger', 'critica': 'danger'}}" class="ms-auto flex-shrink-0"/>
                         </div>
+                        <footer class="align-items-end">
+                            <div class="d-flex flex-wrap gap-1 text-muted text-nowrap align-items-center">
+                                <field name="name" class="fw-bold"/>
+                                <span t-if="record.of.raw_value">• OF: <field name="of"/></span>
+                                <span t-if="record.tipo_ticket.raw_value">• <field name="tipo_ticket"/></span>
+                                <span t-if="record.fecha_creacion.raw_value">• <field name="fecha_creacion"/></span>
+                            </div>
+                            <field name="estado" widget="label_selection" options="{'classes': {'borrador': 'secondary', 'abierto': 'info', 'en_proceso': 'warning', 'aceptado': 'success', 'rechazado': 'danger', 'cerrado': 'dark'}}" class="ms-auto"/>
+                        </footer>
                     </t>
                 </templates>
             </kanban>
@@ -89,6 +85,9 @@
                 <sheet>
                     <field name="is_ai_enabled" invisible="1"/>
                     <div class="oe_button_box" name="button_box">
+                        <button name="action_abrir_carpeta_drive" type="object" class="oe_stat_button" icon="fa-video-camera" invisible="multimedia_count == 0 and not drive_folder_url and not multimedia_url">
+                            <field name="multimedia_count" widget="statinfo" string="Videos Drive"/>
+                        </button>
                         <button name="action_view_medidas" type="object" class="oe_stat_button" icon="fa-tasks">
                             <field name="medida_count" widget="statinfo" string="Medidas"/>
                         </button>
@@ -163,6 +162,7 @@
                                 <group>
                                     <field name="sap_numero_aviso" readonly="estado not in ('aceptado', 'en_proceso')"/>
                                     <field name="sap_numero_orden" readonly="estado not in ('aceptado', 'en_proceso')"/>
+                                    <field name="sap_numero_pedido" readonly="estado not in ('aceptado', 'en_proceso')"/>
                                 </group>
                                 <group>
                                     <field name="sap_centro" readonly="estado not in ('aceptado', 'en_proceso')"/>
@@ -199,9 +199,40 @@
                                 </list>
                             </field>
                         </page>
+
+                        <page string="Multimedia y Videos (Drive)" name="multimedia">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <div>
+                                    <h5 class="mb-1 text-primary"><i class="fa fa-cloud-upload me-2"/> Archivos Multimedia Pesados (Hasta 1 GB)</h5>
+                                    <p class="text-muted small mb-0">Videos de diagnóstico en campo y adjuntos de gran tamaño almacenados en Google Drive.</p>
+                                </div>
+                                <div class="d-flex gap-2">
+                                    <button name="action_adjuntar_multimedia" type="object" string="Adjuntar Video / Multimedia" class="btn btn-primary" icon="fa-cloud-upload"/>
+                                    <button name="action_abrir_carpeta_drive" type="object" string="Abrir Carpeta en Google Drive" class="btn btn-outline-primary" icon="fa-folder-open" invisible="multimedia_count == 0 and not drive_folder_url and not multimedia_url"/>
+                                </div>
+                            </div>
+                            <field name="multimedia_ids" mode="list" readonly="1">
+                                <list decoration-muted="estado_sync == 'subiendo'" decoration-info="estado_sync == 'procesando'" decoration-success="estado_sync == 'disponible'" decoration-danger="estado_sync == 'error'" delete="true">
+                                    <field name="is_video" column_invisible="True"/>
+                                    <field name="name" string="Archivo"/>
+                                    <field name="file_size_display" string="Tamaño"/>
+                                    <field name="mimetype" string="Formato"/>
+                                    <field name="fecha_subida" string="Fecha Carga"/>
+                                    <field name="usuario_id" string="Cargado por"/>
+                                    <field name="estado_sync" widget="badge" 
+                                        decoration-info="estado_sync == 'procesando'" 
+                                        decoration-success="estado_sync == 'disponible'" 
+                                        decoration-danger="estado_sync == 'error'" 
+                                        decoration-warning="estado_sync == 'subiendo'"/>
+                                    <field name="error_message" string="Detalle Error" optional="show" invisible="estado_sync != 'error'"/>
+                                    <button name="action_abrir_drive" type="object" string="Ver en Drive" class="btn-sm btn-primary" icon="fa-external-link" invisible="not drive_url"/>
+                                    <button name="action_reintentar_sync" type="object" string="Reintentar Sync" class="btn-sm btn-outline-danger" icon="fa-refresh" invisible="estado_sync != 'error'"/>
+                                </list>
+                            </field>
+                        </page>
                     </notebook> 
                 </sheet>
-                <chatter/>
+                <chatter reload_on_follower="True"/>
             </form>
         </field>
     </record>
@@ -242,5 +273,48 @@
         <field name="view_mode">kanban,list,form</field>
         <field name="search_view_id" ref="pv_ticket_view_search"/>
     </record>
+
+    <!-- Dedicated Form View for Multimedia (Modal Popup without Chatter) -->
+    <record id="pv_ticket_multimedia_view_form" model="ir.ui.view">
+        <field name="name">pv.ticket.multimedia.view.form</field>
+        <field name="model">pv.ticket.multimedia</field>
+        <field name="arch" type="xml">
+            <form string="Archivo Multimedia">
+                <header>
+                    <button name="action_abrir_drive" type="object" string="Abrir en Google Drive" class="btn-primary" icon="fa-external-link" invisible="not drive_url"/>
+                    <button name="action_reintentar_sync" type="object" string="Reintentar Sincronización" class="btn-secondary" icon="fa-refresh" invisible="estado_sync == 'disponible'"/>
+                    <field name="estado_sync" widget="statusbar" statusbar_visible="subiendo,procesando,disponible"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <label for="name" string="Nombre de Archivo"/>
+                        <h1><field name="name" readonly="1"/></h1>
+                    </div>
+                    <div class="alert alert-danger py-2 mt-2" role="alert" invisible="estado_sync != 'error'">
+                        <strong><i class="fa fa-exclamation-triangle me-1"/> Error en transferencia a Google Drive:</strong>
+                        <field name="error_message" class="d-block mt-1 font-monospace text-muted small" readonly="1"/>
+                    </div>
+                    <div class="alert alert-info py-2 mt-2" role="alert" invisible="estado_sync != 'procesando'">
+                        <i class="fa fa-spinner fa-spin me-1"/> El archivo está siendo transferido a Google Drive por rclone en segundo plano.
+                    </div>
+                    <group>
+                        <group string="Detalles Técnicos">
+                            <field name="ticket_id" readonly="1"/>
+                            <field name="file_size_display" string="Tamaño"/>
+                            <field name="mimetype" readonly="1"/>
+                            <field name="is_video" readonly="1"/>
+                        </group>
+                        <group string="Ubicación y Almacenamiento">
+                            <field name="drive_url" widget="url" readonly="1" invisible="not drive_url"/>
+                            <field name="drive_folder_url" widget="url" readonly="1" invisible="not drive_folder_url"/>
+                            <field name="fecha_subida" readonly="1"/>
+                            <field name="usuario_id" readonly="1"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
 </odoo>
+
 

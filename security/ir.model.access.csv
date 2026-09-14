@@ -39,10 +39,16 @@ access_pv_traslado_maquina_user,pv.transferir.maquina.wizard concesionario,model
 access_pv_ticket_chat_wizard_admin,pv.ticket.chat.wizard admin,model_pv_ticket_chat_wizard,group_pv_admin,1,1,1,1
 access_pv_ticket_chat_wizard_staff,pv.ticket.chat.wizard staff,model_pv_ticket_chat_wizard,group_pv_staff,1,1,1,1
 access_pv_ticket_chat_wizard_user,pv.ticket.chat.wizard concesionario,model_pv_ticket_chat_wizard,group_pv_concesionario,1,1,1,1
-access_pv_aceptar_ticket_admin,pv.aceptar.ticket.wizard admin,model_pv_aceptar_ticket_wizard,group_pv_admin,1,1,1,1
-access_pv_aceptar_ticket_staff,pv.aceptar.ticket.wizard staff,model_pv_aceptar_ticket_wizard,group_pv_staff,1,1,1,1
-access_pv_aceptar_ticket_user,pv.aceptar.ticket.wizard concesionario,model_pv_aceptar_ticket_wizard,group_pv_concesionario,1,0,0,0
+access_pv_cerrar_ticket_admin,pv.cerrar.ticket.wizard admin,model_pv_cerrar_ticket_wizard,group_pv_admin,1,1,1,1
+access_pv_cerrar_ticket_staff,pv.cerrar.ticket.wizard staff,model_pv_cerrar_ticket_wizard,group_pv_staff,1,1,1,1
+access_pv_cerrar_ticket_user,pv.cerrar.ticket.wizard concesionario,model_pv_cerrar_ticket_wizard,group_pv_concesionario,1,0,0,0
 access_pv_dashboard_admin,pv.dashboard admin,model_pv_dashboard,group_pv_admin,1,1,1,1
 access_pv_dashboard_staff,pv.dashboard staff,model_pv_dashboard,group_pv_staff,1,1,1,1
 access_pv_dashboard_user,pv.dashboard concesionario,model_pv_dashboard,group_pv_concesionario,1,1,1,1
+access_pv_ticket_multimedia_admin,pv.ticket.multimedia admin,model_pv_ticket_multimedia,group_pv_admin,1,1,1,1
+access_pv_ticket_multimedia_staff,pv.ticket.multimedia staff,model_pv_ticket_multimedia,group_pv_staff,1,1,1,1
+access_pv_ticket_multimedia_user,pv.ticket.multimedia concesionario,model_pv_ticket_multimedia,group_pv_concesionario,1,1,1,0
+access_pv_ticket_multimedia_wizard_admin,pv.ticket.multimedia.wizard admin,model_pv_ticket_multimedia_wizard,group_pv_admin,1,1,1,1
+access_pv_ticket_multimedia_wizard_staff,pv.ticket.multimedia.wizard staff,model_pv_ticket_multimedia_wizard,group_pv_staff,1,1,1,1
+access_pv_ticket_multimedia_wizard_user,pv.ticket.multimedia.wizard concesionario,model_pv_ticket_multimedia_wizard,group_pv_concesionario,1,1,1,1
 

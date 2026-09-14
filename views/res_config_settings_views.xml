@@ -31,6 +31,22 @@
                             <span> días</span>
                         </setting>
                     </block>
+                    <block title="Almacenamiento Multimedia y Google Drive (rclone)" id="pv_multimedia_setting_block">
+                        <setting id="pv_rclone_remote_setting" string="Remoto de rclone" help="Nombre del remoto de Google Drive configurado en rclone en el servidor">
+                            <field name="pv_rclone_remote"/>
+                        </setting>
+                        <setting id="pv_rclone_drive_folder_setting" string="Carpeta Base en Google Drive" help="Ruta de la carpeta donde se guardarán los archivos multimedia de los tickets">
+                            <field name="pv_rclone_drive_folder"/>
+                        </setting>
+                        <setting id="pv_chunk_size_setting" string="Tamaño de Fragmento (Chunk Size)" help="Tamaño de cada bloque al subir archivos pesados por fragmentos (768 KB recomendado para Nginx con límite 1MB)">
+                            <field name="pv_multimedia_chunk_size_kb"/>
+                            <span> KB</span>
+                        </setting>
+                        <setting id="pv_max_file_size_setting" string="Límite Máximo de Archivo" help="Tamaño máximo permitido para la subida de videos y archivos multimedia pesados (por defecto 1024 MB = 1 GB)">
+                            <field name="pv_multimedia_max_size_mb"/>
+                            <span> MB</span>
+                        </setting>
+                    </block>
                 </app>
             </xpath>
         </field>

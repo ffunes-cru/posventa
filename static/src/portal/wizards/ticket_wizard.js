@@ -46,7 +46,17 @@ export class TicketWizard extends Component {
             accionesRealizadas: "",
             multimediaUrl: "",
             attachments: [], // [{ name, size, type, data }]
+            heavyFiles: [], // [{ file, name, size, type, uuid, progress, status }]
+            isUploadingHeavy: false,
+            uploadProgressText: "",
+            createdTicketId: false,
+            uploadError: null, // { filename, error, fileItem }
+            wantsSendDirect: false,
         });
+
+        this.chunkSizeBytes = 768 * 1024;
+        this.maxFileSizeBytes = 1024 * 1024 * 1024;
+        this.rcloneConfigured = true;
 
         onWillStart(async () => {
             await this.loadCatalogs();
@@ -77,6 +87,16 @@ export class TicketWizard extends Component {
             this.state.subsistemas = data.subsistemas || [];
             this.state.problemas = data.problemas || [];
             this.state.camposExtras = data.campos_extras || [];
+            if (data.chunk_size_bytes) {
+                this.chunkSizeBytes = data.chunk_size_bytes;
+            }
+            if (data.max_file_size_bytes) {
+                this.maxFileSizeBytes = data.max_file_size_bytes;
+            }
+            if (data.rclone_configured !== undefined) {
+                this.rcloneConfigured = data.rclone_configured;
+                this.rcloneMsg = data.rclone_msg;
+            }
         } catch (e) {
             console.error("Error loading wizard catalogs", e);
         }
@@ -119,7 +139,19 @@ export class TicketWizard extends Component {
     // Attachments Handling
     async onFilesChange(ev) {
         const files = Array.from(ev.target.files || []);
+        const MAX_STANDARD_SIZE = 20 * 1024 * 1024; // 20 MB
+
         for (const file of files) {
+            // Si el archivo supera 20MB, redirigir automáticamente a la carga pesada (Drive) para evitar OOM
+            if (file.size > MAX_STANDARD_SIZE) {
+                this.addHeavyFileDirect(file);
+                this.notification.add(
+                    _t("El archivo '%s' supera los 20 MB y se procesará mediante carga optimizada a Google Drive.", file.name),
+                    { type: "info" }
+                );
+                continue;
+            }
+
             const base64Data = await new Promise((resolve, reject) => {
                 const reader = new FileReader();
                 reader.onload = () => {
@@ -140,8 +172,115 @@ export class TicketWizard extends Component {
         ev.target.value = "";
     }
 
+    addHeavyFileDirect(file) {
+        const MAX_HEAVY_SIZE = this.maxFileSizeBytes || (1024 * 1024 * 1024);
+        if (file.size > MAX_HEAVY_SIZE) {
+            this.notification.add(
+                _t("El archivo '%s' supera el tamaño máximo permitido de %s (%s).", file.name, this.formatFileSize(MAX_HEAVY_SIZE), this.formatFileSize(file.size)),
+                { type: "danger" }
+            );
+            return;
+        }
+        const uuid = "file_" + Math.random().toString(36).substring(2, 10) + "_" + Date.now();
+        this.state.heavyFiles.push({
+            file: file,
+            name: file.name,
+            size: file.size,
+            type: file.type || "application/octet-stream",
+            uuid: uuid,
+            progress: 0,
+            status: "pending",
+        });
+    }
+
+    onHeavyFilesChange(ev) {
+        const files = Array.from(ev.target.files || []);
+        for (const file of files) {
+            this.addHeavyFileDirect(file);
+        }
+        ev.target.value = "";
+    }
+
     removeAttachment(index) {
         this.state.attachments.splice(index, 1);
+    }
+
+    removeHeavyFile(index) {
+        this.state.heavyFiles.splice(index, 1);
+    }
+
+    async uploadHeavyFile(ticketId, item) {
+        const CHUNK_SIZE = this.chunkSizeBytes || (768 * 1024);
+        const file = item.file;
+        const totalChunks = Math.ceil(file.size / CHUNK_SIZE) || 1;
+
+        item.status = "uploading";
+        item.progress = 0;
+
+        for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+            const start = chunkIndex * CHUNK_SIZE;
+            const end = Math.min(start + CHUNK_SIZE, file.size);
+            const blobChunk = file.slice(start, end);
+
+            const formData = new FormData();
+            formData.append("ticket_id", ticketId);
+            formData.append("file_uuid", item.uuid);
+            formData.append("filename", item.name);
+            formData.append("chunk_index", chunkIndex);
+            formData.append("total_chunks", totalChunks);
+            formData.append("file_size", file.size);
+            formData.append("chunk", blobChunk, item.name);
+
+            this.state.uploadProgressText = _t(
+                "Subiendo %s (%s)... Bloque %s de %s",
+                item.name,
+                this.formatFileSize(file.size),
+                chunkIndex + 1,
+                totalChunks
+            );
+
+            let success = false;
+            let retries = 3;
+            let lastError = null;
+
+            while (!success && retries > 0) {
+                try {
+                    const response = await fetch("/posventa/ticket/upload_chunk", {
+                        method: "POST",
+                        body: formData,
+                    });
+                    if (!response.ok) {
+                        let errMsg = `Error del servidor (HTTP ${response.status})`;
+                        if (response.status === 413) {
+                            errMsg = _t("El archivo o bloque supera el límite admitido por el servidor (HTTP 413).");
+                        } else {
+                            try {
+                                const errData = await response.json();
+                                if (errData.error) errMsg = errData.error;
+                            } catch (_) {}
+                        }
+                        throw new Error(errMsg);
+                    }
+                    const data = await response.json();
+                    if (data.error) {
+                        throw new Error(data.error);
+                    }
+                    success = true;
+                } catch (err) {
+                    retries--;
+                    lastError = err;
+                    if (retries === 0) {
+                        item.status = "error";
+                        throw err;
+                    }
+                    await new Promise(r => setTimeout(r, 1000));
+                }
+            }
+
+            item.progress = Math.round(((chunkIndex + 1) / totalChunks) * 100);
+        }
+
+        item.status = "completed";
     }
 
     formatFileSize(bytes) {
@@ -267,69 +406,94 @@ export class TicketWizard extends Component {
     async submitTicket(enviarDirecto = false) {
         if (this.state.submitting) return;
         this.state.submitting = true;
+        this.state.uploadError = null;
+        this.state.wantsSendDirect = Boolean(enviarDirecto);
 
         try {
-            const ticketVals = {
-                maquina_id: this.props.maquina.id,
-                certificado_id: parseInt(this.state.certificadoId),
-                tipo_ticket: this.state.tipoTicket,
-                descripcion: this.state.descripcion,
-                acciones_realizadas: this.state.accionesRealizadas || "",
-                multimedia_url: this.state.multimediaUrl || "",
-            };
+            let ticketId = this.state.createdTicketId;
+            if (!ticketId) {
+                const ticketVals = {
+                    maquina_id: this.props.maquina.id,
+                    certificado_id: parseInt(this.state.certificadoId),
+                    tipo_ticket: this.state.tipoTicket,
+                    descripcion: this.state.descripcion,
+                    acciones_realizadas: this.state.accionesRealizadas || "",
+                    multimedia_url: this.state.multimediaUrl || "",
+                };
 
-            if (this.state.tipoTicket === "post_pm") {
-                ticketVals.sistema_id = parseInt(this.state.sistemaId);
-                ticketVals.subsistema_id = parseInt(this.state.subsistemaId);
-                if (this.state.problemaId) {
-                    ticketVals.problema_id = parseInt(this.state.problemaId);
-                }
-                ticketVals.ubicacion_actual = this.state.ubicacionActual || "";
-                ticketVals.hectareas = parseFloat(this.state.hectareas) || 0.0;
-
-                if (this.state.camposExtras.length > 0) {
-                    const extraLines = [];
-                    for (const c of this.state.camposExtras) {
-                        const val = this.state.camposValues[c.id] || "";
-                        extraLines.push([0, 0, {
-                            campo_id: c.id,
-                            campo_nombre: c.name,
-                            valor: String(val),
-                        }]);
+                if (this.state.tipoTicket === "post_pm") {
+                    ticketVals.sistema_id = parseInt(this.state.sistemaId);
+                    ticketVals.subsistema_id = parseInt(this.state.subsistemaId);
+                    if (this.state.problemaId) {
+                        ticketVals.problema_id = parseInt(this.state.problemaId);
                     }
-                    ticketVals.campo_extra_ids = extraLines;
+                    ticketVals.ubicacion_actual = this.state.ubicacionActual || "";
+                    ticketVals.hectareas = parseFloat(this.state.hectareas) || 0.0;
+
+                    if (this.state.camposExtras.length > 0) {
+                        const extraLines = [];
+                        for (const c of this.state.camposExtras) {
+                            const val = this.state.camposValues[c.id] || "";
+                            extraLines.push([0, 0, {
+                                campo_id: c.id,
+                                campo_nombre: c.name,
+                                valor: String(val),
+                            }]);
+                        }
+                        ticketVals.campo_extra_ids = extraLines;
+                    }
+                } else {
+                    ticketVals.desvio_tipo = this.state.desvioTipo;
                 }
-            } else {
-                ticketVals.desvio_tipo = this.state.desvioTipo;
-            }
 
-            const resIds = await this.orm.create("pv.ticket", [ticketVals]);
-            const ticketId = resIds[0];
+                const resIds = await this.orm.create("pv.ticket", [ticketVals]);
+                ticketId = resIds[0];
+                this.state.createdTicketId = ticketId;
 
-            // Guardamos adjuntos reales en el documento como en el estándar
-            for (const att of this.state.attachments) {
-                try {
-                    await this.orm.create("ir.attachment", [{
-                        name: att.name,
-                        datas: att.data,
-                        res_model: "pv.ticket",
-                        res_id: ticketId,
-                        mimetype: att.type,
-                    }]);
-                } catch (attErr) {
-                    console.warn("Error uploading attachment", att.name, attErr);
+                // Guardamos adjuntos estándar de Odoo
+                for (const att of this.state.attachments) {
+                    try {
+                        await this.orm.create("ir.attachment", [{
+                            name: att.name,
+                            datas: att.data,
+                            res_model: "pv.ticket",
+                            res_id: ticketId,
+                            mimetype: att.type,
+                        }]);
+                    } catch (attErr) {
+                        console.warn("Error uploading attachment", att.name, attErr);
+                    }
                 }
             }
 
-            if (enviarDirecto) {
-                // Invocamos el método público sin guion bajo
-                await this.orm.call("pv.ticket", "action_enviar_ticket_direct", [[ticketId]]);
-                this.notification.add(_t("Ticket creado y enviado a revisión técnica."), { type: "success" });
-            } else {
-                this.notification.add(_t("Ticket guardado en estado Borrador."), { type: "info" });
+            // Subida por fragmentos de archivos pesados (hasta 1 GB)
+            if (this.state.heavyFiles.length > 0) {
+                this.state.isUploadingHeavy = true;
+                for (let i = 0; i < this.state.heavyFiles.length; i++) {
+                    const hf = this.state.heavyFiles[i];
+                    if (hf.status === "completed") continue;
+                    try {
+                        await this.uploadHeavyFile(ticketId, hf);
+                    } catch (uploadErr) {
+                        console.error("Error al subir archivo pesado:", hf.name, uploadErr);
+                        this.state.isUploadingHeavy = false;
+                        this.state.uploadProgressText = "";
+                        this.state.uploadError = {
+                            filename: hf.name,
+                            error: uploadErr.message || _t("Error en la transmisión de red o proxy."),
+                            fileItem: hf,
+                        };
+                        this.state.submitting = false;
+                        // DETENEMOS: no enviamos a abierto ni cerramos el modal
+                        return;
+                    }
+                }
+                this.state.isUploadingHeavy = false;
+                this.state.uploadProgressText = "";
             }
 
-            this.props.onSuccess(ticketId);
+            await this.finalizeTicket(enviarDirecto);
+
         } catch (e) {
             console.error("Error creating ticket", e);
             const msg = e.data?.message || e.message || _t("Error al crear el ticket.");
@@ -337,5 +501,50 @@ export class TicketWizard extends Component {
         } finally {
             this.state.submitting = false;
         }
+    }
+
+    async finalizeTicket(enviarDirecto = false) {
+        const ticketId = this.state.createdTicketId;
+        if (!ticketId) return;
+
+        if (enviarDirecto) {
+            await this.orm.call("pv.ticket", "action_enviar_ticket_direct", [[ticketId]]);
+            this.notification.add(_t("Ticket creado y enviado a revisión técnica."), { type: "success" });
+        } else {
+            this.notification.add(_t("Ticket guardado en estado Borrador."), { type: "info" });
+        }
+
+        this.props.onSuccess(ticketId);
+    }
+
+    async retryUpload() {
+        if (!this.state.uploadError || !this.state.createdTicketId) return;
+        this.state.uploadError = null;
+        await this.submitTicket(this.state.wantsSendDirect);
+    }
+
+    async proceedWithoutFailedFile() {
+        if (!this.state.createdTicketId) return;
+        this.state.uploadError = null;
+        this.state.submitting = true;
+        try {
+            await this.finalizeTicket(this.state.wantsSendDirect);
+        } catch (e) {
+            console.error("Error finalizing ticket without file", e);
+            const msg = e.data?.message || e.message || _t("Error al enviar el ticket.");
+            this.notification.add(msg, { type: "danger" });
+        } finally {
+            this.state.submitting = false;
+        }
+    }
+
+    async keepInDraft() {
+        if (!this.state.createdTicketId) return;
+        this.state.uploadError = null;
+        this.notification.add(
+            _t("El ticket quedó guardado en estado Borrador. Podrá adjuntar el archivo multimedia directamente desde Odoo."),
+            { type: "info" }
+        );
+        this.props.onSuccess(this.state.createdTicketId);
     }
 }

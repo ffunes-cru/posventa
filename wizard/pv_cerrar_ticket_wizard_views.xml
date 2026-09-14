@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="pv_cerrar_ticket_wizard_view_form" model="ir.ui.view">
+        <field name="name">pv.cerrar.ticket.wizard.view.form</field>
+        <field name="model">pv.cerrar.ticket.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Cerrar Ticket / Garantía y Devolución">
+                <sheet>
+                    <div class="alert alert-info border-start border-4 border-info shadow-sm rounded-3 mb-3 p-3" role="status">
+                        <i class="fa fa-info-circle me-1"/>
+                        El ticket posee la <strong>Orden SAP: <field name="sap_numero_orden" readonly="1" class="fw-bold"/></strong> registrada. Complete los datos de resolución de garantía y comprobante de devolución de la pieza para proceder al cierre definitivo del expediente.
+                    </div>
+                    <group>
+                        <field name="ticket_id" readonly="1" options="{'no_open': True}"/>
+                        <field name="garantia_aceptada" widget="boolean_toggle"/>
+                        <field name="garantia_observaciones" placeholder="Ingrese observaciones y justificación del análisis de la garantía y devolución..." style="min-height: 80px;"/>
+                        <field name="garantia_adjunto" filename="garantia_adjunto_name"/>
+                        <field name="garantia_adjunto_name" invisible="1"/>
+                    </group>
+                </sheet>
+                <footer>
+                    <button name="action_confirmar" string="Confirmar Cierre de Ticket" type="object" class="oe_highlight"/>
+                    <button string="Cancelar" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

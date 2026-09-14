@@ -1,16 +1,78 @@
 /* Portal Concesionario — Styles (Crucianelli Red Theme) */
 
-/* Crucianelli Red Theme Variables */
+/* Crucianelli Red Theme Variables & Dynamic Color Palette */
 :root {
     --pv-red-primary: #c8102e;
     --pv-red-dark: #991b1b;
     --pv-red-darker: #7f1d1d;
     --pv-red-light: #fef2f2;
     --pv-red-border: #fca5a5;
+
+    --pv-bg: #f8fafc;
+    --pv-card-bg: #ffffff;
+    --pv-card-border: #e2e8f0;
+    --pv-card-hover-border: #c8102e;
+    --pv-text-main: #0f172a;
+    --pv-text-muted: #64748b;
+    --pv-text-subtle: #94a3b8;
+    --pv-input-bg: #ffffff;
+    --pv-input-border: #cbd5e1;
+    --pv-input-text: #0f172a;
+    --pv-table-header-bg: #f8fafc;
+    --pv-table-row-bg: #ffffff;
+    --pv-table-row-hover: #f1f5f9;
+    --pv-table-border: #e2e8f0;
+    --pv-modal-bg: #ffffff;
+    --pv-modal-footer-bg: #f8fafc;
+    --pv-badge-bg-neutral: #f1f5f9;
+}
+
+/* Automatic Dark Mode Fallback via Media Query & Bootstrap attributes */
+@media (prefers-color-scheme: dark) {
+    :root:not([data-color-mode="light"]):not([data-bs-theme="light"]) {
+        --pv-bg: #151521;
+        --pv-card-bg: #1e1e2d;
+        --pv-card-border: #2e2e42;
+        --pv-text-main: #f1f5f9;
+        --pv-text-muted: #94a3b8;
+        --pv-text-subtle: #64748b;
+        --pv-input-bg: #1b1b28;
+        --pv-input-border: #383852;
+        --pv-input-text: #ffffff;
+        --pv-table-header-bg: #181826;
+        --pv-table-row-bg: #1e1e2d;
+        --pv-table-row-hover: #26263b;
+        --pv-table-border: #2e2e42;
+        --pv-modal-bg: #1e1e2d;
+        --pv-modal-footer-bg: #181826;
+        --pv-badge-bg-neutral: #28283c;
+    }
+}
+
+:root[data-color-mode="dark"],
+:root[data-bs-theme="dark"],
+body.o_web_client_dark_mode {
+    --pv-bg: #151521;
+    --pv-card-bg: #1e1e2d;
+    --pv-card-border: #2e2e42;
+    --pv-text-main: #f1f5f9;
+    --pv-text-muted: #94a3b8;
+    --pv-text-subtle: #64748b;
+    --pv-input-bg: #1b1b28;
+    --pv-input-border: #383852;
+    --pv-input-text: #ffffff;
+    --pv-table-header-bg: #181826;
+    --pv-table-row-bg: #1e1e2d;
+    --pv-table-row-hover: #26263b;
+    --pv-table-border: #2e2e42;
+    --pv-modal-bg: #1e1e2d;
+    --pv-modal-footer-bg: #181826;
+    --pv-badge-bg-neutral: #28283c;
 }
 
 .pv-portal {
-    background: #f8fafc;
+    background: var(--pv-bg);
+    color: var(--pv-text-main);
     height: 100vh;
     display: flex;
     flex-direction: column;
@@ -317,6 +379,13 @@
     background: var(--pv-red-primary);
     color: #fff;
     border-color: var(--pv-red-primary);
+}
+
+.pv-filter-scroll-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
 }
 
 .pv-maquina-grid {
@@ -745,31 +814,395 @@
     gap: 10px;
 }
 
-/* ===================== Responsive ===================== */
+/* ===================== Responsive (Mobile Redesign) ===================== */
 @media (max-width: 768px) {
-    .pv-portal-content {
-        padding: 14px;
+    .pv-portal {
+        padding-bottom: 30px;
     }
+
+    /* Compact Mobile Header */
+    .pv-portal-header {
+        padding: 12px 14px;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+
+        h2 {
+            font-size: 1.1rem;
+            margin-bottom: 2px;
+        }
+
+        .pv-breadcrumb {
+            font-size: 11px;
+            overflow-x: auto;
+            white-space: nowrap;
+            max-width: 220px;
+        }
+
+        .pv-refresh-btn {
+            padding: 6px 10px;
+            font-size: 12px;
+            white-space: nowrap;
+        }
+    }
+
+    /* Content Area */
+    .pv-portal-content {
+        padding: 12px;
+    }
+
+    /* Welcome Banner */
+    .pv-portal .alert {
+        padding: 12px 14px;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
+
+        h4 {
+            font-size: 1.1rem;
+        }
+    }
+
+    /* Home Action Cards: 2-column compact grid */
+    .pv-home-cards {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+        margin-bottom: 18px;
+    }
+
+    .pv-home-card {
+        padding: 14px 10px;
+        border-radius: 10px;
+
+        .pv-card-icon {
+            font-size: 24px;
+            margin-bottom: 4px;
+        }
+
+        .pv-card-count {
+            font-size: 28px;
+        }
+
+        .pv-card-label {
+            font-size: 11px;
+            letter-spacing: 0.4px;
+        }
+    }
+
+    /* Ticket Status Cards: 3-column compact grid */
+    .pv-ticket-cards {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+        margin-bottom: 18px;
+    }
+
+    .pv-ticket-card {
+        padding: 10px 6px;
+        border-radius: 8px;
+        min-height: auto;
+
+        .pv-tc-count {
+            font-size: 20px;
+        }
+
+        .pv-tc-label {
+            font-size: 10px;
+            letter-spacing: 0.3px;
+        }
+    }
+
+    /* KPI Cards: Single column compact */
+    .pv-kpi-cards {
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+
+    .pv-kpi-card {
+        padding: 12px 14px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        text-align: left;
+
+        .pv-kpi-label {
+            font-size: 11px;
+            margin-bottom: 2px;
+        }
+
+        .pv-kpi-value {
+            font-size: 26px;
+            margin-bottom: 0;
+            order: 2;
+        }
+
+        .pv-kpi-desc {
+            display: none;
+        }
+    }
+
+    /* Search & Horizontal Scrolling Filter Chips */
+    .pv-maquina-filters {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+        margin-bottom: 14px;
+
+        .pv-search-wrap,
+        .pv-search-input {
+            width: 100% !important;
+            max-width: 100% !important;
+            font-size: 15px;
+            padding: 10px 14px;
+            border-radius: 10px;
+        }
+    }
+
+    .pv-filter-scroll-row {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 4px;
+        width: 100%;
+        scrollbar-width: none;
+        &::-webkit-scrollbar {
+            display: none;
+        }
+
+        .pv-filter-btn {
+            white-space: nowrap;
+            flex-shrink: 0;
+            padding: 6px 12px;
+            font-size: 12px;
+            min-height: 34px;
+            border-radius: 20px;
+        }
+    }
+
+    /* Machine Cards: Single Column touch-friendly */
+    .pv-maquina-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    .pv-maquina-card {
+        padding: 14px;
+        border-radius: 10px;
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+
+        &:active {
+            transform: scale(0.985);
+        }
+
+        .pv-mc-of {
+            font-size: 15px;
+        }
+    }
+
+    /* Machine Detail Page */
+    .pv-detail-header {
+        padding: 14px;
+        border-radius: 10px;
+        margin-bottom: 14px;
+
+        .pv-detail-title {
+            font-size: 17px;
+        }
+
+        .pv-detail-subtitle {
+            font-size: 12px;
+        }
+    }
+
+    .pv-detail-actions {
+        flex-direction: column;
+        gap: 8px;
+        margin-top: 14px;
+        padding-top: 12px;
+
+        .pv-btn {
+            width: 100%;
+            justify-content: center;
+            min-height: 42px;
+            font-size: 14px;
+        }
+    }
+
+    .pv-detail-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+        margin-top: 12px;
+
+        .pv-detail-field .pv-df-value {
+            font-size: 13px;
+        }
+    }
+
+    /* ADP Countdown Banner: Column Layout on Mobile */
+    .pv-adp-banner {
+        flex-direction: column;
+        align-items: stretch;
+        padding: 14px;
+        gap: 12px;
+        border-radius: 10px;
+
+        .pv-adp-banner-icon {
+            width: 42px;
+            height: 42px;
+            font-size: 20px;
+            border-radius: 10px;
+        }
+
+        .pv-adp-banner-title {
+            font-size: 15px;
+        }
+
+        .pv-adp-banner-meta {
+            font-size: 12px;
+        }
+
+        .pv-adp-banner-badge-wrap {
+            width: 100%;
+        }
+
+        .pv-adp-badge {
+            width: 100%;
+            justify-content: center;
+            font-size: 13px;
+            padding: 8px 16px;
+        }
+    }
+
+    /* Transfer Alerts: Full width on mobile */
+    .pv-detail-header .alert {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+        padding: 12px;
+
+        .d-flex.gap-2 {
+            width: 100%;
+
+            .pv-btn {
+                flex: 1;
+                justify-content: center;
+            }
+        }
+    }
+
+    /* Table Wrappers: Clean horizontal swipe indicator */
+    .table-responsive {
+        border-radius: 8px;
+        margin-bottom: 0;
+
+        table {
+            font-size: 12px;
+
+            th, td {
+                padding: 8px 10px;
+                white-space: nowrap;
+            }
+        }
+    }
+
+    /* Wizard Stepper & Container */
+    .pv-wizard-container {
+        padding: 14px;
+        border-radius: 10px;
+    }
+
+    .pv-wizard-stepper {
+        justify-content: space-between;
+        padding: 0 4px;
+        margin-bottom: 16px;
+        width: 100%;
+    }
+
+    .pv-wizard-step {
+        .pv-step-circle {
+            width: 28px;
+            height: 28px;
+            font-size: 12px;
+        }
+
+        .pv-step-label {
+            font-size: 11px;
+            margin-left: 4px;
+        }
+
+        .pv-step-label:not(.active) {
+            display: none;
+        }
+    }
+
+    .pv-step-connector {
+        flex: 1;
+        min-width: 8px;
+        max-width: 32px;
+        margin: 0 4px;
+    }
+
+    .pv-wizard-footer {
+        flex-direction: column-reverse;
+        gap: 8px;
+        padding-top: 14px;
+
+        .pv-btn {
+            width: 100%;
+            justify-content: center;
+            min-height: 42px;
+        }
+
+        > div {
+            width: 100%;
+            display: flex;
+            flex-direction: column-reverse;
+            gap: 8px;
+        }
+    }
+
+    /* Modal dialog full width */
+    .pv-modal-dialog {
+        width: 95%;
+        max-width: 95%;
+        margin: 16px auto;
+        border-radius: 12px;
+
+        .pv-modal-header {
+            padding: 12px 14px;
+            h4 {
+                font-size: 1rem;
+            }
+        }
+
+        .pv-modal-body {
+            padding: 14px;
+        }
+
+        .pv-modal-footer {
+            flex-direction: column-reverse;
+            gap: 8px;
+            padding: 12px 14px;
+
+            .pv-btn {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+    }
+}
+
+/* Extra small screens (< 480px) */
+@media (max-width: 480px) {
     .pv-home-cards {
         grid-template-columns: 1fr;
     }
+
     .pv-ticket-cards {
         grid-template-columns: repeat(2, 1fr);
     }
-    .pv-kpi-cards {
-        grid-template-columns: 1fr;
-    }
-    .pv-maquina-grid {
-        grid-template-columns: 1fr;
-    }
-    .pv-wizard-stepper {
-        flex-wrap: wrap;
-        gap: 6px;
-    }
-    .pv-step-connector {
-        display: none;
-    }
 }
+
 
 /* ===================== Ultra-Clear ADP Countdown Banner ===================== */
 .pv-adp-banner {
@@ -986,3 +1419,80 @@
     transform: translateY(-1px);
     box-shadow: 0 2px 8px rgba(220, 38, 38, 0.15);
 }
+
+/* ===================== Mobile Cards (Certificados & Tickets) ===================== */
+.pv-mobile-cards-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.pv-mobile-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 14px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    transition: all 0.2s ease;
+
+    .pv-mc-title {
+        font-size: 14px;
+        font-weight: 700;
+        line-height: 1.35;
+        color: #0f172a;
+    }
+
+    .pv-mc-countdown-box {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 12px;
+        border-radius: 8px;
+        font-size: 12px;
+        font-weight: 600;
+        border: 1px solid transparent;
+
+        &.bg-info-subtle {
+            background: #f0f9ff !important;
+            border-color: #bae6fd;
+            color: #0369a1 !important;
+        }
+        &.bg-warning-subtle {
+            background: #fffbeb !important;
+            border-color: #fde68a;
+            color: #b45309 !important;
+        }
+        &.bg-danger-subtle {
+            background: #fef2f2 !important;
+            border-color: #fecaca;
+            color: #b91c1c !important;
+        }
+    }
+}
+
+.pv-mobile-ticket-card {
+    border-left: 4px solid var(--pv-red-primary);
+    cursor: pointer;
+
+    &:active {
+        transform: scale(0.985);
+        background: #f8fafc;
+    }
+
+    .pv-tc-name {
+        font-size: 15px;
+        font-weight: 800;
+        color: var(--pv-red-primary);
+    }
+
+    .pv-ticket-desc-box {
+        background: #f1f5f9;
+        color: #334155;
+        line-height: 1.4;
+        border: 1px solid #e2e8f0;
+    }
+}
+

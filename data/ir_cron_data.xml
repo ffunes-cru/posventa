@@ -31,5 +31,15 @@
             <field name="active">True</field>
         </record>
 
+        <record id="cron_pv_sync_multimedia_drive" model="ir.cron">
+            <field name="name">Posventa: Sincronizar multimedia pendiente a Google Drive</field>
+            <field name="model_id" ref="model_pv_ticket"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_sync_pending_multimedia()</field>
+            <field name="interval_number">5</field>
+            <field name="interval_type">minutes</field>
+            <field name="active">True</field>
+        </record>
+
     </data>
 </odoo>

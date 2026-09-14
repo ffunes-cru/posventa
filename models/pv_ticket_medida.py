@@ -1,4 +1,5 @@
 # Part of Crucianelli Posventa Module
+from markupsafe import Markup, escape
 from odoo import api, fields, models, _
 
 
@@ -111,8 +112,9 @@ class PvTicketMedida(models.Model):
         for medida in vencidas:
             medida.estado = 'vencida'
             medida.ticket_id.message_post(
-                body=_('⚠️ Medida vencida: <b>%s</b> (Responsable: %s)',
-                       medida.name, medida.responsable_id.name or 'Sin asignar'),
+                body=Markup(_('⚠️ Medida vencida: <b>%s</b> (Responsable: %s)')) % (
+                    escape(medida.name), escape(medida.responsable_id.name or 'Sin asignar')
+                ),
                 message_type='notification',
                 subtype_xmlid='mail.mt_note',
             )

@@ -13,5 +13,21 @@
             <field name="key">posventa.enable_ai_integration</field>
             <field name="value">True</field>
         </record>
+        <record id="config_parameter_rclone_remote" model="ir.config_parameter">
+            <field name="key">posventa.rclone_remote</field>
+            <field name="value">crucianelli_drive</field>
+        </record>
+        <record id="config_parameter_rclone_drive_folder" model="ir.config_parameter">
+            <field name="key">posventa.rclone_drive_folder</field>
+            <field name="value">Crucianelli_Posventa/Reclamos</field>
+        </record>
+        <record id="config_parameter_chunk_size_kb" model="ir.config_parameter">
+            <field name="key">posventa.chunk_size_kb</field>
+            <field name="value">768</field>
+        </record>
+        <record id="config_parameter_max_file_size_mb" model="ir.config_parameter">
+            <field name="key">posventa.max_file_size_mb</field>
+            <field name="value">1024</field>
+        </record>
     </data>
 </odoo>

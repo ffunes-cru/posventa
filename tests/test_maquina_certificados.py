@@ -387,7 +387,7 @@ class TestMaquinaCertificados(TestPosventaCommon):
 
         portal_data = maquina_tardia.get_portal_detail_data()
         cert_data = next(c for c in portal_data['certificados'] if c['id'] == fru_tardio.id)
-        self.assertIn('Vencido hace 5 días', cert_data['estado_certificado_label'])
+        self.assertIn('Vencido luego de 5 días', cert_data['estado_certificado_label'])
         self.assertEqual(cert_data['tag_badge'], 'danger')
 
     def test_08_upload_certificate_with_string_dates(self):
@@ -409,3 +409,76 @@ class TestMaquinaCertificados(TestPosventaCommon):
         self.assertEqual(fru.estado_certificado, 'vigente')
         self.assertTrue(fru.fecha_vencimiento)
         self.assertTrue(fru.fecha_limite_carga)
+
+    def test_09_certificate_order_hardening(self):
+        """Test backend hardening for certificate order, archived certificates, and dealer access."""
+        from odoo.exceptions import ValidationError
+        maquina = self.env['pv.maquina'].create({
+            'tipo': 'plantor',
+            'of': 'OF-TEST-HARDEN-001',
+            'concesionario_id': self.concesionario_a.id,
+        })
+
+        # Cannot create CPM directly without FRU or FEU
+        with self.assertRaises(ValidationError):
+            self.env['pv.certificado'].create({
+                'maquina_id': maquina.id,
+                'tipo': 'cpm',
+                'archivo': DUMMY_PDF_BASE64,
+                'archivo_nombre': 'cpm_illegal.pdf',
+            })
+
+        # Cannot create FEU without FRU
+        with self.assertRaises(ValidationError):
+            self.env['pv.certificado'].create({
+                'maquina_id': maquina.id,
+                'tipo': 'feu',
+                'archivo': DUMMY_PDF_BASE64,
+                'archivo_nombre': 'feu_illegal.pdf',
+            })
+
+        # Create valid FRU
+        fru = self.env['pv.certificado'].create({
+            'maquina_id': maquina.id,
+            'tipo': 'fru',
+            'archivo': DUMMY_PDF_BASE64,
+            'archivo_nombre': 'fru.pdf',
+        })
+        # Still cannot create CPM with only FRU
+        with self.assertRaises(ValidationError):
+            self.env['pv.certificado'].create({
+                'maquina_id': maquina.id,
+                'tipo': 'cpm',
+                'archivo': DUMMY_PDF_BASE64,
+                'archivo_nombre': 'cpm_no_feu.pdf',
+            })
+
+        # Create valid FEU
+        feu = self.env['pv.certificado'].create({
+            'maquina_id': maquina.id,
+            'tipo': 'feu',
+            'archivo': DUMMY_PDF_BASE64,
+            'archivo_nombre': 'feu.pdf',
+        })
+
+        # Archive them manually
+        fru.sudo().write({'estado_certificado': 'archivado_manual'})
+        feu.sudo().write({'estado_certificado': 'archivado_manual'})
+
+        # Now creating CPM should fail because FRU and FEU are archived (not vigente or vencido)
+        with self.assertRaises(ValidationError):
+            self.env['pv.certificado'].create({
+                'maquina_id': maquina.id,
+                'tipo': 'cpm',
+                'archivo': DUMMY_PDF_BASE64,
+                'archivo_nombre': 'cpm_after_archived.pdf',
+            })
+
+        # Test dealer isolation check: Concesionario B cannot upload cert for A's machine
+        with self.assertRaises(ValidationError):
+            self.env['pv.certificado'].with_user(self.user_concesionario_b).create({
+                'maquina_id': maquina.id,
+                'tipo': 'fru',
+                'archivo': DUMMY_PDF_BASE64,
+                'archivo_nombre': 'fru_cross_dealer.pdf',
+            })

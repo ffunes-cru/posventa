@@ -1,6 +1,7 @@
 # Part of Crucianelli Posventa Module
 import json
 import requests
+from markupsafe import Markup
 from odoo import api, fields, models, _
 from odoo.exceptions import ValidationError, UserError, AccessError
 
@@ -672,7 +673,7 @@ GUARDRAILS (REGLAS DE SEGURIDAD Y COMPORTAMIENTO):
             summary_text = summary_text.replace('\n', '<br/>')
 
         self.ticket_id.message_post(
-            body=f"<h4><b>Resumen de Consulta al Asistente IA:</b></h4><div>{summary_text}</div>",
+            body=Markup(f"<h4><b>Resumen de Consulta al Asistente IA:</b></h4><div>{summary_text}</div>"),
             message_type='comment',
             subtype_xmlid='mail.mt_comment',
         )

@@ -10,6 +10,7 @@ from . import pv_problema
 from . import pv_ticket
 from . import pv_ticket_campo_valor
 from . import pv_ticket_medida
+from . import pv_ticket_multimedia
 from . import pv_maquina_transfer
 from . import res_config_settings
 from . import pv_dashboard

@@ -63,6 +63,21 @@
                             </label>
                         </t>
                     </div>
+                    <t t-if="showFeuWarning">
+                        <div class="alert alert-warning border-start border-4 border-warning shadow-sm rounded-3 mt-3 mb-3 p-3">
+                            <div class="d-flex align-items-start gap-2">
+                                <i class="fa fa-exclamation-triangle fa-2x text-warning mt-1"/>
+                                <div>
+                                    <strong class="d-block fs-6 text-dark mb-1">¡Atención Concesionario!</strong>
+                                    <span class="text-dark">
+                                        Esta máquina ya cuenta con un <strong>Formulario de Entrega de Unidad (FEU)</strong> cargado previamente.
+                                        Recuerde que no es necesario cargar múltiples FEU periódicamente: el siguiente paso esperado es la carga del <strong>Certificado de Puesta en Marcha (CPM)</strong> al concretarse la venta y puesta en servicio de la unidad.
+                                        Solo cargue una renovación si el CPM se emitirá en los próximos días inmediatos.
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </t>
 
                     <div class="pv-form-group col-md-6">
                         <label>Fecha de Emisión / Carga</label>

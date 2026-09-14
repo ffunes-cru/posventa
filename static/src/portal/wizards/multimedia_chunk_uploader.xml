@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="posventa.MultimediaChunkUploader">
+        <div class="pv-multimedia-chunk-uploader w-100">
+            <input type="file" t-ref="fileInput" t-on-change="onFileSelected" class="d-none"/>
+
+            <!-- Estado Inicial: Selector / Dropzone -->
+            <t t-if="state.status === 'idle'">
+                <div class="border border-2 border-dashed rounded-3 p-4 text-center bg-light cursor-pointer hover-shadow transition" 
+                     t-on-click="triggerFileSelect"
+                     style="cursor: pointer; border-color: #0d6efd !important;">
+                    <div class="mb-2">
+                        <i class="fa fa-cloud-upload text-primary" style="font-size: 3rem;"/>
+                    </div>
+                    <h6 class="fw-bold mb-1 text-dark">Haga clic aquí para seleccionar un archivo o video</h6>
+                    <p class="text-muted small mb-2">
+                        Admite videos en alta resolución y archivos pesados (hasta <t t-esc="formatFileSize(state.maxFileSizeBytes)"/>).
+                    </p>
+                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-3 py-1">
+                        <i class="fa fa-shield me-1"/> Subida optimizada en paquetes de <t t-esc="Math.round(state.chunkSizeBytes / 1024)"/> KB (compatible con cualquier proxy)
+                    </span>
+                </div>
+            </t>
+
+            <!-- Estado: Subiendo por fragmentos -->
+            <t t-if="state.status === 'uploading'">
+                <div class="card border-primary p-3 shadow-sm">
+                    <div class="d-flex align-items-center mb-2">
+                        <div class="me-3 text-primary">
+                            <i class="fa fa-file-video-o fa-2x"/>
+                        </div>
+                        <div class="flex-grow-1 overflow-hidden">
+                            <div class="fw-bold text-truncate" t-esc="state.filename"/>
+                            <div class="text-muted small">
+                                <span t-esc="state.fileSizeDisplay"/> · 
+                                <span class="text-primary fw-semibold" t-esc="state.progressText"/>
+                            </div>
+                        </div>
+                        <div class="ms-2">
+                            <span class="badge bg-primary fs-6"><t t-esc="state.progress"/>%</span>
+                        </div>
+                    </div>
+                    <div class="progress" style="height: 10px;">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" 
+                             role="progressbar" 
+                             t-attf-style="width: {{state.progress}}%;" 
+                             t-att-aria-valuenow="state.progress" 
+                             aria-valuemin="0" 
+                             aria-valuemax="100"/>
+                    </div>
+                    <div class="text-muted small mt-2 text-center">
+                        <i class="fa fa-spinner fa-spin me-1"/> No cierre esta ventana mientras finaliza la transferencia...
+                    </div>
+                </div>
+            </t>
+
+            <!-- Estado: Subida Completa -->
+            <t t-if="state.status === 'success'">
+                <div class="alert alert-success d-flex align-items-center justify-content-between mb-0 p-3 shadow-sm" role="alert">
+                    <div class="d-flex align-items-center">
+                        <div class="me-3 text-success">
+                            <i class="fa fa-check-circle" style="font-size: 2.2rem;"/>
+                        </div>
+                        <div>
+                            <h6 class="alert-heading fw-bold mb-1">¡Archivo adjuntado exitosamente!</h6>
+                            <p class="mb-0 small text-success-emphasis">
+                                <strong><t t-esc="state.filename"/></strong> (<t t-esc="state.fileSizeDisplay"/>) ya quedó registrado en el ticket y se sincroniza a Google Drive.
+                            </p>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-success fw-bold text-nowrap ms-3" t-on-click="onFinish">
+                        <i class="fa fa-check me-1"/> Listo / Ver Ticket
+                    </button>
+                </div>
+            </t>
+
+            <!-- Estado: Error -->
+            <t t-if="state.status === 'error'">
+                <div class="alert alert-danger p-3 shadow-sm mb-0" role="alert">
+                    <div class="d-flex align-items-start">
+                        <i class="fa fa-exclamation-triangle fa-2x me-3 text-danger"/>
+                        <div class="flex-grow-1">
+                            <h6 class="alert-heading fw-bold mb-1">Error al subir archivo</h6>
+                            <p class="mb-2 small font-monospace"><t t-esc="state.errorMessage"/></p>
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-sm btn-danger" t-on-click="retryUpload">
+                                    <i class="fa fa-refresh me-1"/> Reintentar
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" t-on-click="triggerFileSelect">
+                                    <i class="fa fa-folder-open me-1"/> Elegir otro archivo
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </t>
+        </div>
+    </t>
+</templates>

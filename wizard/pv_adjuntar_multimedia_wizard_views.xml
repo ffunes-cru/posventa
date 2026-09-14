@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="view_pv_ticket_multimedia_wizard_form" model="ir.ui.view">
+        <field name="name">pv.ticket.multimedia.wizard.form</field>
+        <field name="model">pv.ticket.multimedia.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Adjuntar Video / Archivo Multimedia">
+                <sheet>
+                    <div class="alert alert-info py-2 mb-3" role="alert">
+                        <i class="fa fa-info-circle me-1"/> Puede cargar un archivo local (video o archivo pesado) que será transferido automáticamente a <strong>Google Drive</strong> vía rclone, o bien ingresar directamente un enlace público/compartido.
+                    </div>
+                    <group>
+                        <field name="ticket_id" invisible="1"/>
+                        <field name="tipo_carga" widget="radio" options="{'horizontal': true}"/>
+                    </group>
+                    <group invisible="tipo_carga != 'archivo'">
+                        <field name="chunk_file_uploader" widget="pv_multimedia_chunk_uploader" nolabel="1"/>
+                        <field name="uploaded_multimedia_id" invisible="1"/>
+                        <field name="uploaded_multimedia_id_int" invisible="1"/>
+                        <field name="name" placeholder="Título o descripción opcional (por defecto toma el nombre del archivo)"/>
+                        <field name="file" invisible="1"/>
+                        <field name="filename" invisible="1"/>
+                    </group>
+                    <group invisible="tipo_carga != 'enlace_drive'">
+                        <field name="name" placeholder="Ej: Video de prueba hidráulica en campo" required="tipo_carga == 'enlace_drive'"/>
+                        <field name="drive_url" widget="url" placeholder="https://drive.google.com/..." required="tipo_carga == 'enlace_drive'"/>
+                    </group>
+                </sheet>
+                <footer>
+                    <button name="action_adjuntar" string="Vincular Enlace al Ticket" type="object" class="btn-primary" icon="fa-link" invisible="tipo_carga != 'enlace_drive'"/>
+                    <button name="action_adjuntar" string="Confirmar y Cerrar" type="object" class="btn-primary" icon="fa-check" invisible="tipo_carga != 'archivo'"/>
+                    <button string="Cancelar" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_pv_ticket_multimedia_wizard" model="ir.actions.act_window">
+        <field name="name">Adjuntar Video / Multimedia</field>
+        <field name="res_model">pv.ticket.multimedia.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+</odoo>

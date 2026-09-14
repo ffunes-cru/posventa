@@ -271,6 +271,42 @@
                         </t>
                     </div>
 
+                    <!-- Heavy Files / Diagnostic Videos (Up to 1 GB via Google Drive) -->
+                    <div class="pv-form-group border border-primary border-opacity-25 rounded-3 p-3 bg-white shadow-sm">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <label class="fw-bold mb-0 text-primary">
+                                <i class="fa fa-cloud-upload me-1"/> Videos de Diagnóstico y Multimedia Pesada (Hasta 1 GB)
+                            </label>
+                            <span class="badge bg-primary text-white small">
+                                <i class="fa fa-google me-1"/> Google Drive
+                            </span>
+                        </div>
+                        <p class="text-muted small mb-2">
+                            Adjunte videos del funcionamiento en campo, audios o registros pesados de hasta 1 GB. Se sincronizarán automáticamente con Google Drive:
+                        </p>
+                        
+                        <input type="file" multiple="multiple" class="form-control mb-2" t-on-change="onHeavyFilesChange" accept="video/*,.mp4,.mov,.avi,.mkv,.zip,.rar,.tar,.gz"/>
+
+                        <t t-if="state.heavyFiles.length &gt; 0">
+                            <div class="d-flex flex-column gap-2 mt-2">
+                                <t t-foreach="state.heavyFiles" t-as="hf" t-key="hf_index">
+                                    <div class="border rounded p-2 bg-light d-flex justify-content-between align-items-center">
+                                        <div class="d-flex align-items-center text-truncate me-2">
+                                            <i class="fa fa-video-camera me-2 text-primary fs-5"/>
+                                            <div>
+                                                <strong class="d-block text-truncate" style="max-width: 250px;" t-esc="hf.name"/>
+                                                <small class="text-muted"><t t-esc="formatFileSize(hf.size)"/> • Preparado para Google Drive</small>
+                                            </div>
+                                        </div>
+                                        <button type="button" class="btn btn-sm btn-outline-danger" t-on-click="() => this.removeHeavyFile(hf_index)" title="Quitar archivo">
+                                            <i class="fa fa-trash"/>
+                                        </button>
+                                    </div>
+                                </t>
+                            </div>
+                        </t>
+                    </div>
+
                     <div class="pv-form-group">
                         <label>Enlace Multimedia Adicional (Google Drive / Fotos / Videos)</label>
                         <input type="url" class="pv-form-input" placeholder="https://drive.google.com/drive/folders/..." t-model="state.multimediaUrl"/>
@@ -385,6 +421,19 @@
                         </div>
                     </t>
 
+                    <t t-if="state.heavyFiles.length &gt; 0">
+                        <div class="pv-form-group mb-3">
+                            <label class="fw-bold text-primary"><i class="fa fa-cloud-upload me-1"/> Videos / Archivos Pesados (Google Drive):</label>
+                            <div class="d-flex flex-wrap gap-2 mt-1">
+                                <t t-foreach="state.heavyFiles" t-as="hf" t-key="hf_index">
+                                    <span class="badge bg-primary text-white p-2">
+                                        <i class="fa fa-video-camera me-1"/> <t t-esc="hf.name"/> (<t t-esc="formatFileSize(hf.size)"/>)
+                                    </span>
+                                </t>
+                            </div>
+                        </div>
+                    </t>
+
                     <t t-if="state.multimediaUrl">
                         <div class="pv-form-group mb-3">
                             <label class="fw-bold">Multimedia (Google Drive):</label>
@@ -394,38 +443,95 @@
                         </div>
                     </t>
                 </t>
+
+                <!-- Heavy File Upload In-Progress Banner -->
+                <t t-if="state.isUploadingHeavy">
+                    <div class="alert alert-info border-start border-4 border-info shadow-sm p-3 mt-3 mb-2 rounded-3">
+                        <div class="d-flex align-items-center mb-2">
+                            <div class="spinner-border spinner-border-sm text-info me-2" role="status"/>
+                            <strong class="text-dark" t-esc="state.uploadProgressText || 'Transfiriendo archivos pesados a Google Drive...'"/>
+                        </div>
+                        <div class="progress" style="height: 10px;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated bg-info" style="width: 100%;"/>
+                        </div>
+                        <small class="text-muted mt-2 d-block"><i class="fa fa-info-circle me-1"/> La subida se transmite en bloques seguros. Por favor no cierre el navegador hasta que finalice.</small>
+                    </div>
+                </t>
+
+                <!-- Heavy File Upload Error & Decision Panel -->
+                <t t-if="state.uploadError">
+                    <div class="alert alert-danger border-start border-4 border-danger shadow p-4 mt-3 mb-2 rounded-3">
+                        <div class="d-flex align-items-start mb-3">
+                            <i class="fa fa-exclamation-triangle fa-2x text-danger me-3 mt-1"/>
+                            <div>
+                                <h5 class="alert-heading text-danger fw-bold mb-1">
+                                    Inconveniente al subir el archivo multimedia
+                                </h5>
+                                <div class="text-dark">
+                                    No se pudo transferir: <strong t-esc="state.uploadError.filename"/>
+                                </div>
+                                <div class="text-muted small mt-1">
+                                    Detalle: <span t-esc="state.uploadError.error"/>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="alert alert-warning py-2 px-3 small mb-3 border">
+                            <i class="fa fa-shield me-1"/> 
+                            <strong>Tranquilidad:</strong> Los datos del reclamo ya quedaron registrados en el sistema en estado <strong>Borrador</strong> para no perder lo ingresado.
+                        </div>
+                        <p class="fw-bold mb-2 text-dark">¿Cómo desea continuar?</p>
+                        <div class="d-flex flex-wrap gap-2">
+                            <button type="button" class="btn btn-primary" t-att-disabled="state.submitting" t-on-click="() => this.retryUpload()">
+                                <i class="fa fa-refresh me-1"/> Reintentar Subida
+                            </button>
+                            <button type="button" class="btn btn-warning text-dark fw-bold" t-att-disabled="state.submitting" t-on-click="() => this.proceedWithoutFailedFile()">
+                                <i class="fa fa-paper-plane me-1"/> Continuar y Enviar Reclamo (sin este archivo)
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" t-att-disabled="state.submitting" t-on-click="() => this.keepInDraft()">
+                                <i class="fa fa-save me-1"/> Dejar en Borrador (Adjuntar luego en Odoo)
+                            </button>
+                        </div>
+                    </div>
+                </t>
             </div>
 
             <!-- Wizard Footer Buttons -->
             <div class="pv-wizard-footer">
-                <div>
-                    <t t-if="state.currentStepIndex &gt; 0">
-                        <button class="pv-btn pv-btn-secondary" t-on-click="() => this.prevStep()">
-                            <i class="fa fa-arrow-left"/> Anterior
-                        </button>
-                    </t>
-                    <t t-else="">
-                        <button class="pv-btn pv-btn-secondary" t-on-click="props.onClose">
-                            Cancelar
-                        </button>
-                    </t>
-                </div>
+                <t t-if="!state.uploadError">
+                    <div>
+                        <t t-if="state.currentStepIndex &gt; 0">
+                            <button class="pv-btn pv-btn-secondary" t-on-click="() => this.prevStep()">
+                                <i class="fa fa-arrow-left"/> Anterior
+                            </button>
+                        </t>
+                        <t t-else="">
+                            <button class="pv-btn pv-btn-secondary" t-on-click="props.onClose">
+                                Cancelar
+                            </button>
+                        </t>
+                    </div>
 
-                <div>
-                    <t t-if="state.currentStepIndex &lt; steps.length - 1">
-                        <button class="pv-btn pv-btn-primary" t-on-click="() => this.nextStep()">
-                            Siguiente <i class="fa fa-arrow-right"/>
-                        </button>
-                    </t>
-                    <t t-else="">
-                        <button class="pv-btn pv-btn-secondary me-2" t-att-disabled="state.submitting" t-on-click="() => this.submitTicket(false)">
-                            <i class="fa fa-save"/> Guardar en Borrador
-                        </button>
-                        <button class="pv-btn pv-btn-success" t-att-disabled="state.submitting" t-on-click="() => this.submitTicket(true)">
-                            <i class="fa fa-paper-plane"/> Guardar y Enviar Ticket
-                        </button>
-                    </t>
-                </div>
+                    <div>
+                        <t t-if="state.currentStepIndex &lt; steps.length - 1">
+                            <button class="pv-btn pv-btn-primary" t-on-click="() => this.nextStep()">
+                                Siguiente <i class="fa fa-arrow-right"/>
+                            </button>
+                        </t>
+                        <t t-else="">
+                            <button class="pv-btn pv-btn-secondary me-2" t-att-disabled="state.submitting" t-on-click="() => this.submitTicket(false)">
+                                <i class="fa fa-save"/> Guardar en Borrador
+                            </button>
+                            <button class="pv-btn pv-btn-success" t-att-disabled="state.submitting" t-on-click="() => this.submitTicket(true)">
+                                <i class="fa fa-paper-plane"/> Guardar y Enviar Ticket
+                            </button>
+                        </t>
+                    </div>
+                </t>
+                <t t-else="">
+                    <div class="w-100 text-end text-muted small py-1">
+                        <i class="fa fa-info-circle me-1"/> Elija una de las opciones del cuadro superior para resolver la subida.
+                    </div>
+                </t>
             </div>
         </div>
     </t>

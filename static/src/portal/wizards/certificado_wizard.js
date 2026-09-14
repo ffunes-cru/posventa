@@ -19,11 +19,10 @@ export class CertificadoWizard extends Component {
 
         // Determine default recommended tipo
         const certs = maquina.certificados || [];
-        const hasVigenteFEU = certs.some(c => c.tipo === "feu" && c.estado_certificado === "vigente");
         let defaultTipo = "fru";
-        if (maquina.tiene_fru && !hasVigenteFEU) {
+        if (maquina.tiene_fru && !maquina.tiene_feu) {
             defaultTipo = "feu";
-        } else if (hasVigenteFEU && !maquina.tiene_cpm) {
+        } else if (maquina.tiene_feu && !maquina.tiene_cpm) {
             defaultTipo = "cpm";
         }
 
@@ -38,6 +37,16 @@ export class CertificadoWizard extends Component {
         });
     }
 
+    get showFeuWarning() {
+        const m = this.props.maquina;
+        const certs = (m && m.certificados) || [];
+        // Only warn if there is already an active-cycle FEU (vigente or vencido), ignoring archived certificates
+        const hasCurrentCycleFeu = certs.some(
+            c => c.active !== false && c.tipo === "feu" && ["vigente", "vencido"].includes(c.estado_certificado)
+        );
+        return this.state.tipo === "feu" && hasCurrentCycleFeu;
+    }
+
     get stepLabels() {
         return [
             _t("1. Tipo de Certificado"),
@@ -50,8 +59,11 @@ export class CertificadoWizard extends Component {
     get certificateTypes() {
         const m = this.props.maquina;
         const certs = m.certificados || [];
-        const activeCerts = certs.filter(c => c.estado_certificado === "vigente");
+        const activeCerts = certs.filter(c => c.active !== false && c.estado_certificado === "vigente");
         const activeTypes = activeCerts.map(c => c.tipo);
+        const hasCurrentCycleFeu = certs.some(
+            c => c.active !== false && c.tipo === "feu" && ["vigente", "vencido"].includes(c.estado_certificado)
+        );
 
         return [
             {
@@ -62,7 +74,11 @@ export class CertificadoWizard extends Component {
             },
             {
                 value: "feu",
-                label: activeTypes.includes("feu") ? _t("FEU — Formulario de Entrega de Unidad") : (certs.some(c => c.tipo === 'feu') ? _t("FEU — Formulario de Entrega de Unidad (Renovación)") : _t("FEU — Formulario de Entrega de Unidad")),
+                label: activeTypes.includes("feu")
+                    ? _t("FEU — Formulario de Entrega de Unidad")
+                    : (hasCurrentCycleFeu
+                        ? _t("FEU — Formulario de Entrega de Unidad (Renovación)")
+                        : _t("FEU — Formulario de Entrega de Unidad")),
                 disabled: activeTypes.includes("feu") || !m.tiene_fru,
                 reason: activeTypes.includes("feu") ? _t("Ya existe un FEU vigente cargado") : (!m.tiene_fru ? _t("Requiere cargar primero el FRU") : ""),
             },
