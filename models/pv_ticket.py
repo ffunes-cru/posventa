@@ -340,17 +340,6 @@ class PvTicket(models.Model):
         help='Tiempo de cierre definitivo: desde creación hasta cierre (interno)',
     )
 
-    is_ai_enabled = fields.Boolean(
-        compute='_compute_is_ai_enabled',
-        store=False,
-    )
-
-    def _compute_is_ai_enabled(self):
-        param = self.env['ir.config_parameter'].sudo().get_param('posventa.enable_ai_integration', 'False')
-        enabled = str(param).strip().lower() in ('true', '1')
-        for rec in self:
-            rec.is_ai_enabled = enabled
-
     # --- Color for kanban ---
     color = fields.Integer(string='Color')
     kanban_state = fields.Selection([
@@ -556,35 +545,6 @@ class PvTicket(models.Model):
                 raise UserError(_('Es obligatorio adjuntar al menos una imagen o video donde se observe la problemática antes de enviar el ticket a revisión.'))
 
     def action_enviar_ticket(self):
-        """ Envía el ticket (BORRADOR -> ABIERTO). Si la IA está activada abre el chat asistente; si no, lo envía directamente sin popup. """
-        self.ensure_one()
-        if self.estado != 'borrador':
-            raise UserError(_('Solo se pueden enviar tickets en estado Borrador.'))
-        self._check_mandatory_attachments()
-
-        param = self.env['ir.config_parameter'].sudo().get_param('posventa.enable_ai_integration', 'False')
-        ai_enabled = str(param).strip().lower() in ('true', '1')
-
-        if not ai_enabled:
-            self._action_enviar_ticket_direct()
-            return {'type': 'ir.actions.act_window_close'}
-            
-        wizard = self.env['pv.ticket.chat.wizard'].create({
-            'ticket_id': self.id,
-        })
-        wizard._initialize_chat()
-        
-        return {
-            'name': _('Asistente IA - Enviar Ticket'),
-            'type': 'ir.actions.act_window',
-            'view_mode': 'form',
-            'res_model': 'pv.ticket.chat.wizard',
-            'res_id': wizard.id,
-            'target': 'new',
-            'context': self.env.context,
-        }
-
-    def action_enviar_ticket_direct(self):
         """ El concesionario envía el ticket al Staff (BORRADOR -> ABIERTO) """
         for rec in self:
             if rec.estado != 'borrador':
@@ -599,67 +559,6 @@ class PvTicket(models.Model):
                 subtype_xmlid='mail.mt_note',
             )
             rec._send_notification_to_staff()
-
-    def _action_enviar_ticket_direct(self):
-        return self.action_enviar_ticket_direct()
-
-    def action_aceptar_ticket_direct(self):
-        """ Acepta el reclamo programáticamente sin abrir el wizard interactivo de correo """
-        for rec in self:
-            if rec.estado != 'en_proceso':
-                raise UserError(_('Solo se pueden aceptar tickets EN PROCESO.'))
-            rec.write({
-                'estado': 'aceptado',
-                'fecha_solucion': fields.Datetime.now(),
-            })
-            rec.message_post(
-                body=_('Reclamo aceptado y validado (vía Asistente IA)'),
-                message_type='notification',
-                subtype_xmlid='mail.mt_note',
-            )
-            template = self.env.ref('posventa.mail_template_ticket_aceptado', raise_if_not_found=False)
-            if template:
-                template.send_mail(rec.id, force_send=True)
-
-    def action_rechazar_ticket_direct(self, motivo):
-        """ Rechaza el reclamo programáticamente sin abrir el wizard interactivo de correo """
-        for rec in self:
-            if rec.estado != 'en_proceso':
-                raise UserError(_('Solo se pueden rechazar tickets EN PROCESO.'))
-            rec.write({
-                'estado': 'rechazado',
-                'motivo_rechazo': motivo,
-                'fecha_cierre': fields.Datetime.now(),
-            })
-            rec.message_post(
-                body=_('Reclamo rechazado (vía Asistente IA). Motivo: %s', motivo),
-                message_type='notification',
-                subtype_xmlid='mail.mt_note',
-            )
-            template = self.env.ref('posventa.mail_template_ticket_rechazado', raise_if_not_found=False)
-            if template:
-                template.send_mail(rec.id, force_send=True)
-
-    def action_open_ai_chat(self):
-        """ Abre el Asistente de IA para interactuar libremente en cualquier estado """
-        self.ensure_one()
-        param = self.env['ir.config_parameter'].sudo().get_param('posventa.enable_ai_integration', 'True')
-        if str(param).lower() not in ('true', '1'):
-            raise UserError(_("La integración con Inteligencia Artificial se encuentra deshabilitada en los ajustes de Posventa."))
-        wizard = self.env['pv.ticket.chat.wizard'].create({
-            'ticket_id': self.id,
-        })
-        wizard._initialize_chat()
-        
-        return {
-            'name': _('Asistente IA - Chat de Consulta'),
-            'type': 'ir.actions.act_window',
-            'view_mode': 'form',
-            'res_model': 'pv.ticket.chat.wizard',
-            'res_id': wizard.id,
-            'target': 'new',
-            'context': self.env.context,
-        }
 
     # --- State transitions ---
     def action_tomar_ticket(self):

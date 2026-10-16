@@ -542,7 +542,7 @@ export class TicketWizard extends Component {
         if (!ticketId) return;
 
         if (enviarDirecto) {
-            await this.orm.call("pv.ticket", "action_enviar_ticket_direct", [[ticketId]]);
+            await this.orm.call("pv.ticket", "action_enviar_ticket", [[ticketId]]);
             this.notification.add(_t("Ticket creado y enviado a revisión técnica."), { type: "success" });
         } else {
             this.notification.add(_t("Ticket guardado en estado Borrador."), { type: "info" });

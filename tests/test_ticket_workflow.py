@@ -64,8 +64,8 @@ class TestTicketWorkflow(TestPosventaCommon):
         })
         self.assertTrue(attachment.id)
 
-        # Concessionaire sends ticket via public action_enviar_ticket_direct
-        ticket.with_user(self.user_concesionario_a).action_enviar_ticket_direct()
+        # Concessionaire sends ticket via action_enviar_ticket
+        ticket.with_user(self.user_concesionario_a).action_enviar_ticket()
         self.assertEqual(ticket.estado, 'abierto')
 
         # 2. Concessionaire cannot modify acciones_realizadas once out of borrador
@@ -89,7 +89,7 @@ class TestTicketWorkflow(TestPosventaCommon):
         self.assertTrue(medida.id)
 
         # 5. Staff accepts ticket
-        ticket.with_user(self.user_staff).action_aceptar_ticket_direct()
+        ticket.with_user(self.user_staff).action_aceptar_ticket()
         self.assertEqual(ticket.estado, 'aceptado')
         self.assertTrue(ticket.fecha_solucion)
 
@@ -121,13 +121,15 @@ class TestTicketWorkflow(TestPosventaCommon):
         })
         self.assertEqual(ticket.certificado_id, self.cpm)
 
-        ticket.with_user(self.user_concesionario_a).action_enviar_ticket_direct()
+        ticket.with_user(self.user_concesionario_a).action_enviar_ticket()
         ticket.with_user(self.user_staff).action_tomar_ticket()
 
         # Staff rejects ticket
-        ticket.with_user(self.user_staff).action_rechazar_ticket_direct('Falla por mal uso del operador.')
+        tag = self.env['pv.tipo.rechazo'].create({'name': 'Falla por mal uso del operador'})
+        ticket.with_user(self.user_staff).write({'rechazo_tag_ids': [(6, 0, tag.ids)]})
+        ticket.with_user(self.user_staff).action_rechazar_ticket()
         self.assertEqual(ticket.estado, 'rechazado')
-        self.assertIn('mal uso', ticket.motivo_rechazo)
+        self.assertEqual(ticket.rechazo_tag_ids, tag)
 
     def test_03_accept_and_close_with_sap_order_wizard(self):
         """Test accepting directly without popup, and closing with wizard (always opens popup, SAP optional)."""
@@ -139,7 +141,7 @@ class TestTicketWorkflow(TestPosventaCommon):
             'descripcion': 'Falta manual y bulón',
             'multimedia_url': 'https://drive.google.com/test-mandatory-file-1',
         })
-        ticket.with_user(self.user_concesionario_a).action_enviar_ticket_direct()
+        ticket.with_user(self.user_concesionario_a).action_enviar_ticket()
         ticket.with_user(self.user_staff).action_tomar_ticket()
 
         # 1. Staff accepts directly (no popup)
@@ -155,7 +157,7 @@ class TestTicketWorkflow(TestPosventaCommon):
             'descripcion': 'Falta calco lateral',
             'multimedia_url': 'https://drive.google.com/test-mandatory-file-2',
         })
-        ticket_no_sap.with_user(self.user_concesionario_a).action_enviar_ticket_direct()
+        ticket_no_sap.with_user(self.user_concesionario_a).action_enviar_ticket()
         ticket_no_sap.with_user(self.user_staff).action_tomar_ticket()
         ticket_no_sap.with_user(self.user_staff).action_aceptar_ticket()
         res_no_sap = ticket_no_sap.with_user(self.user_staff).action_cerrar_ticket()
@@ -223,7 +225,7 @@ class TestTicketWorkflow(TestPosventaCommon):
         self.assertEqual(ticket.desvio_tipo_id, desvio)
 
         # Rejection tag integration
-        ticket.with_user(self.user_concesionario_a).action_enviar_ticket_direct()
+        ticket.with_user(self.user_concesionario_a).action_enviar_ticket()
         ticket.with_user(self.user_staff).action_tomar_ticket()
         ticket.with_user(self.user_staff).write({
             'rechazo_tag_ids': [(6, 0, [rechazo.id])],

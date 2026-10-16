@@ -74,7 +74,6 @@
             <form string="Ticket de Reclamo">
                 <header>
                     <button name="action_enviar_ticket" string="Enviar Ticket" type="object" class="oe_highlight" invisible="estado != 'borrador'"/>
-                    <button name="action_open_ai_chat" string="Consultar IA" type="object" class="btn-info" invisible="estado == 'borrador' or not is_ai_enabled"/>
                     <button name="action_tomar_ticket" string="Tomar Ticket" type="object" class="oe_highlight" invisible="estado != 'abierto'" groups="posventa.group_pv_staff"/>
                     <button name="action_aceptar_ticket" string="Aceptar Reclamo" type="object" class="oe_highlight" invisible="estado != 'en_proceso'" groups="posventa.group_pv_staff"/>
                     <button name="action_rechazar_ticket" string="Rechazar Reclamo" type="object" class="btn-danger" invisible="estado != 'en_proceso'" groups="posventa.group_pv_staff"/>
@@ -88,7 +87,6 @@
                     <field name="estado" widget="statusbar" statusbar_visible="abierto,en_proceso,aceptado,cerrado"/>
                 </header>
                 <sheet>
-                    <field name="is_ai_enabled" invisible="1"/>
                     <field name="storage_mode" invisible="1"/>
                     <div class="alert alert-warning border-start border-4 border-warning shadow-sm rounded-3 mb-3 p-2" role="alert" invisible="estado != 'borrador'">
                         <i class="fa fa-info-circle me-1"/> <strong>Requisito para envío:</strong> Es obligatorio adjuntar al menos una imagen o video donde se observe la problemática antes de enviar el ticket a revisión técnica.

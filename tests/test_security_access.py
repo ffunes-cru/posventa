@@ -61,7 +61,7 @@ class TestSecurityAccess(TestPosventaCommon):
         self.ticket_a.write({'multimedia_url': 'https://drive.google.com/test-mandatory-file'})
 
         # When ticket is submitted (abierto), staff sees it regardless of assignment
-        self.ticket_a._action_enviar_ticket_direct()
+        self.ticket_a.action_enviar_ticket()
         tickets_staff_after = self.env['pv.ticket'].with_user(self.user_staff).search([])
         self.assertIn(self.ticket_a, tickets_staff_after)
 

@@ -29,11 +29,6 @@ class ResConfigSettings(models.TransientModel):
         default=90,
         help='Días desde la emisión/carga del FEU durante los cuales está vigente para crear tickets antes de vencer y requerir renovación.'
     )
-    pv_enable_ai_integration = fields.Boolean(
-        string='Habilitar Integración con IA',
-        config_parameter='posventa.enable_ai_integration',
-        help='Habilita o deshabilita las funcionalidades y asistencia con Inteligencia Artificial (Gemini) en los tickets.'
-    )
     pv_rclone_remote = fields.Char(
         string='Remoto de rclone (Google Drive)',
         config_parameter='posventa.rclone_remote',
