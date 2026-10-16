@@ -8,3 +8,4 @@ from . import test_multimedia_upload
 from . import test_security_hardening
 from . import test_portal
 from . import test_import_maquinas
+from . import test_documentacion
