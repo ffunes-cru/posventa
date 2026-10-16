@@ -41,8 +41,11 @@ class PvDashboard(models.TransientModel):
             rec.count_cerrado = counts.get('cerrado', 0)
 
     def _compute_averages(self):
+        # Solo promedia los tickets que alcanzaron cada etapa (los pendientes tienen 0 y bajarían el promedio)
         self.env.cr.execute("""
-            SELECT AVG(t1_horas), AVG(t2_horas), AVG(t3_horas)
+            SELECT AVG(t1_horas) FILTER (WHERE fecha_primera_atencion IS NOT NULL),
+                   AVG(t2_horas) FILTER (WHERE fecha_solucion IS NOT NULL),
+                   AVG(t3_horas) FILTER (WHERE fecha_cierre IS NOT NULL)
             FROM pv_ticket
         """)
         res = self.env.cr.fetchone()
@@ -121,7 +124,9 @@ class PvDashboard(models.TransientModel):
 
         # KPIs (averages for this concesionario)
         self.env.cr.execute("""
-            SELECT AVG(t1_horas), AVG(t2_horas), AVG(t3_horas)
+            SELECT AVG(t1_horas) FILTER (WHERE fecha_primera_atencion IS NOT NULL),
+                   AVG(t2_horas) FILTER (WHERE fecha_solucion IS NOT NULL),
+                   AVG(t3_horas) FILTER (WHERE fecha_cierre IS NOT NULL)
             FROM pv_ticket
             WHERE concesionario_id = %s
         """, (concesionario.id,))

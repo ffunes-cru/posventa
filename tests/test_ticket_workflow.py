@@ -317,3 +317,20 @@ class TestTicketWorkflow(TestPosventaCommon):
         self.assertEqual(ticket.tipo_ticket, 'post_pm')
         ticket.action_enviar_ticket()
         self.assertEqual(ticket.estado, 'abierto')
+
+    def test_08_kpis_promedian_solo_etapas_alcanzadas(self):
+        """Tickets not yet attended must not pull the T1 average down."""
+        from datetime import timedelta
+        atendido = self._ticket_en_proceso('Ticket atendido')
+        atendido.sudo().write({
+            'fecha_creacion': atendido.fecha_primera_atencion - timedelta(hours=10),
+        })
+        self._ticket_en_proceso('Otro atendido').sudo().write({'fecha_primera_atencion': False})
+        pendiente = self.env['pv.ticket'].with_user(self.user_concesionario_a).create({
+            'maquina_id': self.maquina_stock.id, 'desvio_tipo': 'faltante',
+            'descripcion': 'Sin atender', 'multimedia_url': 'https://drive.google.com/x',
+        })
+        pendiente.action_enviar_ticket()
+        self.env.flush_all()
+        data = self.env['pv.dashboard'].with_user(self.user_concesionario_a).get_concesionario_portal_data()
+        self.assertAlmostEqual(data['kpis']['avg_t1'], 10.0, places=1)
