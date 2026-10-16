@@ -8,13 +8,14 @@
                 <sheet>
                     <div class="alert alert-info border-start border-4 border-info shadow-sm rounded-3 mb-3 p-3" role="status">
                         <i class="fa fa-info-circle me-1"/>
-                        Complete la clasificación de garantía, motivos de resolución y comprobante para proceder al cierre definitivo del expediente.
+                        Indique la solución aplicada y si la garantía cubre la pieza. Si no la cubre, la pieza la abona el concesionario/cliente y debe indicar los motivos.
                     </div>
                     <group>
                         <field name="ticket_id" readonly="1" options="{'no_open': True}"/>
                         <field name="tipo_garantia" widget="radio" options="{'horizontal': true}"/>
-                        <field name="garantia_aceptada" widget="boolean_toggle"/>
-                        <field name="rechazo_tag_ids" widget="many2many_tags" options="{'color_field': 'color', 'no_create_edit': False}" invisible="garantia_aceptada" placeholder="Seleccione motivos de rechazo..."/>
+                        <field name="garantia_aceptada" widget="boolean_toggle" string="¿La garantía cubre la pieza?"/>
+                        <field name="garantia_rechazo_tag_ids" widget="many2many_tags" options="{'color_field': 'color', 'no_create': True}" invisible="garantia_aceptada" required="not garantia_aceptada" placeholder="Seleccione motivos sin cobertura..."/>
+                        <field name="solucion_aplicada" placeholder="Describa qué se hizo para resolver la falla (repuesto enviado, ajuste, reparación en campo...)" style="min-height: 80px;"/>
                         <field name="sap_numero_orden" placeholder="Ej: 4500012345 (opcional)"/>
                         <field name="garantia_observaciones" placeholder="Ingrese observaciones y justificación del análisis de la garantía y devolución..." style="min-height: 80px;"/>
                         <field name="garantia_adjunto" filename="garantia_adjunto_name"/>

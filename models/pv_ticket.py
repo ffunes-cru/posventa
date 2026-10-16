@@ -227,14 +227,12 @@ class PvTicket(models.Model):
         string='Responsable',
         tracking=True,
     )
-    motivo_rechazo = fields.Text(
-        string='Motivo de rechazo',
-        tracking=True,
-    )
     rechazo_tag_ids = fields.Many2many(
         'pv.tipo.rechazo',
-        string='Motivos de Rechazo',
+        string='Motivos de Rechazo del Reclamo',
+        domain=[('aplica_a', '=', 'reclamo')],
         tracking=True,
+        help='Errores de carga por los que se rechaza el reclamo. El concesionario debe crear un ticket nuevo.',
     )
     tipo_garantia = fields.Selection(
         [('tecnica', 'Técnica'), ('comercial', 'Comercial')],
@@ -277,9 +275,24 @@ class PvTicket(models.Model):
         string='Garantía Aceptada',
         tracking=True,
     )
+    garantia_rechazo_tag_ids = fields.Many2many(
+        'pv.tipo.rechazo',
+        'pv_ticket_garantia_rechazo_rel',
+        'ticket_id',
+        'tipo_rechazo_id',
+        string='Motivos sin Cobertura',
+        domain=[('aplica_a', '=', 'garantia')],
+        tracking=True,
+        help='Motivos por los que la garantía no cubre la pieza (la abona el concesionario/cliente).',
+    )
     garantia_observaciones = fields.Text(
         string='Observaciones de Garantía',
         tracking=True,
+    )
+    solucion_aplicada = fields.Text(
+        string='Solución Aplicada',
+        tracking=True,
+        help='Qué se hizo para resolver la falla. Se carga al cerrar y alimenta el historial de casos similares.',
     )
     garantia_adjunto = fields.Binary(
         string='Adjunto de Garantía',
@@ -431,6 +444,14 @@ class PvTicket(models.Model):
             if rec.certificado_id.maquina_id != rec.maquina_id:
                 raise ValidationError(_('El certificado seleccionado (%s) no pertenece a la máquina %s.',
                                         rec.certificado_id.name, rec.maquina_id.name))
+
+    @api.constrains('rechazo_tag_ids', 'garantia_rechazo_tag_ids')
+    def _check_rechazo_tags_aplica_a(self):
+        for rec in self:
+            if any(t.aplica_a != 'reclamo' for t in rec.rechazo_tag_ids):
+                raise ValidationError(_('Los motivos de rechazo del reclamo solo pueden ser de tipo "Rechazo de Reclamo".'))
+            if any(t.aplica_a != 'garantia' for t in rec.garantia_rechazo_tag_ids):
+                raise ValidationError(_('Los motivos sin cobertura solo pueden ser de tipo "Sin Cobertura de Garantía".'))
 
     @api.constrains('campo_extra_ids')
     def _check_obligatory_extra_fields(self):
@@ -600,17 +621,15 @@ class PvTicket(models.Model):
         self.ensure_one()
         if self.estado != 'en_proceso':
             raise UserError(_('Solo se pueden rechazar tickets EN PROCESO.'))
-        if not self.motivo_rechazo and not self.rechazo_tag_ids:
-            raise UserError(_('Debe indicar el motivo o tags de rechazo.'))
-        if not self.motivo_rechazo and self.rechazo_tag_ids:
-            self.motivo_rechazo = ", ".join(self.rechazo_tag_ids.mapped('name'))
-            
+        if not self.rechazo_tag_ids:
+            raise UserError(_('Debe indicar al menos un motivo de rechazo del reclamo.'))
+
         self.write({
             'estado': 'rechazado',
             'fecha_cierre': fields.Datetime.now(),
         })
         self.message_post(
-            body=_('Reclamo rechazado. Motivo: %s', self.motivo_rechazo),
+            body=_('Reclamo rechazado. Motivos: %s', ", ".join(self.rechazo_tag_ids.mapped('name'))),
             message_type='notification',
             subtype_xmlid='mail.mt_note',
         )

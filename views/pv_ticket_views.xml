@@ -152,16 +152,15 @@
                         <field name="placeholder_descripcion" invisible="not subsistema_id or not placeholder_descripcion"/>
                         <field name="descripcion" required="1" readonly="estado != 'borrador'" placeholder="Describa brevemente el problema..."/>
                         <field name="acciones_realizadas" readonly="estado != 'borrador'" placeholder="Indique qué acciones..."/>
-                        <field name="rechazo_tag_ids" widget="many2many_tags" options="{'color_field': 'color', 'no_create_edit': False}" invisible="estado not in ('en_proceso', 'rechazado')" readonly="estado != 'en_proceso'"/>
-                        <field name="motivo_rechazo" invisible="estado not in ('en_proceso', 'rechazado')" readonly="1" groups="!posventa.group_pv_staff"/>
-                        <field name="motivo_rechazo" invisible="estado not in ('en_proceso', 'rechazado')" readonly="estado != 'en_proceso'" groups="posventa.group_pv_staff"/>
+                        <field name="rechazo_tag_ids" widget="many2many_tags" options="{'color_field': 'color', 'no_create': True}" invisible="estado not in ('en_proceso', 'rechazado')" readonly="estado != 'en_proceso'" placeholder="Requerido para rechazar el reclamo..."/>
                     </group>
                     <notebook>
                         <page string="Análisis de Garantía" name="garantia" invisible="estado not in ('aceptado', 'cerrado')">
                             <group>
                                 <field name="tipo_garantia" readonly="1"/>
-                                <field name="garantia_aceptada" readonly="1"/>
-                                <field name="rechazo_tag_ids" widget="many2many_tags" options="{'color_field': 'color'}" readonly="1" invisible="garantia_aceptada"/>
+                                <field name="garantia_aceptada" readonly="1" string="Con Garantía"/>
+                                <field name="garantia_rechazo_tag_ids" widget="many2many_tags" options="{'color_field': 'color'}" readonly="1" invisible="garantia_aceptada"/>
+                                <field name="solucion_aplicada" readonly="1"/>
                                 <field name="garantia_observaciones" readonly="1"/>
                                 <field name="garantia_adjunto" filename="garantia_adjunto_name" readonly="1"/>
                                 <field name="garantia_adjunto_name" invisible="1"/>

@@ -79,6 +79,23 @@
                             </div>
                         </div>
 
+                        <div class="mb-4" t-if="o.estado == 'rechazado' and o.rechazo_tag_ids">
+                            <h4 style="border-bottom: 2px solid #007A87; padding-bottom: 5px;">Motivos de Rechazo del Reclamo</h4>
+                            <p t-out="', '.join(o.rechazo_tag_ids.mapped('name'))"/>
+                        </div>
+
+                        <div class="mb-4" t-if="o.estado == 'cerrado'">
+                            <h4 style="border-bottom: 2px solid #007A87; padding-bottom: 5px;">Resolución</h4>
+                            <strong>Garantía:</strong> <t t-if="o.garantia_aceptada">Con garantía</t><t t-else="">Sin garantía (la pieza la abona el concesionario/cliente)</t><br/>
+                            <t t-if="not o.garantia_aceptada and o.garantia_rechazo_tag_ids">
+                                <strong>Motivos sin Cobertura:</strong> <span t-out="', '.join(o.garantia_rechazo_tag_ids.mapped('name'))"/><br/>
+                            </t>
+                            <div t-if="o.solucion_aplicada" style="background-color: #f9f9f9; padding: 15px; border-radius: 5px; border-left: 5px solid #198754;" class="mt-2">
+                                <strong>Solución Aplicada:</strong>
+                                <p t-field="o.solucion_aplicada"/>
+                            </div>
+                        </div>
+
                         <div class="mb-4" t-if="o.medida_ids">
                             <h4 style="border-bottom: 2px solid #007A87; padding-bottom: 5px;">Plan de Acción y Medidas de Seguimiento</h4>
                             <table class="table table-sm table-bordered">

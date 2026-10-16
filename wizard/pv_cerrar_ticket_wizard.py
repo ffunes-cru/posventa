@@ -26,9 +26,14 @@ class PvCerrarTicketWizard(models.TransientModel):
         default=True,
         required=True,
     )
-    rechazo_tag_ids = fields.Many2many(
+    garantia_rechazo_tag_ids = fields.Many2many(
         'pv.tipo.rechazo',
-        string='Motivos de Rechazo',
+        string='Motivos sin Cobertura',
+        domain=[('aplica_a', '=', 'garantia')],
+    )
+    solucion_aplicada = fields.Text(
+        string='Solución Aplicada',
+        required=True,
     )
     garantia_observaciones = fields.Text(
         string='Observaciones de Garantía / Devolución',
@@ -51,8 +56,10 @@ class PvCerrarTicketWizard(models.TransientModel):
                     res['sap_numero_orden'] = ticket.sap_numero_orden or ''
                 if 'tipo_garantia' in fields_list and ticket.tipo_garantia:
                     res['tipo_garantia'] = ticket.tipo_garantia
-                if 'rechazo_tag_ids' in fields_list and ticket.rechazo_tag_ids:
-                    res['rechazo_tag_ids'] = [(6, 0, ticket.rechazo_tag_ids.ids)]
+                if 'garantia_rechazo_tag_ids' in fields_list and ticket.garantia_rechazo_tag_ids:
+                    res['garantia_rechazo_tag_ids'] = [(6, 0, ticket.garantia_rechazo_tag_ids.ids)]
+                if 'solucion_aplicada' in fields_list and ticket.solucion_aplicada:
+                    res['solucion_aplicada'] = ticket.solucion_aplicada
         return res
 
     def action_confirmar(self):
@@ -60,6 +67,11 @@ class PvCerrarTicketWizard(models.TransientModel):
         ticket = self.ticket_id
         if ticket.estado != 'aceptado':
             raise UserError(_("Solo se pueden cerrar tickets en estado 'Aceptado'."))
+        if not (self.solucion_aplicada or '').strip():
+            raise UserError(_("Debe indicar la solución aplicada para cerrar el ticket."))
+        if not self.garantia_aceptada and not self.garantia_rechazo_tag_ids:
+            raise UserError(_("Si la garantía no cubre la pieza, debe indicar al menos un motivo sin cobertura."))
+        sin_cobertura_tags = self.garantia_rechazo_tag_ids if not self.garantia_aceptada else self.env['pv.tipo.rechazo']
 
         ticket_vals = {
             'estado': 'cerrado',
@@ -69,14 +81,11 @@ class PvCerrarTicketWizard(models.TransientModel):
             'garantia_adjunto': self.garantia_adjunto,
             'garantia_adjunto_name': self.garantia_adjunto_name,
             'tipo_garantia': self.tipo_garantia,
+            'garantia_rechazo_tag_ids': [(6, 0, sin_cobertura_tags.ids)],
+            'solucion_aplicada': self.solucion_aplicada.strip(),
         }
         if self.sap_numero_orden:
             ticket_vals['sap_numero_orden'] = self.sap_numero_orden
-        if self.rechazo_tag_ids:
-            ticket_vals['rechazo_tag_ids'] = [(6, 0, self.rechazo_tag_ids.ids)]
-            reasons_str = ", ".join(self.rechazo_tag_ids.mapped('name'))
-            if not ticket.motivo_rechazo:
-                ticket_vals['motivo_rechazo'] = reasons_str
 
         ticket.write(ticket_vals)
 
@@ -93,14 +102,15 @@ class PvCerrarTicketWizard(models.TransientModel):
             attachment_id = attachment.id
             adjunto_html = Markup("<br/><b>Archivo Adjunto:</b> %s") % escape(self.garantia_adjunto_name)
 
-        estado_garantia = "ACEPTADA" if self.garantia_aceptada else "RECHAZADA"
+        estado_garantia = _("CON GARANTÍA") if self.garantia_aceptada else _("SIN GARANTÍA (la pieza la abona el concesionario/cliente)")
         tipo_garantia_label = dict(self._fields['tipo_garantia'].selection).get(self.tipo_garantia, self.tipo_garantia)
-        rechazo_str = ", ".join(self.rechazo_tag_ids.mapped('name')) if self.rechazo_tag_ids else '-'
+        rechazo_str = ", ".join(sin_cobertura_tags.mapped('name')) or '-'
         body = Markup(_(
             "<h4><b>Cierre de Ticket / Expediente Completo</b></h4>"
             "<b>Clasificación de Garantía:</b> %s<br/>"
             "<b>Resolución de Garantía:</b> %s<br/>"
-            "<b>Motivos de Rechazo:</b> %s<br/>"
+            "<b>Motivos sin Cobertura:</b> %s<br/>"
+            "<b>Solución Aplicada:</b> %s<br/>"
             "<b>Orden SAP:</b> %s<br/>"
             "<b>Observaciones:</b> %s"
             "%s"
@@ -108,6 +118,7 @@ class PvCerrarTicketWizard(models.TransientModel):
             escape(tipo_garantia_label),
             escape(estado_garantia),
             escape(rechazo_str),
+            escape(ticket.solucion_aplicada),
             escape(ticket.sap_numero_orden or '-'),
             escape(self.garantia_observaciones or 'Sin observaciones'),
             adjunto_html

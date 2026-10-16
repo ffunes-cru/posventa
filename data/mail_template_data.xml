@@ -66,8 +66,8 @@
                             <td style="padding: 6px; border-bottom: 1px solid #eee;" t-out="object.maquina_id.name"/>
                         </tr>
                         <tr>
-                            <td style="padding: 6px; font-weight: bold; border-bottom: 1px solid #eee; color: #b91c1c;">Motivo de Rechazo:</td>
-                            <td style="padding: 6px; border-bottom: 1px solid #eee; font-weight: 500;" t-out="object.motivo_rechazo or 'No especificado'"/>
+                            <td style="padding: 6px; font-weight: bold; border-bottom: 1px solid #eee; color: #b91c1c;">Motivos de Rechazo:</td>
+                            <td style="padding: 6px; border-bottom: 1px solid #eee; font-weight: 500;" t-out="', '.join(object.rechazo_tag_ids.mapped('name')) or 'No especificado'"/>
                         </tr>
                     </table>
 

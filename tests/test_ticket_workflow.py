@@ -100,6 +100,7 @@ class TestTicketWorkflow(TestPosventaCommon):
             'ticket_id': ticket.id,
             'tipo_garantia': 'tecnica',
             'garantia_aceptada': True,
+            'solucion_aplicada': 'Se envió manguera nueva.',
         })
         wizard.action_confirmar()
         self.assertEqual(ticket.estado, 'cerrado')
@@ -168,6 +169,7 @@ class TestTicketWorkflow(TestPosventaCommon):
             'ticket_id': ticket_no_sap.id,
             'tipo_garantia': 'comercial',
             'garantia_aceptada': True,
+            'solucion_aplicada': 'Se envió calco lateral.',
         })
         wizard_no_sap.action_confirmar()
         self.assertEqual(ticket_no_sap.estado, 'cerrado')
@@ -190,6 +192,7 @@ class TestTicketWorkflow(TestPosventaCommon):
             'tipo_garantia': 'tecnica',
             'garantia_aceptada': True,
             'garantia_observaciones': 'Pieza defectuosa devuelta a planta y validada.',
+            'solucion_aplicada': 'Reemplazo de pieza defectuosa.',
             'garantia_adjunto': DUMMY_PDF_BASE64,
             'garantia_adjunto_name': 'devolucion_comprobante.pdf',
         })
@@ -232,6 +235,55 @@ class TestTicketWorkflow(TestPosventaCommon):
         })
         ticket.with_user(self.user_staff).action_rechazar_ticket()
         self.assertEqual(ticket.estado, 'rechazado')
-        self.assertIn('Desgaste por uso normal', ticket.motivo_rechazo)
+        self.assertEqual(ticket.rechazo_tag_ids, rechazo)
+
+    def _ticket_en_proceso(self, descripcion='Falta bulón'):
+        ticket = self.env['pv.ticket'].with_user(self.user_concesionario_a).create({
+            'maquina_id': self.maquina_stock.id,
+            'tipo_ticket': 'pre_pm',
+            'desvio_tipo': 'faltante',
+            'descripcion': descripcion,
+            'multimedia_url': 'https://drive.google.com/test-file',
+        })
+        ticket.with_user(self.user_concesionario_a).action_enviar_ticket()
+        ticket.with_user(self.user_staff).action_tomar_ticket()
+        return ticket
+
+    def test_05_rechazo_requiere_tags_de_reclamo(self):
+        """Rejecting a claim requires claim-type tags; coverage tags are not accepted."""
+        ticket = self._ticket_en_proceso()
+        with self.assertRaises(UserError):
+            ticket.with_user(self.user_staff).action_rechazar_ticket()
+
+        tag_garantia = self.env['pv.tipo.rechazo'].create({'name': 'Mal uso', 'aplica_a': 'garantia'})
+        with self.assertRaises(ValidationError):
+            ticket.with_user(self.user_staff).write({'rechazo_tag_ids': [(6, 0, tag_garantia.ids)]})
+        self.assertEqual(ticket.estado, 'en_proceso')
+
+    def test_06_cierre_sin_garantia_requiere_motivos_y_solucion(self):
+        """Closing without coverage requires coverage tags; closing always requires the applied solution."""
+        ticket = self._ticket_en_proceso()
+        ticket.with_user(self.user_staff).action_aceptar_ticket()
+        tag_garantia = self.env['pv.tipo.rechazo'].create({'name': 'Mantenimiento nulo', 'aplica_a': 'garantia'})
+
+        wizard = self.env['pv.cerrar.ticket.wizard'].with_user(self.user_staff).create({
+            'ticket_id': ticket.id,
+            'garantia_aceptada': False,
+            'solucion_aplicada': 'Se envió repuesto con cargo.',
+        })
+        with self.assertRaises(UserError):
+            wizard.action_confirmar()
+
+        wizard.solucion_aplicada = '   '
+        wizard.garantia_rechazo_tag_ids = tag_garantia
+        with self.assertRaises(UserError):
+            wizard.action_confirmar()
+
+        wizard.solucion_aplicada = 'Se envió repuesto con cargo.'
+        wizard.action_confirmar()
+        self.assertEqual(ticket.estado, 'cerrado')
+        self.assertFalse(ticket.garantia_aceptada)
+        self.assertEqual(ticket.garantia_rechazo_tag_ids, tag_garantia)
+        self.assertEqual(ticket.solucion_aplicada, 'Se envió repuesto con cargo.')
 
 
