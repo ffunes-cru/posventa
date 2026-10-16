@@ -139,6 +139,8 @@ class PvTicket(models.Model):
         default=lambda self: self.env.user.partner_id,
         tracking=True,
     )
+    # Los related se leen como superusuario: el portal muestra el nombre sin dar acceso al contacto
+    operador_nombre = fields.Char(related='operador_id.name', string='Nombre del Operador')
     storage_mode = fields.Selection(
         [('drive', 'Google Drive'), ('odoo', 'Odoo')],
         string='Modo de Almacenamiento',
@@ -227,6 +229,7 @@ class PvTicket(models.Model):
         string='Responsable',
         tracking=True,
     )
+    responsable_nombre = fields.Char(related='responsable_id.name', string='Nombre del Responsable')
     rechazo_tag_ids = fields.Many2many(
         'pv.tipo.rechazo',
         string='Motivos de Rechazo del Reclamo',

@@ -186,7 +186,7 @@
                         <div>
                             <div class="fw-bold" t-out="m.name"/>
                             <div class="small text-muted">
-                                <t t-if="m.cliente_id"><i class="fa fa-user me-1"/><t t-out="m.cliente_id.name"/> · </t>
+                                <t t-if="m.cliente_id"><i class="fa fa-user me-1"/><t t-out="m.cliente_nombre"/> · </t>
                                 <t t-out="m.ciudad or ''"/>
                                 <t t-if="m.estado == 'pendiente'"> · Traslado a <t t-out="m.concesionario_destino_id.name"/></t>
                             </div>
@@ -429,7 +429,7 @@
                             <a t-attf-href="/my/posventa/maquina/#{ticket.maquina_id.id}" class="fw-bold" t-out="ticket.maquina_id.name"/>
                             <div class="small text-muted">
                                 <span t-field="ticket.tipo_ticket"/> · Certificado: <t t-out="ticket.certificado_id.name"/>
-                                · Creado el <t t-out="ticket.fecha_creacion" t-options="{'widget': 'date'}"/> por <t t-out="ticket.operador_id.name"/>
+                                · Creado el <t t-out="ticket.fecha_creacion" t-options="{'widget': 'date'}"/> por <t t-out="ticket.operador_nombre"/>
                             </div>
                         </div>
                         <t t-call="posventa.portal_badge_ticket"><t t-set="estado" t-value="ticket.estado"/></t>
@@ -471,7 +471,7 @@
                         </div>
                         <div class="col-md-6">
                             <h6 class="text-muted">Atención</h6>
-                            <div>Responsable: <t t-out="ticket.responsable_id.name or 'Sin asignar'"/></div>
+                            <div>Responsable: <t t-out="ticket.responsable_nombre or 'Sin asignar'"/></div>
                         </div>
                     </div>
                     <h6 class="text-muted mt-3">Descripción</h6>

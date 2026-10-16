@@ -13,6 +13,7 @@ class TestPortalPosventa(TestPosventaCommon, HttpCase):
         super().setUpClass()
         cls.maquina_a = cls.env['pv.maquina'].create({
             'tipo': 'plantor', 'of': 'OF-PORTAL-A', 'concesionario_id': cls.concesionario_a.id,
+            'cliente_id': cls.cliente_final.id,
         })
         cls.env['pv.certificado'].create({
             'maquina_id': cls.maquina_a.id, 'tipo': 'fru', 'fecha': fields.Date.today(),
@@ -37,6 +38,9 @@ class TestPortalPosventa(TestPosventaCommon, HttpCase):
         return self.url_open(url, data=dict(data, csrf_token=http.Request.csrf_token(self)))
 
     def test_01_paginas_y_aislamiento(self):
+        # El cliente final y el responsable de Crucianelli son partners ajenos a la empresa del concesionario
+        self.ticket_a.with_user(self.user_concesionario_a).action_enviar_ticket()
+        self.ticket_a.with_user(self.user_staff).action_tomar_ticket()
         self.authenticate('concesionario_a', 'concesionario_a')
         home = self.url_open('/my/posventa')
         self.assertEqual(home.status_code, 200)
@@ -45,10 +49,14 @@ class TestPortalPosventa(TestPosventaCommon, HttpCase):
 
         maquinas = self.url_open('/my/posventa/maquinas').text
         self.assertIn('OF-PORTAL-A', maquinas)
+        self.assertIn('Productor Juan Perez', maquinas)
         self.assertNotIn('OF-PORTAL-B', maquinas)
         self.assertIn('OF-PORTAL-A', self.url_open(f'/my/posventa/maquina/{self.maquina_a.id}').text)
         self.assertIn(self.ticket_a.name, self.url_open('/my/posventa/tickets').text)
-        self.assertIn('Falta manual A', self.url_open(f'/my/posventa/ticket/{self.ticket_a.id}').text)
+        ticket = self.url_open(f'/my/posventa/ticket/{self.ticket_a.id}').text
+        self.assertIn('Falta manual A', ticket)
+        self.assertIn(self.user_staff.name, ticket)
+        self.assertIn('Productor Juan Perez', self.url_open('/my/posventa/maquinas?search=Juan').text)
         self.assertEqual(self.url_open('/my/posventa/certificados').status_code, 200)
 
         # Registros de otro concesionario: vuelve al listado sin mostrar datos

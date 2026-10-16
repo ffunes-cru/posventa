@@ -40,6 +40,8 @@ class PvMaquina(models.Model):
     of = fields.Char(string='Orden de Fabricación', required=True, tracking=True, index=True)
     tipo = fields.Selection(TIPO_MAQUINA, string='Tipo de Máquina', required=True, tracking=True)
     cliente_id = fields.Many2one('res.partner', string='Cliente', tracking=True)
+    # Los related se leen como superusuario: el portal muestra el nombre sin dar acceso al contacto
+    cliente_nombre = fields.Char(related='cliente_id.name', string='Nombre del Cliente')
     concesionario_id = fields.Many2one('pv.concesionario', string='Concesionario', required=True, tracking=True)
     ciudad = fields.Char(string='Ciudad', tracking=True)
     provincia_id = fields.Many2one('res.country.state', string='Provincia', tracking=True)
@@ -177,7 +179,7 @@ class PvMaquina(models.Model):
             'name': self.name or '',
             'of': self.of or '',
             'tipo_label': dict(TIPO_MAQUINA).get(self.tipo, ''),
-            'cliente': self.cliente_id.name or '',
+            'cliente': self.cliente_nombre or '',
             'ciudad': self.ciudad or '',
             'provincia': self.provincia_id.name or '',
             'fecha_liberacion': str(self.fecha_liberacion or ''),

@@ -109,7 +109,7 @@ class PosventaPortal(CustomerPortal):
         elif estado in dict(ESTADO_MAQUINA):
             domain.append(('estado', '=', estado))
         if search:
-            domain += ['|', '|', ('of', 'ilike', search), ('name', 'ilike', search), ('cliente_id.name', 'ilike', search)]
+            domain += ['|', '|', ('of', 'ilike', search), ('name', 'ilike', search), ('cliente_nombre', 'ilike', search)]
         Maquina = request.env['pv.maquina']
         total = Maquina.search_count(domain)
         pager = portal_pager(url='/my/posventa/maquinas', url_args={'search': search, 'estado': estado},
