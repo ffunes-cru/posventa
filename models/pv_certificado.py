@@ -223,7 +223,7 @@ class PvCertificado(models.Model):
             maquina = rec.maquina_id.sudo()
             if maquina.estado != estado:
                 maquina.write({'estado': estado})
-                maquina.message_post(body=mensaje, message_type='notification', subtype_xmlid='mail.mt_note')
+                maquina._message_log(body=mensaje)
 
     # --- Crons ---
     @api.model
@@ -236,7 +236,7 @@ class PvCertificado(models.Model):
             ('fecha_vencimiento', '<', fields.Date.today()),
         ])
         for cert in vencidos:
-            cert.maquina_id._post_nota(_(
+            cert.maquina_id._message_log(body=_(
                 'El certificado %s ha superado su vigencia para reclamos (límite: %s). Su estado pasa a Vencido.',
                 dict(TIPO_CERTIFICADO)[cert.tipo], cert.fecha_vencimiento))
         vencidos.write({'estado_certificado': 'vencido'})
@@ -252,7 +252,7 @@ class PvCertificado(models.Model):
         for cert in por_vencer:
             tipo = dict(TIPO_CERTIFICADO)[cert.tipo]
             maquina = cert.maquina_id
-            maquina._post_nota(_("⚠️ El certificado %s de la máquina %s vencerá en 3 días (el %s).",
+            maquina._message_log(body=_("⚠️ El certificado %s de la máquina %s vencerá en 3 días (el %s).",
                                  tipo, maquina.name, cert.fecha_vencimiento))
             email = cert.concesionario_id.partner_id.email
             if email:

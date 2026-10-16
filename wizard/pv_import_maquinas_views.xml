@@ -32,11 +32,6 @@
                         <field name="lineas_error"/>
                     </group>
                 </group>
-                <group invisible="state != 'done'">
-                    <div class="alert alert-success">
-                        <p><strong>Importación completada exitosamente.</strong></p>
-                    </div>
-                </group>
                 <field name="state" invisible="1"/>
                 <footer>
                     <button name="action_preview" type="object" string="Vista Previa"

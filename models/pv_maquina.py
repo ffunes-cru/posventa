@@ -1,5 +1,4 @@
 # Part of Crucianelli Posventa Module
-from datetime import timedelta
 
 from odoo import api, fields, models, _
 from odoo.exceptions import AccessError, UserError
@@ -272,7 +271,7 @@ class PvMaquina(models.Model):
         for rec in self:
             rec._check_liberacion_solicitada()
             rec.sudo()._limpiar_solicitud_liberacion()
-            rec._post_nota(_('Solicitud de liberación RECHAZADA por %s.', self.env.user.name))
+            rec._message_log(body=_('Solicitud de liberación RECHAZADA por %s.', self.env.user.name))
         return True
 
     def action_liberar_maquina(self, motivo):
@@ -319,13 +318,10 @@ class PvMaquina(models.Model):
             {'estado_certificado': 'archivado_manual'})
         maquina.write({'estado': 'liberada', 'fecha_liberacion': fields.Date.today()})
         maquina._limpiar_solicitud_liberacion()
-        self._post_nota(_(
+        self._message_log(body=_(
             "La máquina fue LIBERADA por %(user)s. Motivo: %(motivo)s. Sus certificados anteriores fueron "
             "marcados como 'Archivado Manualmente' y se puede iniciar una nueva carga de certificados.",
             user=self.env.user.name, motivo=motivo))
-
-    def _post_nota(self, body):
-        self.sudo().message_post(body=body, message_type='notification', subtype_xmlid='mail.mt_note')
 
     # --- Traslados ---
     @api.model
@@ -381,7 +377,7 @@ class PvMaquina(models.Model):
             'ciudad_destino': ciudad_destino,
             'estado': 'pendiente',
         })
-        self._post_nota(_('Solicitud de traslado enviada a %s por %s (Pendiente de aceptación).',
+        self._message_log(body=_('Solicitud de traslado enviada a %s por %s (Pendiente de aceptación).',
                           concesionario_destino.name, self.env.user.name))
         return True
 
@@ -401,7 +397,7 @@ class PvMaquina(models.Model):
             'fecha_liberacion': fields.Date.today(),
         })
         maquina._limpiar_transferencia()
-        self._post_nota(_(
+        self._message_log(body=_(
             "Transferencia ACEPTADA por %s. Nuevo dueño: %s. Los certificados anteriores fueron marcados como "
             "'Archivado por Traslado'. El nuevo concesionario debe iniciar la carga de certificados.",
             self.env.user.name, destino.name))
@@ -412,7 +408,7 @@ class PvMaquina(models.Model):
         self._check_transferencia_pendiente(_("Solo el concesionario destino puede rechazar esta transferencia."))
         destino = self.sudo().concesionario_destino_id.name
         estado = self._revertir_transferencia()
-        self._post_nota(_("Transferencia RECHAZADA por el concesionario %s. La máquina vuelve a estado %s con su dueño original.",
+        self._message_log(body=_("Transferencia RECHAZADA por el concesionario %s. La máquina vuelve a estado %s con su dueño original.",
                           destino, dict(ESTADO_MAQUINA)[estado]))
         return True
 
@@ -424,7 +420,7 @@ class PvMaquina(models.Model):
         if self.estado != 'pendiente':
             raise UserError(_("Solo se pueden cancelar traslados en estado Pendiente."))
         estado = self._revertir_transferencia()
-        self._post_nota(_("Solicitud de traslado CANCELADA por el concesionario de origen (%s). La máquina vuelve a estado %s.",
+        self._message_log(body=_("Solicitud de traslado CANCELADA por el concesionario de origen (%s). La máquina vuelve a estado %s.",
                           self.env.user.name, dict(ESTADO_MAQUINA)[estado]))
         return True
 

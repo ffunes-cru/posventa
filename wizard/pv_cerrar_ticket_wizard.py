@@ -122,11 +122,6 @@ class PvCerrarTicketWizard(models.TransientModel):
             adjunto_html
         )
 
-        ticket.message_post(
-            body=body,
-            message_type='notification',
-            subtype_xmlid='mail.mt_note',
-            attachment_ids=[attachment_id] if attachment_id else []
-        )
+        ticket._message_log(body=body, attachment_ids=[attachment_id] if attachment_id else [])
 
         return {'type': 'ir.actions.act_window_close'}

@@ -86,7 +86,6 @@ class TestSecurityAccess(TestPosventaCommon):
 
     def test_04_menu_visibility_restrictions(self):
         """El backend de Posventa es solo para Crucianelli: el concesionario (portal) no ve la app."""
-        m_root = self.env.ref('posventa.menu_pv_root').id
         m_config = self.env.ref('posventa.menu_pv_config').id
         self.assertTrue(self.user_concesionario_a.share)
         with self.assertRaises(AccessError):
@@ -107,7 +106,7 @@ class TestSecurityAccess(TestPosventaCommon):
 
         # Check get_portal_list_data returns only A's certificates
         certs_a = self.env['pv.certificado'].with_user(self.user_concesionario_a).get_portal_list_data()
-        cert_ids_a = [c['id'] for c in certs_a]
+        self.assertEqual([c['id'] for c in certs_a], self.fru_a.ids)
     def test_06_concesionario_contact_user_access(self):
         """Users created as child contacts of a dealership partner can access the dealership's records."""
         # Create a contact partner under concesionario_a's company partner

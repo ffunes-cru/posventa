@@ -1,6 +1,6 @@
 # Part of Crucianelli Posventa Module
 from .common import TestPosventaCommon, DUMMY_PDF_BASE64
-from odoo.exceptions import AccessError, ValidationError, UserError
+from odoo.exceptions import AccessError, ValidationError
 from odoo import fields
 from datetime import timedelta
 
@@ -261,7 +261,7 @@ class TestMaquinaCertificados(TestPosventaCommon):
             'concesionario_id': self.concesionario_a.id,
         })
         today = fields.Date.today()
-        fru = self.env['pv.certificado'].create({
+        self.env['pv.certificado'].create({
             'maquina_id': maquina.id,
             'tipo': 'fru',
             'fecha': today,
