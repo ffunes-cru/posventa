@@ -1,6 +1,6 @@
 # Flujos y estados
 
-Cada flecha es un método del modelo. El nombre entre paréntesis indica quién puede ejecutarlo; si otro lo
+Cada flecha es un método del [modelo](odoo.md#modelos-registros-y-campos). El nombre entre paréntesis indica quién puede ejecutarlo; si otro lo
 intenta, el método lo rechaza aunque el botón no se vea (ver [Seguridad](seguridad.md)).
 
 ## Reclamo (`pv.ticket`)
@@ -33,7 +33,7 @@ stateDiagram-v2
 | Cerrar | Solución aplicada; si no hay cobertura, sus motivos. | Se guardan garantía, datos SAP y adjunto. Se registra el cierre (T3). |
 
 **Medidas de seguimiento** (`pv.ticket.medida`): el Staff las agrega a un reclamo en curso. Pasan de
-*Pendiente* a *En curso* y *Completada*; el cron diario marca *Vencida* la que supera su fecha y lo avisa en el
+*Pendiente* a *En curso* y *Completada*; el [cron](odoo.md#acciones-planificadas-y-acciones-de-servidor) diario marca *Vencida* la que supera su fecha y lo avisa en el
 chatter del reclamo.
 
 ## Máquina (`pv.maquina`)
@@ -86,3 +86,8 @@ stateDiagram-v2
 ```
 
 El cron diario también avisa al concesionario por correo tres días antes de que venza un certificado.
+
+## Ver también
+
+- [Conceptos de Odoo](odoo.md#decoradores-de-métodos): dónde va cada validación (`constrains`, métodos de acción).
+- [Seguridad](seguridad.md): quién puede ejecutar cada acción.

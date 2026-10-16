@@ -20,8 +20,8 @@ flowchart LR
 
 | Rol | Dónde trabaja | Qué hace |
 |---|---|---|
-| Concesionario | Portal web `/my/posventa` | Ve solo lo de su empresa: máquinas, certificados y reclamos. Carga certificados, crea y envía reclamos, adjunta fotos, propone y acepta traslados, pide liberaciones. |
-| Staff Call Center | Backend de Odoo | Ve todas las máquinas y todos los reclamos enviados. Toma reclamos, carga medidas de seguimiento, acepta, rechaza y cierra. |
+| Concesionario | Portal web `/my/posventa` ([usuario portal](odoo.md#usuarios-internos-y-usuarios-portal)) | Ve solo lo de su empresa: máquinas, certificados y reclamos. Carga certificados, crea y envía reclamos, adjunta fotos, propone y acepta traslados, pide liberaciones. |
+| Staff Call Center | Backend de Odoo ([usuario interno](odoo.md#usuarios-internos-y-usuarios-portal)) | Ve todas las máquinas y todos los reclamos enviados. Toma reclamos, carga medidas de seguimiento, acepta, rechaza y cierra. |
 | Administrador de Posventa | Backend de Odoo | Todo lo del Staff, más concesionarios y su acceso al portal, catálogos, importación de máquinas, liberaciones, retrocesos de estado y ajustes. |
 
 ## Glosario
@@ -47,3 +47,8 @@ flowchart LR
 | **Traslado** | Paso de una máquina en STOCK de un concesionario a otro. El destino debe aceptarlo; al aceptarlo la máquina vuelve a LIBERADA para el nuevo dueño. |
 | **Liberación** | Reinicio de una máquina (canje): vuelve a LIBERADA y sus certificados se archivan. La hace el admin, a pedido del concesionario o directamente. |
 | **Archivo pesado** | Video o archivo grande. Se sube en fragmentos y se guarda en Google Drive (o en Odoo, según el ajuste). |
+
+## Ver también
+
+- [Conceptos de Odoo](odoo.md): usuarios portal e internos, grupos y permisos.
+- [Flujos](flujos.md): cómo cambia de estado cada cosa.

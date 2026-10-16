@@ -331,7 +331,7 @@ Métodos públicos (invocables por RPC) de modelos y asistentes, y quién los ll
 
 ## Permisos por modelo
 
-L = leer, E = escribir, C = crear, B = borrar. Sin fila: el grupo no accede al modelo.
+L = leer (`perm_read`), E = escribir (`perm_write`), C = crear (`perm_create`), B = borrar (`perm_unlink`). Sin fila: el grupo no accede al modelo. Ver [permisos de acceso](odoo.md#permisos-de-acceso).
 
 | Modelo | Grupo | Permisos |
 |---|---|---|
@@ -380,7 +380,7 @@ L = leer, E = escribir, C = crear, B = borrar. Sin fila: el grupo no accede al m
 
 ## Reglas de registro
 
-Filtran qué registros ve cada grupo. Las reglas de distintos grupos de un mismo usuario se suman (O lógico).
+Filtran qué registros ve cada grupo. Las reglas de distintos grupos de un mismo usuario se suman (O lógico). Ver [reglas de registro](odoo.md#reglas-de-registro).
 
 | Modelo | Grupos | Regla | Dominio |
 |---|---|---|---|

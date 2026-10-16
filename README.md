@@ -18,6 +18,7 @@ Leer en este orden. Los diagramas son [Mermaid](https://mermaid.js.org/): GitHub
 | Documento | Para qué |
 |---|---|
 | [Conceptos](docs/conceptos.md) | El negocio en palabras simples y el glosario (OF, FRU, FEU, CPM, T1…). Empezar acá. |
+| [Conceptos de Odoo](docs/odoo.md) | Las piezas de Odoo que usa el módulo (permisos, reglas, campos related, crons…), explicadas con ejemplos y con enlaces a la documentación oficial. |
 | [Arquitectura](docs/arquitectura.md) | Cómo está armado el módulo, qué hace cada archivo y cómo viaja un pedido. |
 | [Flujos](docs/flujos.md) | Estados de ticket, máquina y certificado, y qué acción los cambia. |
 | [Seguridad](docs/seguridad.md) | Quién ve y hace qué, y cómo diagnosticar un error de acceso. |

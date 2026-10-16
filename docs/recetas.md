@@ -24,14 +24,14 @@ Hacer el cambio en el XML y actualizar el módulo.
 ## Agregar un campo al reclamo
 
 1. **Modelo** (`models/pv_ticket.py`): declarar el campo junto a los de su grupo.
-2. **Permisos por campo:** agregarlo a una de las listas del principio del archivo:
+2. **Permisos por campo** (la validación está en `write()`, no es un mecanismo estándar de Odoo): agregarlo a una de las listas del principio del archivo:
    - lo carga el concesionario al crear → `CAMPOS_CARGA_CONCESIONARIO`;
    - lo carga solo el Staff → `CAMPOS_SOLO_STAFF`;
    - lo puede tocar el concesionario después de enviar → `CAMPOS_POST_ENVIO_CONCESIONARIO` (casi nunca).
 3. **Backend:** agregarlo al formulario en `views/pv_ticket_views.xml`.
 4. **Portal, si lo carga el concesionario:** campo en el paso que corresponda de
    `static/src/frontend/wizards/ticket_wizard.xml`, valor inicial en `state` y envío en `ticketVals()` de
-   `ticket_wizard.js`. Si es obligatorio, validarlo en `stepError()` **y** en una `@api.constrains` del modelo
+   `ticket_wizard.js`. Si es obligatorio, validarlo en `stepError()` **y** en una [`@api.constrains`](odoo.md#decoradores-de-métodos) del modelo
    (el JS solo ayuda al usuario; la regla real es la del modelo).
 5. **Portal, si solo se muestra:** agregarlo a `portal_posventa_ticket` en `views/portal_templates.xml`. Si es
    un dato de otro modelo (un contacto, un usuario), usar un campo *related* (ver
@@ -52,8 +52,8 @@ Hacer el cambio en el XML y actualizar el módulo.
 
 ## Cambiar quién puede hacer algo
 
-- Ver un modelo: `security/ir.model.access.csv`.
-- Ver ciertos registros: reglas en `security/pv_security.xml`.
+- Ver un modelo: `security/ir.model.access.csv` ([permisos de acceso](odoo.md#permisos-de-acceso)).
+- Ver ciertos registros: reglas en `security/pv_security.xml` ([reglas de registro](odoo.md#reglas-de-registro)).
 - Ejecutar una acción: la validación al principio del método (`_check_staff()`, `_check_admin()`,
   `_check_es_del_concesionario()`).
 
@@ -63,12 +63,12 @@ Cambiar las tres capas de forma coherente y probarlo en `tests/test_security_acc
 ## Cambiar el método que llama un cron
 
 Los crons están en `data/ir_cron_data.xml` con `noupdate="1"`: en bases ya instaladas el cambio del XML **no se
-aplica**. Además de cambiar el XML, agregar un script de migración que actualice el registro (ejemplo en
+aplica**. Además de cambiar el XML, agregar un [script de migración](odoo.md#scripts-de-migración) que actualice el registro (ejemplo en
 `migrations/19.0.1.1.0/post-migrate.py`) y subir la versión del módulo.
 
 ## Reproducir un error en un test
 
-Antes de corregir un error, conviene reproducirlo en un test: queda probado que se corrigió y que no vuelve.
+Antes de corregir un error, conviene reproducirlo en un [test](odoo.md#tests): queda probado que se corrigió y que no vuelve.
 
 ```python
 # tests/test_portal.py
@@ -81,3 +81,7 @@ def test_xx_cliente_de_otra_empresa(self):
 `tests/common.py` ya crea dos concesionarios con sus usuarios portal (`concesionario_a`, `concesionario_b`),
 un Staff (`staff_pv`), un Admin (`admin_pv`), un cliente final y un catálogo mínimo. Correrlo con
 `--test-tags=/posventa:NombreDeLaClase.nombre_del_test`.
+
+## Ver también
+
+- [Conceptos de Odoo](odoo.md): cada pieza mencionada acá, con enlaces a la documentación oficial.

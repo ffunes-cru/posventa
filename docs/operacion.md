@@ -22,6 +22,8 @@ normal del reclamo; los mayores, como archivo pesado.
 
 ## Tareas programadas (Ajustes → Técnico → Acciones planificadas)
 
+Son [acciones planificadas](odoo.md#acciones-planificadas-y-acciones-de-servidor) de Odoo.
+
 | Tarea | Frecuencia | Qué hace |
 |---|---|---|
 | Posventa: Verificar vencimientos de medidas | Diaria | Marca vencidas las medidas pasadas de fecha y lo avisa en el reclamo. |
@@ -41,6 +43,8 @@ rclone debe estar configurado **para el usuario del sistema que corre Odoo**. Si
 reclamo lo avisa y no deja subir archivos pesados; mientras tanto se puede pasar a modo `odoo`.
 
 ## Comandos frecuentes
+
+Opciones explicadas en [Línea de comandos](odoo.md#línea-de-comandos).
 
 ```bash
 # Actualizar el módulo después de cambiar código (y reiniciar el servidor)
@@ -68,3 +72,8 @@ Los tests de navegador (`start_tour`) necesitan Chrome o Chromium instalado.
 | Un video queda "Sincronizando" mucho tiempo | rclone no conecta o el cron no corre. | Ver el error en la pestaña Multimedia del reclamo; probar `rclone lsd`; revisar que el cron esté activo. Botón *Reintentar* para reencolar. |
 | Error HTTP 413 al subir | El fragmento supera el límite del proxy. | Bajar `posventa.chunk_size_kb` o subir `client_max_body_size`. |
 | Los concesionarios no reciben correos | Servidor de correo saliente no configurado. | Ajustes → Técnico → Servidores de correo saliente. |
+
+## Ver también
+
+- [Conceptos de Odoo](odoo.md): crons, línea de comandos y tests.
+- [Configurar el servidor de correo saliente (Odoo)](https://www.odoo.com/documentation/19.0/applications/general/email_communication.html)

@@ -50,17 +50,17 @@ mano: las reglas se cumplen igual. Los tests `test_security_hardening.py` prueba
 | `models/pv_tipo_desvio.py`, `pv_tipo_rechazo.py` | Catálogos de tipos de desvío (Pre-PM) y motivos de rechazo / sin cobertura. |
 | `models/pv_dashboard.py` | Tablero del Staff con contadores y T1/T2/T3. |
 | `models/res_config_settings.py` | Ajustes del módulo (plazos, Google Drive, límites de subida). |
-| `controllers/portal.py` | Rutas `/my/posventa/...` del portal. Lee como el usuario logueado y traduce errores a mensajes. |
+| `controllers/portal.py` | [Rutas](odoo.md#controllers-y-rutas) `/my/posventa/...` del portal. Lee como el usuario logueado y traduce errores a mensajes. |
 | `controllers/multimedia.py` | `/posventa/ticket/upload_chunk`: arma archivos pesados a partir de fragmentos. |
 | `wizard/` | Asistentes del backend (cerrar reclamo, liberar, trasladar, adjuntar video, importar Excel) y el alta de acceso al portal. |
-| `views/portal_templates.xml` | Todas las páginas del portal. |
+| `views/portal_templates.xml` | Todas las páginas del portal ([QWeb](odoo.md#vistas-qweb-y-owl)). |
 | `views/*_views.xml`, `views/pv_menu.xml` | Pantallas y menús del backend. |
-| `static/src/frontend/` | JavaScript del portal: asistente de reclamo, asistente de certificado y subida de archivos. |
+| `static/src/frontend/` | JavaScript del portal ([OWL](odoo.md#vistas-qweb-y-owl)): asistente de reclamo, asistente de certificado y subida de archivos. |
 | `static/src/backend/` | Widget del backend para subir videos por fragmentos. |
 | `static/src/shared/chunk_upload.js` | Subida por fragmentos, compartida por portal y backend. |
-| `security/` | Grupos, permisos por modelo (`ir.model.access.csv`) y reglas de registro (`pv_security.xml`). |
+| `security/` | [Grupos](odoo.md#grupos), [permisos por modelo](odoo.md#permisos-de-acceso) (`ir.model.access.csv`) y [reglas de registro](odoo.md#reglas-de-registro) (`pv_security.xml`). |
 | `data/` | Datos iniciales: secuencia de tickets, catálogos, crons, plantillas de correo y ajustes por defecto. |
-| `migrations/` | Scripts que adaptan bases existentes al cambiar de versión. |
+| `migrations/` | [Scripts de migración](odoo.md#scripts-de-migración) que adaptan bases existentes al cambiar de versión. |
 | `tests/` | Tests automáticos. Son también la mejor documentación de cada regla: cada test describe un caso. |
 | `tools/documentacion.py` | Genera `docs/referencia.md`. |
 
@@ -109,13 +109,19 @@ dejarlo en borrador para completarlo después.
 
 - **El portal lee como el usuario.** Las páginas no usan `sudo()`: las reglas de registro garantizan que un
   concesionario no vea lo de otro. Cuando hay que mostrar el nombre de algo que el usuario no puede leer (el
-  cliente final, el responsable del Staff), se usa un campo *related* de texto, como `cliente_nombre`: Odoo los
+  cliente final, el responsable del Staff), se usa un [campo *related*](odoo.md#campos-related) de texto, como `cliente_nombre`: Odoo los
   calcula como superusuario y solo expone ese texto. Ver [Seguridad](seguridad.md).
 - **El estado del ticket solo cambia con métodos `action_*`.** `write()` rechaza `estado` si no viene de
   `_write_estado()`. Cada acción valida grupo y estado de origen.
 - **Qué campo puede cambiar quién** está en tres listas al principio de `pv_ticket.py`
   (`CAMPOS_CARGA_CONCESIONARIO`, `CAMPOS_POST_ENVIO_CONCESIONARIO`, `CAMPOS_SOLO_STAFF`). Al agregar un campo al
   ticket hay que decidir en cuál va.
-- **Notas en el chatter** con `_message_log()` de Odoo: quedan como nota interna, sin notificar a nadie.
-- **Los crons son `noupdate`.** Si cambia el método que llama un cron, hay que actualizar el registro existente
+- **Notas en el [chatter](odoo.md#chatter)** con `_message_log()` de Odoo: quedan como nota interna, sin notificar a nadie.
+- **Los crons son [`noupdate`](odoo.md#archivos-de-datos-y-noupdate).** Si cambia el método que llama un cron, hay que actualizar el registro existente
   con un script de migración (ver `migrations/19.0.1.1.0/post-migrate.py`).
+
+## Ver también
+
+- [Conceptos de Odoo](odoo.md): explicación de cada pieza de Odoo nombrada acá.
+- [Referencia](referencia.md): todos los modelos, campos y quién llama a cada método.
+- [Documentación oficial para desarrolladores de Odoo 19](https://www.odoo.com/documentation/19.0/developer.html)
