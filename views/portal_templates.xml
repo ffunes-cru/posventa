@@ -10,7 +10,7 @@
         <div id="portal_client_category" position="inside">
             <t groups="posventa.group_pv_concesionario">
                 <t t-call="portal.portal_docs_entry">
-                    <t t-set="icon" t-value="'/posventa/static/description/icon.png'"/>
+                    <t t-set="icon" t-value="'/posventa/static/description/icon.svg'"/>
                     <t t-set="title">Posventa</t>
                     <t t-set="url" t-value="'/my/posventa'"/>
                     <t t-set="text">Máquinas, certificados y reclamos de garantía</t>
@@ -488,7 +488,7 @@
                     <h5 class="card-title">Fotos y videos</h5>
                     <div t-if="not adjuntos and not ticket.multimedia_ids and not ticket.multimedia_url" class="text-muted small mb-2">Todavía no hay archivos adjuntos.</div>
                     <ul class="list-unstyled mb-2">
-                        <li t-foreach="adjuntos" t-as="a"><i class="fa fa-paperclip me-1"/><a t-attf-href="/web/content/#{a.id}?download=true" t-out="a.name"/></li>
+                        <li t-foreach="adjuntos" t-as="adjunto"><i class="fa fa-paperclip me-1"/><a t-attf-href="/web/content/#{adjunto[0].id}?access_token=#{adjunto[1]}&amp;download=true" t-out="adjunto[0].name"/></li>
                         <li t-foreach="ticket.multimedia_ids" t-as="mm">
                             <i class="fa fa-film me-1"/>
                             <a t-if="mm.drive_url" t-att-href="mm.drive_url" target="_blank" t-out="mm.name"/>

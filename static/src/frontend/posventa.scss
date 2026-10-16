@@ -1,0 +1,297 @@
+/* Portal web de Posventa: estilos de los asistentes OWL (tema Crucianelli) */
+
+:root {
+    --pv-red-primary: #c8102e;
+    --pv-red-dark: #991b1b;
+}
+
+.pv-detail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 16px;
+    margin-top: 16px;
+}
+
+.pv-detail-field {
+    display: flex;
+    flex-direction: column;
+}
+
+.pv-detail-field .pv-df-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #94a3b8;
+    margin-bottom: 2px;
+}
+
+.pv-detail-field .pv-df-value {
+    font-size: 15px;
+    font-weight: 600;
+    color: #1e293b;
+}
+
+.pv-btn {
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 700;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.pv-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.pv-btn-primary {
+    background: var(--pv-red-primary);
+    color: #fff;
+}
+
+.pv-btn-primary:hover:not(:disabled) {
+    background: var(--pv-red-dark);
+    box-shadow: 0 4px 12px rgba(200, 16, 46, 0.3);
+}
+
+.pv-btn-success {
+    background: #16a34a;
+    color: #fff;
+}
+
+.pv-btn-success:hover:not(:disabled) {
+    background: #15803d;
+}
+
+.pv-btn-secondary {
+    background: #f1f5f9;
+    color: #475569;
+    border: 1px solid #cbd5e1;
+}
+
+.pv-btn-secondary:hover:not(:disabled) {
+    background: #e2e8f0;
+}
+
+.pv-wizard-container {
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    border: 1px solid #e2e8f0;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+}
+
+.pv-wizard-stepper {
+    display: flex;
+    justify-content: center;
+    gap: 0;
+    margin-bottom: 24px;
+    padding: 0 10px;
+    flex-wrap: wrap;
+}
+
+.pv-wizard-step {
+    display: flex;
+    align-items: center;
+    gap: 0;
+}
+
+.pv-step-circle {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 700;
+    background: #e2e8f0;
+    color: #94a3b8;
+    border: 2px solid #cbd5e1;
+    transition: all 0.3s;
+    flex-shrink: 0;
+}
+
+.pv-step-circle.active {
+    background: var(--pv-red-primary);
+    color: #fff;
+    border-color: var(--pv-red-primary);
+    box-shadow: 0 2px 8px rgba(200, 16, 46, 0.3);
+}
+
+.pv-step-circle.completed {
+    background: #16a34a;
+    color: #fff;
+    border-color: #16a34a;
+}
+
+.pv-step-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #94a3b8;
+    margin-left: 6px;
+    white-space: nowrap;
+}
+
+.pv-step-label.active {
+    color: var(--pv-red-primary);
+    font-weight: 700;
+}
+
+.pv-step-label.completed {
+    color: #16a34a;
+}
+
+.pv-step-connector {
+    width: 36px;
+    height: 2px;
+    background: #cbd5e1;
+    margin: 0 6px;
+    flex-shrink: 0;
+}
+
+.pv-step-connector.completed {
+    background: #16a34a;
+}
+
+.pv-wizard-content {
+    flex: 1;
+    min-height: 250px;
+}
+
+.pv-wizard-content h3 {
+    font-size: 18px;
+    font-weight: 700;
+    color: #1e293b;
+    margin-bottom: 16px;
+}
+
+.pv-wizard-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 16px;
+    border-top: 1px solid #e2e8f0;
+    margin-top: 24px;
+    position: sticky;
+    bottom: 0;
+    background: #fff;
+    z-index: 10;
+}
+
+.pv-form-group {
+    margin-bottom: 16px;
+}
+
+.pv-form-group label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 4px;
+}
+
+.pv-form-group label .required {
+    color: #dc3545;
+}
+
+.pv-form-input,
+.pv-form-select,
+.pv-form-textarea {
+    width: 100%;
+    padding: 9px 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+    box-sizing: border-box;
+}
+
+.pv-form-input:focus,
+.pv-form-select:focus,
+.pv-form-textarea:focus {
+    border-color: var(--pv-red-primary);
+    box-shadow: 0 0 0 3px rgba(200, 16, 46, 0.1);
+}
+
+.pv-form-textarea {
+    min-height: 90px;
+    resize: vertical;
+}
+
+@media (max-width: 768px) {
+    .pv-detail-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+        margin-top: 12px;
+        .pv-detail-field .pv-df-value {
+            font-size: 13px;
+        }
+    }
+    .table-responsive {
+        border-radius: 8px;
+        margin-bottom: 0;
+        table {
+            font-size: 12px;
+            th, td {
+                padding: 8px 10px;
+                white-space: nowrap;
+            }
+        }
+    }
+    .pv-wizard-container {
+        padding: 14px;
+        border-radius: 10px;
+    }
+    .pv-wizard-stepper {
+        justify-content: space-between;
+        padding: 0 4px;
+        margin-bottom: 16px;
+        width: 100%;
+    }
+    .pv-wizard-step {
+        .pv-step-circle {
+            width: 28px;
+            height: 28px;
+            font-size: 12px;
+        }
+        .pv-step-label {
+            font-size: 11px;
+            margin-left: 4px;
+        }
+        .pv-step-label:not(.active) {
+            display: none;
+        }
+    }
+    .pv-step-connector {
+        flex: 1;
+        min-width: 8px;
+        max-width: 32px;
+        margin: 0 4px;
+    }
+    .pv-wizard-footer {
+        flex-direction: column-reverse;
+        gap: 8px;
+        padding-top: 14px;
+        .pv-btn {
+            width: 100%;
+            justify-content: center;
+            min-height: 42px;
+        }
+        > div {
+            width: 100%;
+            display: flex;
+            flex-direction: column-reverse;
+            gap: 8px;
+        }
+    }
+}

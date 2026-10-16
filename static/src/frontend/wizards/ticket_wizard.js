@@ -2,7 +2,21 @@
 import { Component, useState, onWillStart } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
 import { _t } from "@web/core/l10n/translation";
-import { MAX_STANDARD_SIZE, fileToBase64, newUploadUuid, uploadFileInChunks } from "./chunk_upload";
+import {
+    adjuntarArchivo,
+    fileToBase64,
+    formatFileSize,
+    newUploadUuid,
+    uploadFileInChunks,
+} from "@posventa/shared/chunk_upload";
+
+/** Certificados vigentes que pueden respaldar el reclamo: CPM en Post-PM; FRU o FEU en Pre-PM. */
+function certificadosParaReclamo(maquina, tipoTicket) {
+    const tipos = tipoTicket === "post_pm" ? ["cpm"] : ["fru", "feu"];
+    return (maquina.certificados || []).filter(
+        (c) => c.active && c.estado_certificado === "vigente" && tipos.includes(c.tipo)
+    );
+}
 
 // Valor del selector de problema cuando la falla no figura en el catálogo
 const PROBLEMA_NO_LISTADO = "no_listado";
@@ -19,23 +33,18 @@ export class TicketWizard extends Component {
         this.orm = useService("orm");
         this.notification = useService("notification");
 
-        const maquina = this.props.maquina;
-        const tipoTicket = maquina.tiene_cpm ? "post_pm" : "pre_pm";
-
-        const availableCerts = (maquina && maquina.certificados) ?
-            maquina.certificados.filter(c => c.active && c.estado_certificado === "vigente" && (tipoTicket === "post_pm" ? c.tipo === "cpm" : (c.tipo === "fru" || c.tipo === "feu"))) : [];
-        const initialCertId = availableCerts.length > 0 ? availableCerts[0].id : false;
+        const tipoTicket = this.props.maquina.tiene_cpm ? "post_pm" : "pre_pm";
+        const [certificadoInicial] = certificadosParaReclamo(this.props.maquina, tipoTicket);
 
         this.state = useState({
             currentStepIndex: 0, // 0-indexed: 0..N
             submitting: false,
             tipoTicket: tipoTicket,
-            certificadoId: initialCertId,
+            certificadoId: certificadoInicial ? certificadoInicial.id : false,
             // Step Classification
             sistemaId: false,
             subsistemaId: false,
             problemaId: false,
-            desvioTipo: "rotura",
             desvioTipoId: false,
             tiposDesvio: [],
             storageMode: "drive",
@@ -63,7 +72,6 @@ export class TicketWizard extends Component {
 
         this.chunkSizeBytes = 768 * 1024;
         this.maxFileSizeBytes = 1024 * 1024 * 1024;
-        this.rcloneConfigured = true;
 
         onWillStart(async () => {
             await this.loadCatalogs();
@@ -79,17 +87,11 @@ export class TicketWizard extends Component {
     }
 
     get availableCertificates() {
-        const certs = (this.props.maquina && this.props.maquina.certificados) || [];
-        if (this.state.tipoTicket === "post_pm") {
-            return certs.filter(c => c.active && c.estado_certificado === "vigente" && c.tipo === "cpm");
-        } else {
-            return certs.filter(c => c.active && c.estado_certificado === "vigente" && (c.tipo === "fru" || c.tipo === "feu"));
-        }
+        return certificadosParaReclamo(this.props.maquina, this.state.tipoTicket);
     }
 
     get selectedCertificado() {
-        const certs = (this.props.maquina && this.props.maquina.certificados) || [];
-        return certs.find(c => c.id === parseInt(this.state.certificadoId));
+        return (this.props.maquina.certificados || []).find((c) => c.id === parseInt(this.state.certificadoId));
     }
 
     async loadCatalogs() {
@@ -104,20 +106,15 @@ export class TicketWizard extends Component {
             this.state.camposExtras = data.campos_extras || [];
             this.state.tiposDesvio = data.tipos_desvio || [];
             this.state.storageMode = data.storage_mode || "drive";
-            if (this.state.tiposDesvio.length > 0 && !this.state.desvioTipoId) {
-                const match = this.state.tiposDesvio.find(t => t.codigo === this.state.desvioTipo) || this.state.tiposDesvio[0];
-                this.state.desvioTipoId = match.id;
-                this.state.desvioTipo = match.codigo || "rotura";
+            if (!this.state.desvioTipoId && this.state.tiposDesvio.length) {
+                this.state.desvioTipoId = this.state.tiposDesvio[0].id;
             }
+            this.maxAdjuntoBytes = data.max_adjunto_bytes;
             if (data.chunk_size_bytes) {
                 this.chunkSizeBytes = data.chunk_size_bytes;
             }
             if (data.max_file_size_bytes) {
                 this.maxFileSizeBytes = data.max_file_size_bytes;
-            }
-            if (data.rclone_configured !== undefined) {
-                this.rcloneConfigured = data.rclone_configured;
-                this.rcloneMsg = data.rclone_msg;
             }
         } catch (e) {
             console.error("Error loading wizard catalogs", e);
@@ -125,10 +122,7 @@ export class TicketWizard extends Component {
     }
 
     onDesvioTipoChange(ev) {
-        const selectedCode = ev.target.value;
-        this.state.desvioTipo = selectedCode;
-        const found = this.state.tiposDesvio.find(t => t.codigo === selectedCode);
-        this.state.desvioTipoId = found ? found.id : false;
+        this.state.desvioTipoId = parseInt(ev.target.value) || false;
     }
 
     async onSistemaChange(ev) {
@@ -170,11 +164,11 @@ export class TicketWizard extends Component {
         const files = Array.from(ev.target.files || []);
 
         for (const file of files) {
-            // Si el archivo supera 20MB, redirigir automáticamente a la carga pesada (Drive) para evitar OOM
-            if (file.size > MAX_STANDARD_SIZE) {
+            // Los archivos pesados van por fragmentos para no cargarlos enteros en memoria
+            if (file.size > this.maxAdjuntoBytes) {
                 this.addHeavyFileDirect(file);
                 this.notification.add(
-                    _t("El archivo '%s' supera los 20 MB y se procesará mediante carga optimizada a Google Drive.", file.name),
+                    _t("El archivo '%s' supera %s y se subirá como archivo pesado.", file.name, formatFileSize(this.maxAdjuntoBytes)),
                     { type: "info" }
                 );
                 continue;
@@ -257,11 +251,7 @@ export class TicketWizard extends Component {
     }
 
     formatFileSize(bytes) {
-        if (!bytes) return "0 B";
-        const k = 1024;
-        const sizes = ["B", "KB", "MB", "GB"];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
+        return formatFileSize(bytes);
     }
 
     // Dynamic Step Definitions
@@ -315,7 +305,7 @@ export class TicketWizard extends Component {
                     return false;
                 }
             } else {
-                if (!this.state.desvioTipo) {
+                if (!this.state.desvioTipoId) {
                     this.notification.add(_t("Por favor seleccione el Tipo de Desvío."), { type: "warning" });
                     return false;
                 }
@@ -388,16 +378,8 @@ export class TicketWizard extends Component {
     }
 
     get desvioTipoLabel() {
-        if (this.state.tiposDesvio && this.state.tiposDesvio.length > 0) {
-            const found = this.state.tiposDesvio.find(t => t.codigo === this.state.desvioTipo || t.id === this.state.desvioTipoId);
-            if (found) return found.name;
-        }
-        const map = {
-            rotura: _t("Rotura en transporte / recepción"),
-            faltante: _t("Faltante de piezas o componentes"),
-            otro: _t("Otro desvío"),
-        };
-        return map[this.state.desvioTipo] || this.state.desvioTipo;
+        const found = this.state.tiposDesvio.find((t) => t.id === this.state.desvioTipoId);
+        return found ? found.name : "";
     }
 
     // Submit Action
@@ -413,7 +395,6 @@ export class TicketWizard extends Component {
                 const ticketVals = {
                     maquina_id: this.props.maquina.id,
                     certificado_id: parseInt(this.state.certificadoId),
-                    tipo_ticket: this.state.tipoTicket,
                     descripcion: this.state.descripcion,
                     acciones_realizadas: this.state.accionesRealizadas || "",
                     multimedia_url: this.state.multimediaUrl || "",
@@ -443,10 +424,7 @@ export class TicketWizard extends Component {
                         ticketVals.campo_extra_ids = extraLines;
                     }
                 } else {
-                    if (this.state.desvioTipoId) {
-                        ticketVals.desvio_tipo_id = parseInt(this.state.desvioTipoId);
-                    }
-                    ticketVals.desvio_tipo = this.state.desvioTipo;
+                    ticketVals.desvio_tipo_id = this.state.desvioTipoId;
                 }
 
                 const resIds = await this.orm.create("pv.ticket", [ticketVals]);
@@ -458,13 +436,7 @@ export class TicketWizard extends Component {
             for (const att of this.state.attachments) {
                 if (att.uploaded || att.skipped) continue;
                 try {
-                    await this.orm.create("ir.attachment", [{
-                        name: att.name,
-                        datas: att.data,
-                        res_model: "pv.ticket",
-                        res_id: ticketId,
-                        mimetype: att.type,
-                    }]);
+                    await adjuntarArchivo(this.orm, ticketId, att, att.data);
                     att.uploaded = true;
                 } catch (attErr) {
                     console.error("Error al subir adjunto:", att.name, attErr);
@@ -547,7 +519,7 @@ export class TicketWizard extends Component {
         if (!this.state.createdTicketId) return;
         this.state.uploadError = null;
         this.notification.add(
-            _t("El ticket quedó guardado en estado Borrador. Podrá adjuntar el archivo multimedia directamente desde Odoo."),
+            _t("El ticket quedó guardado en estado Borrador. Podrá adjuntar el archivo desde el detalle del reclamo."),
             { type: "info" }
         );
         this.props.onSuccess(this.state.createdTicketId);

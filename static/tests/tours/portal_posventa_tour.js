@@ -124,27 +124,3 @@ registry.category("web_tour.tours").add("posventa_portal_adjuntar_foto", {
     ],
 });
 
-// Humo del portal backend (client action): sigue montando el wizard compartido con el portal web
-registry.category("web_tour.tours").add("posventa_backend_portal_smoke", {
-    steps: () => [
-        {
-            content: "Ir a Máquinas",
-            trigger: ".pv-home-card.pv-card-maquinas",
-            run: "click",
-        },
-        {
-            content: "Abrir la máquina",
-            trigger: ".pv-maquina-card:contains(OF-PORTAL-A)",
-            run: "click",
-        },
-        {
-            content: "Nuevo reclamo",
-            trigger: ".pv-detail-actions button.pv-btn-primary:not([disabled])",
-            run: "click",
-        },
-        {
-            content: "El wizard se monta en el backend",
-            trigger: ".pv-wizard-container .pv-wizard-stepper",
-        },
-    ],
-});

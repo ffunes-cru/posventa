@@ -1,16 +1,8 @@
 # Part of Crucianelli Posventa Module
-import os
-import shutil
-import subprocess
-import logging
-import mimetypes
-from markupsafe import Markup, escape
 from odoo import api, fields, models, _
 from odoo.exceptions import AccessError, UserError, ValidationError
-from .pv_maquina import ESTADO_MAQUINA, ESTADOS_MAQUINA_SIN_TICKETS
-from .pv_ticket_multimedia import MAX_SYNC_INTENTOS
 
-_logger = logging.getLogger(__name__)
+from .pv_maquina import ESTADO_MAQUINA, ESTADOS_MAQUINA_SIN_TICKETS
 
 
 ESTADO_TICKET = [
@@ -27,12 +19,12 @@ TIPO_TICKET = [
     ('post_pm', 'Post Puesta en Marcha'),
 ]
 
-# En modo de almacenamiento 'odoo' el archivo se carga entero en memoria del worker: tope propio
-ODOO_STORAGE_MAX_MB = 200
+# Fotos/archivos chicos van como adjunto; los mayores, por fragmentos (Drive o almacenamiento Odoo)
+MAX_ADJUNTO_MB = 20
 
 # Datos que carga el concesionario: no se modifican una vez enviado el ticket (salvo admin)
 CAMPOS_CARGA_CONCESIONARIO = {
-    'maquina_id', 'certificado_id', 'operador_id', 'desvio_tipo_id', 'desvio_tipo',
+    'maquina_id', 'certificado_id', 'operador_id', 'desvio_tipo_id',
     'sistema_id', 'subsistema_id', 'problema_id', 'problema_no_listado', 'campo_extra_ids',
     'descripcion', 'acciones_realizadas', 'ubicacion_actual', 'hectareas',
 }
@@ -100,14 +92,6 @@ class PvTicket(models.Model):
         string='Tipo de Desvío',
         tracking=True,
     )
-    desvio_tipo = fields.Selection(
-        [('rotura', 'Rotura'), ('faltante', 'Faltante'), ('otro', 'Otro')],
-        string='Tipo de desvío',
-        compute='_compute_desvio_tipo',
-        inverse='_inverse_desvio_tipo',
-        store=True,
-        tracking=True,
-    )
 
     # --- Datos de máquina (heredados) ---
     maquina_id = fields.Many2one(
@@ -162,52 +146,7 @@ class PvTicket(models.Model):
     )
 
     def _compute_storage_mode(self):
-        mode = self._get_storage_mode()
-        for rec in self:
-            rec.storage_mode = mode
-
-    @api.model
-    def _get_storage_mode(self):
-        mode = self.env['ir.config_parameter'].sudo().get_param('posventa.storage_mode', 'drive')
-        return mode if mode in ('drive', 'odoo') else 'drive'
-
-    @api.model
-    def _get_chunk_size_bytes(self):
-        return int(self.env['ir.config_parameter'].sudo().get_param('posventa.chunk_size_kb', 768)) * 1024
-
-    @api.model
-    def _get_max_upload_bytes(self):
-        max_mb = int(self.env['ir.config_parameter'].sudo().get_param('posventa.max_file_size_mb', 1024))
-        if self._get_storage_mode() == 'odoo':
-            max_mb = min(max_mb, ODOO_STORAGE_MAX_MB)
-        return max_mb * 1024 * 1024
-
-    @api.depends('desvio_tipo_id', 'desvio_tipo_id.codigo', 'desvio_tipo_id.name')
-    def _compute_desvio_tipo(self):
-        for rec in self:
-            if rec.desvio_tipo_id:
-                code = (rec.desvio_tipo_id.codigo or rec.desvio_tipo_id.name or '').lower().strip()
-                if 'rotura' in code:
-                    rec.desvio_tipo = 'rotura'
-                elif 'faltan' in code:
-                    rec.desvio_tipo = 'faltante'
-                else:
-                    rec.desvio_tipo = 'otro'
-            elif not rec.desvio_tipo:
-                rec.desvio_tipo = False
-
-    def _inverse_desvio_tipo(self):
-        for rec in self:
-            if rec.desvio_tipo and not rec.desvio_tipo_id:
-                tipo_rec = self.env['pv.tipo.desvio'].search([
-                    '|', ('codigo', '=', rec.desvio_tipo), ('name', '=ilike', rec.desvio_tipo)
-                ], limit=1)
-                if not tipo_rec:
-                    tipo_rec = self.env['pv.tipo.desvio'].create({
-                        'name': rec.desvio_tipo.capitalize(),
-                        'codigo': rec.desvio_tipo,
-                    })
-                rec.desvio_tipo_id = tipo_rec.id
+        self.storage_mode = self.env['pv.ticket.multimedia']._get_storage_mode()
 
     # --- Clasificación del desvío ---
     sistema_id = fields.Many2one(
@@ -421,11 +360,6 @@ class PvTicket(models.Model):
 
     # --- Color for kanban ---
     color = fields.Integer(string='Color')
-    kanban_state = fields.Selection([
-        ('normal', 'En curso'),
-        ('done', 'Listo'),
-        ('blocked', 'Bloqueado'),
-    ], default='normal')
 
     @api.model
     def _group_expand_estados(self, states, domain):
@@ -444,6 +378,18 @@ class PvTicket(models.Model):
             rec.medidas_vencidas_count = len(
                 rec.medida_ids.filtered(lambda m: m.estado == 'vencida')
             )
+
+    @api.model
+    def _get_kpis_promedio(self, domain=()):
+        """T1/T2/T3 promedio (horas) de los tickets que alcanzaron cada etapa (los pendientes tienen 0)."""
+        def promedio(campo_horas, campo_fecha):
+            [(valor,)] = self._read_group(list(domain) + [(campo_fecha, '!=', False)], [], [f'{campo_horas}:avg'])
+            return round(valor or 0.0, 1)
+        return {
+            'avg_t1': promedio('t1_horas', 'fecha_primera_atencion'),
+            'avg_t2': promedio('t2_horas', 'fecha_solucion'),
+            'avg_t3': promedio('t3_horas', 'fecha_cierre'),
+        }
 
     @api.depends('fecha_creacion', 'fecha_primera_atencion',
                  'fecha_solucion', 'fecha_cierre')
@@ -465,48 +411,24 @@ class PvTicket(models.Model):
     @api.depends('maquina_id')
     def _compute_tipo_ticket(self):
         for rec in self:
-            if rec.maquina_id:
-                rec.tipo_ticket = 'post_pm' if rec.maquina_id.tiene_cpm else 'pre_pm'
-            else:
-                rec.tipo_ticket = 'pre_pm'
+            rec.tipo_ticket = 'post_pm' if rec.maquina_id.tiene_cpm else 'pre_pm'
 
     @api.depends('maquina_id', 'maquina_id.certificado_ids', 'maquina_id.certificado_ids.estado_certificado', 'maquina_id.certificado_ids.active', 'tipo_ticket')
     def _compute_certificado_id(self):
+        """Certificado vigente que respalda el reclamo: CPM en Post-PM; FEU (o, si no hay, FRU) en Pre-PM."""
+        prioridad = {'post_pm': ['cpm'], 'pre_pm': ['feu', 'fru']}
         for rec in self:
             if rec.certificado_id:
                 continue
-            if not rec.maquina_id:
-                rec.certificado_id = False
-                continue
-
-            active_certs = rec.maquina_id.certificado_ids.filtered(lambda c: c.active and c.estado_certificado == 'vigente')
-            if rec.tipo_ticket == 'post_pm':
-                cpm = active_certs.filtered(lambda c: c.tipo == 'cpm')
-                rec.certificado_id = cpm[0] if cpm else False
-            else:  # pre_pm
-                feu = active_certs.filtered(lambda c: c.tipo == 'feu')
-                if feu:
-                    rec.certificado_id = feu[0]
-                else:
-                    fru = active_certs.filtered(lambda c: c.tipo == 'fru')
-                    rec.certificado_id = fru[0] if fru else False
-
-    @api.constrains('tipo_ticket', 'maquina_id')
-    def _check_tipo_ticket_coherence(self):
-        for rec in self:
-            if rec.maquina_id:
-                expected = 'post_pm' if rec.maquina_id.tiene_cpm else 'pre_pm'
-                if rec.tipo_ticket != expected:
-                    raise ValidationError(_(
-                        'El tipo de ticket (%s) no coincide con el estado de la máquina. '
-                        'Debería ser %s.', rec.tipo_ticket, expected
-                    ))
+            vigentes = rec.maquina_id._get_certificados_vigentes()
+            candidatos = [c for tipo in prioridad[rec.tipo_ticket] for c in vigentes if c.tipo == tipo]
+            rec.certificado_id = candidatos[0] if candidatos else False
 
     @api.constrains('certificado_id', 'maquina_id')
     def _check_certificado_vigente(self):
         for rec in self:
             if not rec.certificado_id:
-                raise ValidationError(_('Todo ticket de reclamo debe estar asociado a un certificado de la máquina.'))
+                raise ValidationError(_('Todo ticket de reclamo debe estar asociado a un certificado vigente de la máquina.'))
             if rec.certificado_id.maquina_id != rec.maquina_id:
                 raise ValidationError(_('El certificado seleccionado (%s) no pertenece a la máquina %s.',
                                         rec.certificado_id.name, rec.maquina_id.name))
@@ -549,32 +471,6 @@ class PvTicket(models.Model):
                             'El campo %s es obligatorio.', campo.campo_nombre
                     ))
 
-    @api.model
-    def default_get(self, fields_list):
-        res = super().default_get(fields_list)
-        if self.env.context.get('default_certificado_id'):
-            res['certificado_id'] = self.env.context.get('default_certificado_id')
-        maquina_id = res.get('maquina_id') or self.env.context.get('default_maquina_id')
-        if maquina_id:
-            maquina = self.env['pv.maquina'].browse(maquina_id)
-            if maquina.exists() and maquina.estado in ESTADOS_MAQUINA_SIN_TICKETS:
-                estado_label = dict(ESTADO_MAQUINA).get(maquina.estado, maquina.estado)
-                raise UserError(_(
-                    'No se puede crear un ticket para la máquina %s porque se encuentra en estado "%s".'
-                ) % (maquina.name or maquina.of, estado_label))
-        return res
-
-    @api.onchange('maquina_id')
-    def _onchange_maquina_id_valida(self):
-        if self.maquina_id and self.maquina_id.estado in ESTADOS_MAQUINA_SIN_TICKETS:
-            estado_label = dict(ESTADO_MAQUINA).get(self.maquina_id.estado, self.maquina_id.estado)
-            return {
-                'warning': {
-                    'title': _('Máquina no válida'),
-                    'message': _('La máquina %s está en estado "%s". No se pueden crear tickets para máquinas en este estado.') % (self.maquina_id.name or self.maquina_id.of, estado_label),
-                }
-            }
-
     @api.constrains('maquina_id')
     def _check_maquina_estado_valido(self):
         # Solo al asignar la máquina: un traslado o liberación posterior no debe trabar tickets en curso
@@ -600,23 +496,16 @@ class PvTicket(models.Model):
                 raise UserError(_('Los tickets se crean en estado Borrador.'))
             if not es_staff and _campos_cargados(vals, CAMPOS_SOLO_STAFF):
                 raise UserError(_('Acción denegada: hay datos del ticket que solo puede cargar el Staff de Posventa.'))
-            if vals.get('maquina_id'):
-                maquina = self.env['pv.maquina'].browse(vals['maquina_id'])
-                if maquina.exists() and maquina.estado in ESTADOS_MAQUINA_SIN_TICKETS:
-                    estado_label = dict(ESTADO_MAQUINA).get(maquina.estado, maquina.estado)
-                    raise ValidationError(_(
-                        'No se puede crear un ticket para la máquina %s porque se encuentra en estado "%s".', maquina.name or maquina.of, estado_label
-                    ))
-            if vals.get('certificado_id'):
-                cert = self.env['pv.certificado'].browse(vals['certificado_id'])
-                if cert.exists():
-                    if not cert.active or cert.estado_certificado != 'vigente':
-                        raise ValidationError(_('No se pueden crear reclamos sobre el certificado %s porque su estado no es Vigente.', cert.name))
-                    if cert.fecha_limite_vigencia and cert.fecha_limite_vigencia < fields.Date.today():
-                        raise ValidationError(_('No se pueden crear reclamos sobre el certificado %s porque su período de vigencia para reclamos expiró el %s.', cert.name, cert.fecha_limite_vigencia))
+            vals.pop('tipo_ticket', None)  # siempre se deduce de la máquina
             if vals.get('name', _('Nuevo')) == _('Nuevo'):
-                vals['name'] = self.env['ir.sequence'].next_by_code('pv.ticket') or _('Nuevo')
-        return super().create(vals_list)
+                vals['name'] = self.env['ir.sequence'].sudo().next_by_code('pv.ticket') or _('Nuevo')
+        tickets = super().create(vals_list)
+        # La vigencia se exige al crear (no como constraint: el certificado puede vencer durante el trámite)
+        for ticket in tickets:
+            if not ticket.certificado_id._es_vigente_para_reclamos():
+                raise ValidationError(_('No se pueden crear reclamos sobre el certificado %s porque ya no está vigente para reclamos.',
+                                        ticket.certificado_id.name))
+        return tickets
 
     # El método write() se encuentra unificado al final del archivo para centralizar todas las validaciones de seguridad.
 
@@ -693,12 +582,10 @@ class PvTicket(models.Model):
                     'No se puede enviar el ticket porque la máquina %s se encuentra en estado "%s".',
                     rec.maquina_id.name or rec.maquina_id.of, estado_label
                 ))
-            cert = rec.certificado_id
-            if not cert.active or cert.estado_certificado != 'vigente' or (
-                    cert.fecha_limite_vigencia and cert.fecha_limite_vigencia < fields.Date.today()):
+            if not rec.certificado_id._es_vigente_para_reclamos():
                 raise UserError(_(
-                    'No se puede enviar el ticket porque el certificado %s ya no está vigente para reclamos.', cert.name
-                ))
+                    'No se puede enviar el ticket porque el certificado %s ya no está vigente para reclamos.',
+                    rec.certificado_id.name))
 
     def action_enviar_ticket(self):
         """ El concesionario envía el ticket al Staff (BORRADOR -> ABIERTO) """
@@ -863,21 +750,26 @@ class PvTicket(models.Model):
 
     def _send_notification_to_staff(self):
         self.ensure_one()
-        template = self.env.ref('posventa.mail_template_ticket_creado', raise_if_not_found=False)
-        if not template:
-            return
-        
-        staff_group = self.env.ref('posventa.group_pv_staff', raise_if_not_found=False)
-        if not staff_group:
-            return
-            
-        staff_users = staff_group.all_user_ids.filtered(lambda u: u.email)
-        for user in staff_users:
-            template.send_mail(
-                self.id, 
-                force_send=True, 
-                email_values={'email_to': user.email}
-            )
+        emails = self.env.ref('posventa.group_pv_staff').sudo().all_user_ids.filtered('email').mapped('email')
+        if emails:
+            self.env.ref('posventa.mail_template_ticket_creado').sudo().send_mail(
+                self.id, force_send=True, email_values={'email_to': ','.join(emails)})
+
+    def portal_adjuntar_archivo(self, nombre, datas, mimetype=None):
+        """Adjunta una foto/archivo chico al ticket (los usuarios portal no crean ir.attachment directamente)."""
+        self.ensure_one()
+        self.check_access('write')
+        if self.estado in ('rechazado', 'cerrado'):
+            raise UserError(_('No se pueden agregar archivos a un reclamo %s.', dict(ESTADO_TICKET)[self.estado]))
+        if len(datas or '') * 3 // 4 > MAX_ADJUNTO_MB * 1024 * 1024:
+            raise UserError(_('El archivo supera %s MB: súbalo como archivo pesado.', MAX_ADJUNTO_MB))
+        return self.env['ir.attachment'].sudo().create({
+            'name': nombre,
+            'datas': datas,
+            'mimetype': mimetype or 'application/octet-stream',
+            'res_model': self._name,
+            'res_id': self.id,
+        }).id
 
     def action_view_medidas(self):
         self.ensure_one()
@@ -963,11 +855,9 @@ class PvTicket(models.Model):
                     'opciones': opciones_list,
                 })
 
-        storage_mode = self._get_storage_mode()
-        if storage_mode == 'drive':
-            is_configured, rclone_msg = self._is_rclone_configured()
-        else:
-            is_configured, rclone_msg = True, "OK"
+        Multimedia = self.env['pv.ticket.multimedia']
+        storage_mode = Multimedia._get_storage_mode()
+        is_configured, rclone_msg = Multimedia._is_rclone_configured() if storage_mode == 'drive' else (True, "OK")
         tipos_desvio = self.env['pv.tipo.desvio'].search_read([('active', '=', True)], ['id', 'name', 'codigo'])
 
         return {
@@ -977,220 +867,26 @@ class PvTicket(models.Model):
             'campos_extras': campos_extras,
             'tipos_desvio': tipos_desvio,
             'storage_mode': storage_mode,
-            'chunk_size_bytes': self._get_chunk_size_bytes(),
-            'max_file_size_bytes': self._get_max_upload_bytes(),
+            'chunk_size_bytes': Multimedia._get_chunk_size_bytes(),
+            'max_adjunto_bytes': MAX_ADJUNTO_MB * 1024 * 1024,
+            'max_file_size_bytes': Multimedia._get_max_upload_bytes(),
             'rclone_configured': is_configured,
             'rclone_msg': rclone_msg,
         }
 
     def action_abrir_carpeta_drive(self):
-        """Abre la carpeta de Google Drive del ticket o su enlace multimedia."""
+        """Abre la carpeta de Google Drive del ticket o, si no hay, el primer enlace multimedia disponible."""
         self.ensure_one()
-        url = self.drive_folder_url or self.multimedia_url
-        if not url:
-            for m in self.multimedia_ids:
-                if m.drive_folder_url:
-                    url = m.drive_folder_url
-                    break
-                elif m.drive_url:
-                    url = m.drive_url
-                    break
-        if not url:
-            pending_count = self.multimedia_ids.filtered(lambda m: m.estado_sync in ('procesando', 'subiendo'))
-            if pending_count:
-                raise UserError(_(
-                    "Los archivos multimedia se están transfiriendo actualmente a Google Drive. "
-                    "Por favor aguarde unos instantes mientras finaliza la sincronización (puede consultar el estado en la pestaña Multimedia)."
-                ))
-            raise UserError(_("No hay una carpeta o archivo de Google Drive asociado a este ticket todavía."))
-        return {
-            'type': 'ir.actions.act_url',
-            'url': url,
-            'target': 'new',
-        }
-
-    @api.model
-    def _is_rclone_configured(self):
-        """Verifica si el binario de rclone y el remoto de Google Drive están configurados."""
-        rclone_bin = self._get_rclone_bin()
-        if not rclone_bin or not os.path.exists(rclone_bin):
-            return False, _("Binario rclone no encontrado en el servidor (~/.local/bin/rclone).")
-
-        remote = self.env['ir.config_parameter'].sudo().get_param('posventa.rclone_remote', 'crucianelli_drive')
-        try:
-            res = subprocess.run([rclone_bin, "listremotes"], capture_output=True, text=True, timeout=10)
-            remotes = [r.strip().rstrip(':') for r in res.stdout.splitlines() if r.strip()]
-            if remote not in remotes:
-                return False, _(
-                    "El almacenamiento de Google Drive no está configurado en el servidor "
-                    "(el remoto '%s' no existe en rclone). "
-                    "Debe ejecutar 'rclone config' para vincular la cuenta de Google Drive."
-                ) % remote
-        except Exception as e:
-            return False, _("Error al consultar configuración de rclone: %s") % str(e)
-
-        return True, "OK"
-
-    @api.model
-    def _cron_sync_pending_multimedia(self):
-        """Sincroniza a Drive los archivos encolados o con error recuperable (uno por commit)."""
-        Multimedia = self.env['pv.ticket.multimedia']
-        Multimedia._cleanup_staging()
-        pendientes = Multimedia.search([
-            ('estado_sync', 'in', ('procesando', 'error')),
-            ('sync_intentos', '<', MAX_SYNC_INTENTOS),
-            '|', ('sync_proximo_intento', '=', False), ('sync_proximo_intento', '<=', fields.Datetime.now()),
-        ], order='id')
-        IrCron = self.env['ir.cron']
-        IrCron._commit_progress(remaining=len(pendientes))
-        for m in pendientes:
-            # El intento se cuenta antes de correr: si el cron muere por timeout no se reintenta indefinidamente
-            m.sync_intentos += 1
-            IrCron._commit_progress()
-            try:
-                m.ticket_id._run_rclone_sync(m, temp_filepath=m.staging_path)
-            except Exception as e:
-                _logger.exception("Error sincronizando multimedia %s a Drive", m.id)
-                self.env.cr.rollback()
-                m._registrar_error_sync(_("Error interno al sincronizar: %s", str(e)[:400]))
-            if not IrCron._commit_progress(1):
-                break
-
-    def _trigger_drive_sync(self, multimedia_rec, temp_filepath=None):
-        """Encola la sincronización con Google Drive; la ejecuta el cron, fuera de la request HTTP."""
-        self.ensure_one()
-        vals = {
-            'estado_sync': 'procesando',
-            'error_message': False,
-            'sync_intentos': 0,
-            'sync_proximo_intento': False,
-        }
-        if temp_filepath:
-            vals['staging_path'] = temp_filepath
-        multimedia_rec.sudo().write(vals)
-        self.env.ref('posventa.cron_pv_sync_multimedia_drive').sudo()._trigger()
-
-    def _get_drive_dest_dir(self):
-        self.ensure_one()
-        params = self.env['ir.config_parameter'].sudo()
-        remote = params.get_param('posventa.rclone_remote', 'crucianelli_drive')
-        drive_base = params.get_param('posventa.rclone_drive_folder', 'Crucianelli_Posventa/Reclamos')
-        of_str = (self.maquina_id.of or 'MAQ').replace(' ', '_').replace('/', '_')
-        ticket_str = (self.name or f"TICKET_{self.id}").replace(' ', '_').replace('/', '_')
-        return f"{remote}:{drive_base}/{of_str}_{ticket_str}"
-
-    @staticmethod
-    def _get_rclone_bin():
-        return shutil.which('rclone') or os.path.expanduser('~/.local/bin/rclone')
-
-    def _is_file_in_drive(self, multimedia):
-        """True si el archivo ya existe en la carpeta de Drive del ticket (subida previa exitosa)."""
-        self.ensure_one()
-        try:
-            res = subprocess.run(
-                [self._get_rclone_bin(), "lsf", self._get_drive_dest_dir(), "--include", multimedia.name],
-                capture_output=True, text=True, timeout=30)
-            return res.returncode == 0 and multimedia.name in res.stdout
-        except Exception as err:
-            _logger.warning("Error verificando archivo en Drive: %s", err)
-            return False
-
-    def _run_rclone_sync(self, multimedia, temp_filepath=None):
-        """Sube el archivo a Drive con rclone y registra los enlaces. Devuelve True si quedó disponible."""
-        self.ensure_one()
-        temp_filepath = temp_filepath or multimedia.staging_path
-
-        is_configured, config_msg = self._is_rclone_configured()
-        if not is_configured:
-            multimedia._registrar_error_sync(config_msg)
-            return False
-
-        rclone_bin = self._get_rclone_bin()
-        dest_dir = self._get_drive_dest_dir()
-        dest_file_path = f"{dest_dir}/{multimedia.name}"
-
-        file_already_in_drive = self._is_file_in_drive(multimedia)
-        if not file_already_in_drive and (not temp_filepath or not os.path.exists(temp_filepath)):
-            multimedia._registrar_error_sync(_("Archivo temporal no encontrado para sincronización."))
-            return False
-
-        mime = (multimedia.mimetype or '').lower()
-        if multimedia.name.lower().endswith('.webm') and ('audio' in mime or not mime):
-            mime = 'video/webm'
-        elif not mime:
-            mime, _enc = mimetypes.guess_type(multimedia.name)
-        mime = mime or 'application/octet-stream'
-
-        if not file_already_in_drive:
-            # rclone copy: el archivo local se borra recién cuando el registro quedó disponible
-            cmd = [rclone_bin, "copy", temp_filepath, dest_dir, "-M", "--metadata-set", f"content-type={mime}"]
-            res = subprocess.run(cmd, capture_output=True, text=True, timeout=1200)
-            if res.returncode != 0:
-                multimedia._registrar_error_sync((res.stderr or res.stdout or _("Error al ejecutar rclone copy."))[:500])
-                return False
-
-        # Enlaces del archivo y de la carpeta (se muestran solo al concesionario dueño y al staff)
-        link_res = subprocess.run([rclone_bin, "link", dest_file_path], capture_output=True, text=True, timeout=60)
-        drive_url = link_res.stdout.strip() if link_res.returncode == 0 else ""
-        folder_res = subprocess.run([rclone_bin, "link", dest_dir], capture_output=True, text=True, timeout=60)
-        folder_url = folder_res.stdout.strip() if folder_res.returncode == 0 else ""
-        if not drive_url:
-            drive_url = folder_url or f"https://drive.google.com/drive/search?q={multimedia.name}"
-
-        multimedia.write({
-            'estado_sync': 'disponible',
-            'drive_url': drive_url,
-            'drive_folder_url': folder_url,
-            'staging_path': False,
-            'mimetype': mime,
-            'error_message': False,
-            'sync_proximo_intento': False,
-        })
-
-        ticket_vals = {}
-        if not self.multimedia_url:
-            ticket_vals['multimedia_url'] = drive_url
-        if folder_url and not self.drive_folder_url:
-            ticket_vals['drive_folder_url'] = folder_url
-        if ticket_vals:
-            self.sudo().write(ticket_vals)
-
-        # ir.attachment tipo URL para que aparezca en el chatter
-        existing_att = self.env['ir.attachment'].sudo().search([
-            ('res_model', '=', 'pv.ticket'),
-            ('res_id', '=', self.id),
-            ('name', '=', multimedia.name),
-        ], limit=1)
-        if not existing_att:
-            att = self.env['ir.attachment'].sudo().create({
-                'name': multimedia.name,
-                'type': 'url',
-                'url': drive_url,
-                'res_model': 'pv.ticket',
-                'res_id': self.id,
-                'mimetype': mime,
-            })
-            multimedia.ir_attachment_id = att.id
-
-        self.message_post(
-            body=Markup(_(
-                "📁 <b>Archivo multimedia disponible en Google Drive:</b> %s (%s)<br/>"
-                "<a href='%s' target='_blank' class='btn btn-sm btn-primary mt-1'>▶ Ver en Google Drive</a>"
-            )) % (escape(multimedia.name or ''), escape(multimedia.file_size_display or ''), escape(drive_url)),
-            message_type='comment',
-            subtype_xmlid='mail.mt_note',
-        )
-
-        # Limpieza del staging local
-        if temp_filepath and os.path.exists(temp_filepath):
-            try:
-                os.remove(temp_filepath)
-                parent_dir = os.path.dirname(temp_filepath)
-                if os.path.exists(parent_dir) and not os.listdir(parent_dir):
-                    os.rmdir(parent_dir)
-            except Exception as clean_err:
-                _logger.warning("No se pudo limpiar archivo staging %s: %s", temp_filepath, clean_err)
-        return True
+        url = (self.drive_folder_url or self.multimedia_url
+               or next((m.drive_folder_url or m.drive_url for m in self.multimedia_ids if m.drive_folder_url or m.drive_url), False))
+        if url:
+            return {'type': 'ir.actions.act_url', 'url': url, 'target': 'new'}
+        if self.multimedia_ids.filtered(lambda m: m.estado_sync == 'procesando'):
+            raise UserError(_(
+                "Los archivos multimedia se están transfiriendo actualmente a Google Drive. "
+                "Por favor aguarde unos instantes mientras finaliza la sincronización (puede consultar el estado en la pestaña Multimedia)."
+            ))
+        raise UserError(_("No hay una carpeta o archivo de Google Drive asociado a este ticket todavía."))
 
     def action_adjuntar_multimedia(self):
         """Abre el asistente para adjuntar un archivo multimedia o enlace de Google Drive."""

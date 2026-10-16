@@ -181,17 +181,8 @@
                         <div class="pv-form-group">
                             <label>Tipo de Desvío <span class="required">*</span></label>
                             <select class="pv-form-select" t-on-change="onDesvioTipoChange">
-                                <t t-if="state.tiposDesvio and state.tiposDesvio.length &gt; 0">
-                                    <t t-foreach="state.tiposDesvio" t-as="td" t-key="td.id">
-                                        <option t-att-value="td.codigo" t-att-selected="state.desvioTipo === td.codigo">
-                                            <t t-esc="td.name"/>
-                                        </option>
-                                    </t>
-                                </t>
-                                <t t-else="">
-                                    <option value="rotura" t-att-selected="state.desvioTipo === 'rotura'">Rotura en transporte / recepción</option>
-                                    <option value="faltante" t-att-selected="state.desvioTipo === 'faltante'">Faltante de piezas o componentes</option>
-                                    <option value="otro" t-att-selected="state.desvioTipo === 'otro'">Otro desvío</option>
+                                <t t-foreach="state.tiposDesvio" t-as="td" t-key="td.id">
+                                    <option t-att-value="td.id" t-att-selected="state.desvioTipoId === td.id" t-esc="td.name"/>
                                 </t>
                             </select>
                         </div>
@@ -511,7 +502,7 @@
                                 <i class="fa fa-paper-plane me-1"/> Continuar y Enviar Reclamo (sin este archivo)
                             </button>
                             <button type="button" class="btn btn-outline-secondary" t-att-disabled="state.submitting" t-on-click="() => this.keepInDraft()">
-                                <i class="fa fa-save me-1"/> Dejar en Borrador (Adjuntar luego en Odoo)
+                                <i class="fa fa-save me-1"/> Dejar en Borrador (adjuntar después)
                             </button>
                         </div>
                     </div>

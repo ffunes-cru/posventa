@@ -57,16 +57,17 @@ class PosventaMultimediaController(http.Controller):
                 return _error('Acceso denegado a este reclamo.', status=403)
 
             # Límites validados en el servidor (no solo en el navegador)
-            storage_mode = ticket._get_storage_mode()
-            max_bytes = ticket._get_max_upload_bytes()
-            chunk_bytes = ticket._get_chunk_size_bytes()
+            Multimedia = request.env['pv.ticket.multimedia']
+            storage_mode = Multimedia._get_storage_mode()
+            max_bytes = Multimedia._get_max_upload_bytes()
+            chunk_bytes = Multimedia._get_chunk_size_bytes()
             if file_size <= 0 or file_size > max_bytes:
                 return _error(f'El archivo supera el tamaño máximo permitido ({max_bytes // (1024 * 1024)} MB).', status=413)
             if total_chunks != -(-file_size // chunk_bytes):
                 return _error('La cantidad de fragmentos no coincide con el tamaño del archivo.')
 
             if chunk_index == 0 and storage_mode == 'drive':
-                is_configured, rclone_err = ticket._is_rclone_configured()
+                is_configured, rclone_err = Multimedia._is_rclone_configured()
                 if not is_configured:
                     return _error(rclone_err)
 
@@ -121,7 +122,7 @@ class PosventaMultimediaController(http.Controller):
             if storage_mode == 'odoo':
                 return self._store_as_attachment(ticket, final_file_path, filename, mimetype, staging_session_dir)
 
-            multimedia = request.env['pv.ticket.multimedia'].sudo().create({
+            multimedia = Multimedia.sudo().create({
                 'ticket_id': ticket.id,
                 'name': filename,
                 'file_size': actual_size,
@@ -131,7 +132,7 @@ class PosventaMultimediaController(http.Controller):
                 'usuario_id': request.env.uid,
             })
             # La transferencia a Drive la hace el cron, fuera de esta request
-            ticket._trigger_drive_sync(multimedia, final_file_path)
+            multimedia._encolar_sync()
 
             return request.make_json_response({
                 'status': 'completed',
@@ -152,7 +153,7 @@ class PosventaMultimediaController(http.Controller):
         """Modo contingencia: guarda el archivo ensamblado como adjunto estándar de Odoo."""
         with open(file_path, 'rb') as f:
             raw = f.read()
-        attachment = request.env['ir.attachment'].create({
+        attachment = request.env['ir.attachment'].sudo().create({
             'name': filename,
             'raw': raw,
             'res_model': 'pv.ticket',

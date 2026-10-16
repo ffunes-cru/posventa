@@ -6,14 +6,9 @@ import { redirect } from "@web/core/utils/urls";
 import { _t } from "@web/core/l10n/translation";
 import { ConfirmationDialog } from "@web/core/confirmation_dialog/confirmation_dialog";
 import { Interaction } from "@web/public/interaction";
-import { TicketWizard } from "@posventa/portal/wizards/ticket_wizard";
-import { CertificadoWizard } from "@posventa/portal/wizards/certificado_wizard";
-import {
-    MAX_STANDARD_SIZE,
-    fileToBase64,
-    newUploadUuid,
-    uploadFileInChunks,
-} from "@posventa/portal/wizards/chunk_upload";
+import { TicketWizard } from "@posventa/frontend/wizards/ticket_wizard";
+import { CertificadoWizard } from "@posventa/frontend/wizards/certificado_wizard";
+import { adjuntarArchivo, newUploadUuid, uploadFileInChunks } from "@posventa/shared/chunk_upload";
 
 /** Carga los datos de la máquina con las mismas reglas que el portal backend. */
 function useMaquinaDetail(maquinaId) {
@@ -87,6 +82,7 @@ export class PortalTicketUploader extends Component {
             const data = await this.orm.call("pv.ticket", "get_wizard_catalog_data", []);
             this.config.chunkSizeBytes = data.chunk_size_bytes || this.config.chunkSizeBytes;
             this.config.maxFileSizeBytes = data.max_file_size_bytes || this.config.maxFileSizeBytes;
+            this.config.maxAdjuntoBytes = data.max_adjunto_bytes;
         });
     }
 
@@ -115,14 +111,8 @@ export class PortalTicketUploader extends Component {
         try {
             for (const file of [...this.state.files]) {
                 this.state.progressText = _t("Subiendo %s...", file.name);
-                if (file.size <= MAX_STANDARD_SIZE) {
-                    await this.orm.create("ir.attachment", [{
-                        name: file.name,
-                        datas: await fileToBase64(file),
-                        res_model: "pv.ticket",
-                        res_id: this.props.ticketId,
-                        mimetype: file.type || "application/octet-stream",
-                    }]);
+                if (file.size <= this.config.maxAdjuntoBytes) {
+                    await adjuntarArchivo(this.orm, this.props.ticketId, file);
                 } else {
                     await uploadFileInChunks({
                         ticketId: this.props.ticketId,

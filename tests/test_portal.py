@@ -11,8 +11,6 @@ class TestPortalPosventa(TestPosventaCommon, HttpCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        for user in (cls.user_concesionario_a, cls.user_concesionario_b, cls.user_staff):
-            user.password = user.login
         cls.maquina_a = cls.env['pv.maquina'].create({
             'tipo': 'plantor', 'of': 'OF-PORTAL-A', 'concesionario_id': cls.concesionario_a.id,
         })
@@ -28,11 +26,11 @@ class TestPortalPosventa(TestPosventaCommon, HttpCase):
             'archivo': DUMMY_PDF_BASE64, 'archivo_nombre': 'fru.pdf',
         })
         cls.ticket_a = cls.env['pv.ticket'].with_user(cls.user_concesionario_a).create({
-            'maquina_id': cls.maquina_a.id, 'desvio_tipo': 'faltante', 'descripcion': 'Falta manual A',
+            'maquina_id': cls.maquina_a.id, 'desvio_tipo_id': cls.desvio_faltante.id, 'descripcion': 'Falta manual A',
             'multimedia_url': 'https://drive.google.com/test-a',
         })
         cls.ticket_b = cls.env['pv.ticket'].with_user(cls.user_concesionario_b).create({
-            'maquina_id': cls.maquina_b.id, 'desvio_tipo': 'faltante', 'descripcion': 'Falta manual B',
+            'maquina_id': cls.maquina_b.id, 'desvio_tipo_id': cls.desvio_faltante.id, 'descripcion': 'Falta manual B',
         })
 
     def _post(self, url, **data):
@@ -124,7 +122,3 @@ class TestPortalPosventa(TestPosventaCommon, HttpCase):
         staff_body = self.env.ref('posventa.mail_template_ticket_creado')._render_field(
             'body_html', self.ticket_a.ids)[self.ticket_a.id]
         self.assertIn(f'/odoo/pv.ticket/{self.ticket_a.id}', staff_body)
-
-    def test_09_tour_portal_backend_sigue_funcionando(self):
-        self.start_tour('/odoo/action-posventa.action_pv_portal_concesionario',
-                        'posventa_backend_portal_smoke', login='concesionario_a')

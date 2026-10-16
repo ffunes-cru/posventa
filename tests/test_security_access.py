@@ -1,6 +1,7 @@
 # Part of Crucianelli Posventa Module
 from .common import TestPosventaCommon, DUMMY_PDF_BASE64
 from odoo import fields
+from odoo.exceptions import AccessError
 
 
 class TestSecurityAccess(TestPosventaCommon):
@@ -19,8 +20,7 @@ class TestSecurityAccess(TestPosventaCommon):
         })
         self.ticket_a = self.env['pv.ticket'].create({
             'maquina_id': self.maquina_a.id,
-            'tipo_ticket': 'pre_pm',
-            'desvio_tipo': 'faltante',
+            'desvio_tipo_id': self.desvio_faltante.id,
             'descripcion': 'Falta manual',
         })
 
@@ -36,8 +36,7 @@ class TestSecurityAccess(TestPosventaCommon):
         })
         self.ticket_b = self.env['pv.ticket'].create({
             'maquina_id': self.maquina_b.id,
-            'tipo_ticket': 'pre_pm',
-            'desvio_tipo': 'faltante',
+            'desvio_tipo_id': self.desvio_faltante.id,
             'descripcion': 'Falta calco',
         })
 
@@ -86,39 +85,23 @@ class TestSecurityAccess(TestPosventaCommon):
         self.assertIn(self.ticket_b, tickets_admin)
 
     def test_04_menu_visibility_restrictions(self):
-        """Concesionario only sees Portal and Tickets, not Maquinas, Certificados or Medidas."""
-        menus_conc = self.env['ir.ui.menu'].with_user(self.user_concesionario_a).load_menus(False)
-        m_portal = self.env.ref('posventa.menu_pv_portal_concesionario').id
-        m_ticket = self.env.ref('posventa.menu_pv_ticket').id
-        m_maquina = self.env.ref('posventa.menu_pv_maquina').id
-        m_certificado = self.env.ref('posventa.menu_pv_certificado').id
-        m_medida = self.env.ref('posventa.menu_pv_ticket_medida').id
-        m_dash = self.env.ref('posventa.menu_pv_dashboard').id
+        """El backend de Posventa es solo para Crucianelli: el concesionario (portal) no ve la app."""
+        m_root = self.env.ref('posventa.menu_pv_root').id
         m_config = self.env.ref('posventa.menu_pv_config').id
+        self.assertTrue(self.user_concesionario_a.share)
+        with self.assertRaises(AccessError):
+            self.env['ir.ui.menu'].with_user(self.user_concesionario_a).load_menus(False)
 
-        # Concesionario checks
-        self.assertIn(m_portal, menus_conc)
-        self.assertIn(m_ticket, menus_conc)
-        self.assertNotIn(m_maquina, menus_conc)
-        self.assertNotIn(m_certificado, menus_conc)
-        self.assertNotIn(m_medida, menus_conc)
-        self.assertNotIn(m_dash, menus_conc)
-        self.assertNotIn(m_config, menus_conc)
-
-        # Staff checks
         menus_staff = self.env['ir.ui.menu'].with_user(self.user_staff).load_menus(False)
-        self.assertIn(m_dash, menus_staff)
-        self.assertIn(m_ticket, menus_staff)
-        self.assertIn(m_maquina, menus_staff)
-        self.assertIn(m_certificado, menus_staff)
-        self.assertIn(m_medida, menus_staff)
-        self.assertNotIn(m_portal, menus_staff)
+        for xmlid in ('menu_pv_dashboard', 'menu_pv_ticket', 'menu_pv_maquina', 'menu_pv_certificado', 'menu_pv_ticket_medida'):
+            self.assertIn(self.env.ref(f'posventa.{xmlid}').id, menus_staff)
         self.assertNotIn(m_config, menus_staff)
+        self.assertIn(m_config, self.env['ir.ui.menu'].with_user(self.user_admin).load_menus(False))
 
     def test_05_portal_certificados_view_and_isolation(self):
         """Concessionaire can see their certificates via portal methods and count is accurate."""
         # Check portal data has certificado_count
-        portal_data = self.env['pv.dashboard'].with_user(self.user_concesionario_a).get_concesionario_portal_data()
+        portal_data = self.concesionario_a.with_user(self.user_concesionario_a)._get_portal_resumen()
         self.assertIn('certificado_count', portal_data)
         self.assertEqual(portal_data['certificado_count'], 1)
 
@@ -139,10 +122,7 @@ class TestSecurityAccess(TestPosventaCommon):
             'login': 'juan_perez_a',
             'email': 'juan.perez@concesionarioa.com',
             'partner_id': contact_partner.id,
-            'group_ids': [(6, 0, [
-                self.env.ref('base.group_user').id,
-                self.env.ref('posventa.group_pv_concesionario').id,
-            ])],
+            'group_ids': [(6, 0, [self.group_portal.id, self.group_concesionario.id])],
         })
 
         # Test resolving concesionario for user
@@ -161,3 +141,24 @@ class TestSecurityAccess(TestPosventaCommon):
 
 
 
+
+    def test_07_alta_por_asistente_de_portal(self):
+        """El admin da acceso al portal a un contacto: queda como usuario portal con rol Concesionario."""
+        contacto = self.env['res.partner'].create({
+            'name': 'Nuevo Operador', 'email': 'nuevo.operador@example.com', 'parent_id': self.partner_conc_a.id,
+        })
+        action = self.concesionario_a.with_user(self.user_admin).action_gestionar_acceso_portal()
+        wizard = self.env['portal.wizard'].browse(action['res_id'])
+        linea = wizard.user_ids.filtered(lambda u: u.partner_id == contacto)
+        linea.with_user(self.user_admin).action_grant_access()
+
+        usuario = contacto.user_ids
+        self.assertTrue(usuario.share)
+        self.assertIn(self.group_concesionario, usuario.all_group_ids)
+        self.assertEqual(self.env['pv.concesionario']._get_concesionario_for_user(usuario), self.concesionario_a)
+
+        # Un contacto que no es de un concesionario no recibe el rol
+        cliente = self.env['res.partner'].create({'name': 'Cliente Portal', 'email': 'cliente@example.com'})
+        linea_cliente = self.env['portal.wizard'].with_context(active_ids=cliente.ids).create({}).user_ids
+        linea_cliente.action_grant_access()
+        self.assertNotIn(self.group_concesionario, cliente.user_ids.all_group_ids)

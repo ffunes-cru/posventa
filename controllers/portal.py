@@ -78,7 +78,7 @@ class PosventaPortal(CustomerPortal):
         concesionario = self._pv_concesionario()
         if not concesionario:
             return self._pv_render('posventa.portal_sin_concesionario', {})
-        data = request.env['pv.dashboard'].get_concesionario_portal_data()
+        data = concesionario._get_portal_resumen()
         Maquina = request.env['pv.maquina']
         alertas = []
         for maquina in Maquina.search([('concesionario_id', '=', concesionario.id),
@@ -253,9 +253,11 @@ class PosventaPortal(CustomerPortal):
             ticket = self._pv_get('pv.ticket', ticket_id)
         except (AccessError, MissingError):
             return request.redirect('/my/posventa/tickets')
-        adjuntos = request.env['ir.attachment'].search([
+        # Los usuarios portal no leen ir.attachment: se listan con sudo y se descargan con token de acceso
+        adjuntos = request.env['ir.attachment'].sudo().search([
             ('res_model', '=', 'pv.ticket'), ('res_id', '=', ticket.id), ('type', '=', 'binary'),
         ])
+        adjuntos = list(zip(adjuntos, adjuntos.generate_access_token()))
         return self._pv_render('posventa.portal_posventa_ticket', {
             'page_name': 'pv_ticket',
             'ticket': ticket,

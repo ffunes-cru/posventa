@@ -32,8 +32,7 @@
                         <div class="flex-grow-1 overflow-hidden">
                             <div class="fw-bold text-truncate" t-esc="state.filename"/>
                             <div class="text-muted small">
-                                <span t-esc="state.fileSizeDisplay"/> · 
-                                <span class="text-primary fw-semibold" t-esc="state.progressText"/>
+                                <span t-esc="state.fileSizeDisplay"/>
                             </div>
                         </div>
                         <div class="ms-2">
@@ -64,7 +63,7 @@
                         <div>
                             <h6 class="alert-heading fw-bold mb-1">¡Archivo adjuntado exitosamente!</h6>
                             <p class="mb-0 small text-success-emphasis">
-                                <strong><t t-esc="state.filename"/></strong> (<t t-esc="state.fileSizeDisplay"/>) ya quedó registrado en el ticket y se sincroniza a Google Drive.
+                                <strong><t t-esc="state.filename"/></strong> (<t t-esc="state.fileSizeDisplay"/>) ya quedó registrado en el ticket y se transfiere a Google Drive en segundo plano.
                             </p>
                         </div>
                     </div>
@@ -83,7 +82,7 @@
                             <h6 class="alert-heading fw-bold mb-1">Error al subir archivo</h6>
                             <p class="mb-2 small font-monospace"><t t-esc="state.errorMessage"/></p>
                             <div class="d-flex gap-2">
-                                <button type="button" class="btn btn-sm btn-danger" t-on-click="retryUpload">
+                                <button type="button" class="btn btn-sm btn-danger" t-on-click="startUpload">
                                     <i class="fa fa-refresh me-1"/> Reintentar
                                 </button>
                                 <button type="button" class="btn btn-sm btn-outline-secondary" t-on-click="triggerFileSelect">

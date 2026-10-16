@@ -1,7 +1,7 @@
 # Part of Crucianelli Posventa Module
 {
     'name': 'Posventa Crucianelli',
-    'version': '19.0.1.0.0',
+    'version': '19.0.1.1.0',
     'category': 'Services/Aftersales',
     'summary': 'Gestión integral de reclamos de posventa centrada en la máquina',
     'description': """
@@ -55,28 +55,20 @@ Módulo para la gestión integral de reclamos de posventa:
         'views/pv_ticket_medida_views.xml',
         'views/pv_catalogo_views.xml',
         'views/pv_dashboard_views.xml',
-        'views/pv_portal_action.xml',
         'views/pv_menu.xml',
         'views/portal_templates.xml',
         # Report
         'report/pv_ticket_report.xml',
     ],
     'assets': {
+        # Backend (staff): widget de subida por fragmentos del asistente de multimedia
         'web.assets_backend': [
-            'posventa/static/src/portal/**/*.scss',
-            'posventa/static/src/portal/**/*.js',
-            'posventa/static/src/portal/**/*.xml',
-            ('remove', 'posventa/static/src/**/*.dark.scss'),
+            'posventa/static/src/shared/**/*',
+            'posventa/static/src/backend/**/*',
         ],
-        'web.assets_web_dark': [
-            'posventa/static/src/**/*.dark.scss',
-        ],
-        # Portal web del concesionario (/my/posventa): reutiliza los wizards OWL del portal backend
+        # Portal web del concesionario (/my/posventa)
         'web.assets_frontend': [
-            'posventa/static/src/portal/portal_concesionario.scss',
-            'posventa/static/src/portal/wizards/chunk_upload.js',
-            'posventa/static/src/portal/wizards/ticket_wizard.*',
-            'posventa/static/src/portal/wizards/certificado_wizard.*',
+            'posventa/static/src/shared/**/*',
             'posventa/static/src/frontend/**/*',
         ],
         'web.assets_tests': [

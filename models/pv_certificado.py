@@ -1,4 +1,7 @@
 # Part of Crucianelli Posventa Module
+from datetime import timedelta
+
+from markupsafe import Markup, escape
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError, ValidationError
 
@@ -19,6 +22,24 @@ ESTADO_CERTIFICADO = [
     ('legacy', 'Legacy / Canje'),
 ]
 
+# Estados que cuentan como "cargado" para la secuencia FRU -> FEU -> CPM
+ESTADOS_CARGADO = ('vigente', 'vencido')
+
+# (parámetro, default) en días, por tipo de certificado
+PLAZO_CARGA = {
+    'fru': ('posventa.fru_expiration_days', 10),
+    'feu': ('posventa.feu_expiration_days', 20),
+}
+VIGENCIA_RECLAMOS = {
+    'fru': ('posventa.fru_grace_days', 3),
+    'feu': ('posventa.feu_claims_validity_days', 90),
+}
+
+EXTENSIONES_ARCHIVO = ('.pdf', '.jpg', '.jpeg', '.png')
+
+# El documento cargado es inmutable salvo para el Administrador
+CAMPOS_DOCUMENTO = {'tipo', 'maquina_id', 'archivo', 'archivo_nombre', 'fecha'}
+
 
 class PvCertificado(models.Model):
     _name = 'pv.certificado'
@@ -26,146 +47,280 @@ class PvCertificado(models.Model):
     _inherit = ['mail.thread']
     _order = 'fecha desc, id desc'
 
-
-    name = fields.Char(
-        string='Referencia',
-        compute='_compute_name',
-        store=True,
-    )
-    tipo = fields.Selection(
-        TIPO_CERTIFICADO,
-        string='Tipo',
-        required=True,
-        tracking=True,
-    )
+    name = fields.Char(string='Referencia', compute='_compute_name', store=True)
+    tipo = fields.Selection(TIPO_CERTIFICADO, string='Tipo', required=True, tracking=True)
     maquina_id = fields.Many2one(
-        'pv.maquina',
-        string='Máquina',
-        required=True,
+        'pv.maquina', string='Máquina', required=True, ondelete='cascade', tracking=True,
         domain="[('tiene_cpm', '=', False)]",
-        ondelete='cascade',
-        tracking=True,
     )
-    fecha = fields.Date(
-        string='Fecha',
-        default=fields.Date.context_today,
-        required=True,
-        tracking=True,
-    )
-    dias_retraso_carga = fields.Integer(
-        string='Días de Retraso en Carga',
-        compute='_compute_fechas_y_vencimiento',
-        store=True,
-        readonly=False,
-        help='Días que se excedió el concesionario respecto al plazo nominal de carga al subir el certificado.',
-    )
+    concesionario_id = fields.Many2one('pv.concesionario', string='Concesionario Emisor', tracking=True)
+    fecha = fields.Date(string='Fecha', default=fields.Date.context_today, required=True, tracking=True)
+    estado_certificado = fields.Selection(
+        ESTADO_CERTIFICADO, string='Estado / Tag', default='vigente', required=True, tracking=True)
+    active = fields.Boolean(string='Activo', default=True, tracking=True)
+    archivo = fields.Binary(string='Archivo PDF', attachment=True, required=True)
+    archivo_nombre = fields.Char(string='Nombre de archivo', required=True)
+    notas = fields.Text(string='Observaciones')
+
     fecha_limite_carga = fields.Date(
-        string='Plazo Nominal de Carga',
-        compute='_compute_fechas_y_vencimiento',
-        store=True,
-        readonly=False,
+        string='Plazo Nominal de Carga', compute='_compute_fechas', store=True, readonly=False,
         help='Fecha límite nominal que tenía la máquina para la carga de este certificado.',
     )
+    dias_retraso_carga = fields.Integer(
+        string='Días de Retraso en Carga', compute='_compute_fechas', store=True, readonly=False,
+        help='Días que la carga real superó el plazo nominal.',
+    )
     fecha_vencimiento = fields.Date(
-        string='Fecha Vencimiento (Gracia / Reclamos)',
-        compute='_compute_fechas_y_vencimiento',
-        store=True,
-        readonly=False,
-        tracking=True,
-        help='Fecha de vencimiento efectiva de la vigencia/gracia para reclamos.',
+        string='Vigente para Reclamos hasta', compute='_compute_fechas', store=True, readonly=False, tracking=True,
+        help='Hasta esta fecha el certificado permite crear reclamos; después pasa a Vencido. El CPM no vence.',
     )
-    fecha_limite_vigencia = fields.Date(
-        string='Fecha Límite de Vigencia para Reclamos',
-        compute='_compute_fecha_limite_vigencia',
-        store=True,
-        help='Fecha real hasta la cual el certificado permite crear tickets de reclamo antes de pasar a Vencido.'
-    )
-    estado_certificado = fields.Selection(
-        ESTADO_CERTIFICADO,
-        string='Estado / Tag',
-        default='vigente',
-        required=True,
-        tracking=True,
-        help='Estado o etiqueta descriptiva del certificado'
-    )
-    dias_para_vencer = fields.Integer(
-        string='Días para Vencer',
-        compute='_compute_dias_para_vencer',
-        help='Días faltantes para el vencimiento de la gracia/validez de reclamos.'
-    )
-    archivo = fields.Binary(
-        string='Archivo PDF',
-        attachment=True,
-        required=True,
-    )
-    archivo_nombre = fields.Char(
-        string='Nombre de archivo',
-        required=True,
-    )
-    notas = fields.Text(
-        string='Observaciones',
-    )
+    dias_para_vencer = fields.Integer(string='Días para Vencer', compute='_compute_dias_para_vencer')
 
-    active = fields.Boolean(
-        string='Activo',
-        default=True,
-        tracking=True,
-    )
+    ticket_ids = fields.One2many('pv.ticket', 'certificado_id', string='Tickets / Reclamos')
+    ticket_count = fields.Integer(string='Cantidad de Tickets', compute='_compute_ticket_count')
 
-    @api.depends('tipo', 'fecha', 'maquina_id', 'maquina_id.fecha_liberacion')
-    def _compute_fechas_y_vencimiento(self):
+    # --- Plazos ---
+    def _get_param_dias(self, param):
+        key, default = param
+        try:
+            return int(self.env['ir.config_parameter'].sudo().get_param(key, default))
+        except ValueError:
+            return default
+
+    @api.model
+    def _get_plazo_nominal_carga(self, tipo, maquina):
+        """Fecha límite nominal para cargar este tipo de certificado, contada desde la liberación de la máquina."""
+        if tipo not in PLAZO_CARGA or not maquina:
+            return False
+        base = maquina.fecha_liberacion or fields.Date.to_date(maquina.create_date) or fields.Date.today()
+        return base + timedelta(days=self._get_param_dias(PLAZO_CARGA[tipo]))
+
+    def _get_vencimiento_reclamos(self):
+        if self.tipo not in VIGENCIA_RECLAMOS:
+            return False
+        return (self.fecha or fields.Date.today()) + timedelta(days=self._get_param_dias(VIGENCIA_RECLAMOS[self.tipo]))
+
+    def _get_fecha_carga(self):
+        """Fecha real en que se subió el certificado (no la fecha que declara el usuario)."""
+        return fields.Date.to_date(self.create_date) if self.create_date else fields.Date.today()
+
+    @api.depends('tipo', 'fecha', 'maquina_id.fecha_liberacion')
+    def _compute_fechas(self):
         for rec in self:
-            if not rec.maquina_id or not rec.tipo:
-                rec.fecha_limite_carga = rec.fecha_limite_carga or False
-                rec.dias_retraso_carga = 0
-                rec.fecha_vencimiento = rec.fecha_vencimiento or False
-                continue
-
-            fecha_emision = fields.Date.to_date(rec.fecha) or fields.Date.today()
-            plazo_nominal = rec._get_plazo_nominal_carga(rec.tipo, rec.maquina_id)
-            rec.fecha_limite_carga = plazo_nominal
-            rec.dias_retraso_carga = rec._get_dias_retraso(plazo_nominal, rec._get_fecha_carga())
-
-            calc_venc = rec._get_calculated_vencimiento(rec.tipo, fecha_emision, rec.maquina_id)
-            rec.fecha_vencimiento = calc_venc
-
-    @api.depends('fecha_vencimiento')
-    def _compute_fecha_limite_vigencia(self):
-        for rec in self:
-            rec.fecha_limite_vigencia = rec.fecha_vencimiento
+            plazo = self._get_plazo_nominal_carga(rec.tipo, rec.maquina_id)
+            rec.fecha_limite_carga = plazo
+            rec.dias_retraso_carga = max((rec._get_fecha_carga() - plazo).days, 0) if plazo else 0
+            rec.fecha_vencimiento = rec._get_vencimiento_reclamos()
 
     @api.depends('fecha_vencimiento')
     def _compute_dias_para_vencer(self):
         hoy = fields.Date.today()
         for rec in self:
-            if rec.fecha_vencimiento:
-                rec.dias_para_vencer = (rec.fecha_vencimiento - hoy).days
-            else:
-                rec.dias_para_vencer = 0
-
-    # --- Concesionario Emisor ---
-    concesionario_id = fields.Many2one(
-        'pv.concesionario',
-        string='Concesionario Emisor',
-        store=True,
-        tracking=True,
-    )
-
-    # --- Tickets / Reclamos ---
-    ticket_ids = fields.One2many(
-        'pv.ticket',
-        'certificado_id',
-        string='Tickets / Reclamos',
-    )
-    ticket_count = fields.Integer(
-        compute='_compute_ticket_count',
-        string='Cantidad de Tickets',
-    )
+            rec.dias_para_vencer = (rec.fecha_vencimiento - hoy).days if rec.fecha_vencimiento else 0
 
     @api.depends('ticket_ids')
     def _compute_ticket_count(self):
         for rec in self:
             rec.ticket_count = len(rec.ticket_ids)
+
+    @api.depends('tipo', 'maquina_id.of')
+    def _compute_name(self):
+        for rec in self:
+            rec.name = f"{dict(TIPO_CERTIFICADO).get(rec.tipo, '')} - {rec.maquina_id.sudo().of or ''}"
+
+    def _es_vigente_para_reclamos(self):
+        self.ensure_one()
+        return (self.active and self.estado_certificado == 'vigente'
+                and not (self.fecha_vencimiento and self.fecha_vencimiento < fields.Date.today()))
+
+    # --- Validaciones ---
+    def _otros_de_la_maquina(self, tipo, estados):
+        return self.search_count([
+            ('maquina_id', '=', self.maquina_id.id),
+            ('tipo', '=', tipo),
+            ('estado_certificado', 'in', estados),
+            ('active', '=', True),
+            ('id', '!=', self.id),
+        ])
+
+    @api.constrains('tipo', 'maquina_id', 'estado_certificado', 'active')
+    def _check_secuencia(self):
+        """Secuencia FRU -> FEU -> CPM, un solo vigente por tipo y nada después del CPM."""
+        for rec in self:
+            if not rec.active or rec.estado_certificado != 'vigente':
+                continue
+            maquina = rec.maquina_id.name
+            if rec.maquina_id.estado == 'pendiente':
+                raise ValidationError(_('No se pueden cargar certificados en la máquina %s porque se encuentra en proceso de transferencia pendiente.', maquina))
+            if rec._otros_de_la_maquina('cpm', ['vigente']):
+                raise ValidationError(_('La máquina %s ya posee un Certificado de Puesta en Marcha (CPM) vigente. No se pueden agregar más certificados a una máquina completa.', maquina))
+            if rec.tipo == 'fru' and rec._otros_de_la_maquina('fru', ESTADOS_CARGADO):
+                raise ValidationError(_('El Formulario de Recepción de Unidad (FRU) ya ha sido cargado para esta máquina y no puede renovarse. Debe cargar el Formulario de Entrega (FEU).'))
+            if rec.tipo != 'fru' and rec._otros_de_la_maquina(rec.tipo, ['vigente']):
+                raise ValidationError(_('Ya existe un certificado vigente de tipo "%s" para esta máquina.', dict(TIPO_CERTIFICADO)[rec.tipo]))
+            if rec.tipo in ('feu', 'cpm') and not rec._otros_de_la_maquina('fru', ESTADOS_CARGADO):
+                raise ValidationError(_('No se puede cargar el %s sin antes haber cargado el Formulario de Recepción de Unidad (FRU) para la máquina %s.', dict(TIPO_CERTIFICADO)[rec.tipo], maquina))
+            if rec.tipo == 'cpm' and not rec._otros_de_la_maquina('feu', ['vigente']):
+                if rec._otros_de_la_maquina('feu', ['vencido']):
+                    raise ValidationError(_('El Formulario de Entrega de Unidad (FEU) de la máquina %s se encuentra vencido. Debe renovarlo antes de poder cargar el Certificado de Puesta en Marcha (CPM).', maquina))
+                raise ValidationError(_('No se puede cargar un Certificado de Puesta en Marcha (CPM) sin antes haber cargado un Formulario de Entrega de Unidad (FEU) vigente para la máquina %s.', maquina))
+
+    @api.constrains('fecha')
+    def _check_fecha_no_futura(self):
+        if any(rec.fecha > fields.Date.today() for rec in self):
+            raise ValidationError(_('La fecha del certificado no puede ser posterior a hoy.'))
+
+    @api.constrains('archivo', 'archivo_nombre')
+    def _check_archivo(self):
+        for rec in self:
+            if not rec.archivo:
+                raise ValidationError(_('El archivo adjunto es obligatorio.'))
+            if not (rec.archivo_nombre or '').lower().endswith(EXTENSIONES_ARCHIVO):
+                raise ValidationError(_('El archivo debe tener una de las siguientes extensiones: %s y este es: %s', EXTENSIONES_ARCHIVO, rec.archivo_nombre))
+
+    # --- ORM ---
+    @api.model_create_multi
+    def create(self, vals_list):
+        es_staff = self.env.su or self.env.user.has_group('posventa.group_pv_staff')
+        concesionario_usuario = self.env['pv.concesionario']._get_concesionario_for_user()
+        for vals in vals_list:
+            maquina = self.env['pv.maquina'].sudo().browse(vals.get('maquina_id')).exists()
+            if es_staff:
+                vals['concesionario_id'] = vals.get('concesionario_id') or (concesionario_usuario or maquina.concesionario_id).id
+                continue
+            # El concesionario carga certificados vigentes a su nombre: estado y emisor no son suyos de elegir
+            if not concesionario_usuario:
+                raise UserError(_('Su usuario no está asociado a ningún concesionario.'))
+            if maquina.concesionario_id != concesionario_usuario:
+                raise ValidationError(_('No puede cargar certificados para una máquina que no pertenece a su concesionario actual.'))
+            fecha = fields.Date.to_date(vals.get('fecha')) or fields.Date.today()
+            if maquina.fecha_liberacion and fecha < maquina.fecha_liberacion:
+                raise ValidationError(_(
+                    'La fecha del certificado no puede ser anterior a la fecha de liberación de la máquina (%s).',
+                    maquina.fecha_liberacion))
+            vals.update(concesionario_id=concesionario_usuario.id, estado_certificado='vigente', active=True)
+        records = super().create(vals_list)
+        records._actualizar_estado_maquina()
+        return records
+
+    def write(self, vals):
+        if CAMPOS_DOCUMENTO.intersection(vals) and not (self.env.su or self.env.user.has_group('posventa.group_pv_admin')):
+            raise UserError(_('No se puede modificar un certificado una vez guardado. Si necesita cambios, '
+                              'solicite al Administrador de Posventa que lo archive.'))
+        res = super().write(vals)
+        if vals.get('active') or vals.get('estado_certificado') == 'vigente':
+            self._actualizar_estado_maquina()
+        return res
+
+    def _actualizar_estado_maquina(self):
+        """Un FRU vigente pone la máquina en STOCK y un CPM vigente en VENDIDA."""
+        mensajes = {
+            'fru': ('stock', _('Formulario de Recepción de Unidad (FRU) cargado. La máquina pasa a estado STOCK.')),
+            'cpm': ('vendida', _('Certificado de Puesta en Marcha (CPM) cargado. La máquina pasa a estado VENDIDA.')),
+        }
+        for rec in self.filtered(lambda c: c.active and c.estado_certificado == 'vigente' and c.tipo in mensajes):
+            estado, mensaje = mensajes[rec.tipo]
+            maquina = rec.maquina_id.sudo()
+            if maquina.estado != estado:
+                maquina.write({'estado': estado})
+                maquina.message_post(body=mensaje, message_type='notification', subtype_xmlid='mail.mt_note')
+
+    # --- Crons ---
+    @api.model
+    def _archive_expired_certificates(self):
+        """Cron diario: pasa a Vencido los certificados cuya vigencia para reclamos expiró (no aplica al CPM)."""
+        vencidos = self.search([
+            ('active', '=', True),
+            ('estado_certificado', '=', 'vigente'),
+            ('maquina_id.tiene_cpm', '=', False),
+            ('fecha_vencimiento', '<', fields.Date.today()),
+        ])
+        for cert in vencidos:
+            cert.maquina_id._post_nota(_(
+                'El certificado %s ha superado su vigencia para reclamos (límite: %s). Su estado pasa a Vencido.',
+                dict(TIPO_CERTIFICADO)[cert.tipo], cert.fecha_vencimiento))
+        vencidos.write({'estado_certificado': 'vencido'})
+
+    @api.model
+    def _notify_upcoming_certificate_expiration(self):
+        """Cron diario: avisa al concesionario 3 días antes de que venza un certificado."""
+        por_vencer = self.search([
+            ('active', '=', True),
+            ('estado_certificado', '=', 'vigente'),
+            ('fecha_vencimiento', '=', fields.Date.today() + timedelta(days=3)),
+        ])
+        for cert in por_vencer:
+            tipo = dict(TIPO_CERTIFICADO)[cert.tipo]
+            maquina = cert.maquina_id
+            maquina._post_nota(_("⚠️ El certificado %s de la máquina %s vencerá en 3 días (el %s).",
+                                 tipo, maquina.name, cert.fecha_vencimiento))
+            email = cert.concesionario_id.partner_id.email
+            if email:
+                url = f"{maquina.get_base_url()}/my/posventa/maquina/{maquina.id}"
+                self.env['mail.mail'].sudo().create({
+                    'subject': _('Vencimiento Próximo de Certificado: %s', maquina.name),
+                    'body_html': Markup(_(
+                        "<p>Estimado/a Concesionario %(concesionario)s,</p>"
+                        "<p>El certificado <b>%(tipo)s</b> de la máquina <b>%(maquina)s</b> vence el %(fecha)s.</p>"
+                        "<p>Por favor, cargue el próximo certificado a la brevedad desde el "
+                        "<a href='%(url)s'>portal de Posventa</a> para evitar bloqueos.</p>"
+                    )) % {
+                        'concesionario': escape(cert.concesionario_id.name), 'tipo': escape(tipo),
+                        'maquina': escape(maquina.name), 'fecha': cert.fecha_vencimiento, 'url': escape(url),
+                    },
+                    'email_to': email,
+                }).send()
+
+    # --- Portal ---
+    def _get_portal_values(self):
+        """Datos del certificado para el portal (detalle de máquina, listado y asistentes)."""
+        self.ensure_one()
+        etiqueta, color = {
+            'vigente': (_('Vigente'), 'success'),
+            'vencido': (_('Vencido'), 'danger'),
+            'archivado_traslado': (_('Archivado por Traslado'), 'warning'),
+        }.get(self.estado_certificado, (_('Archivado Manualmente'), 'secondary'))
+        if self.estado_certificado == 'vigente' and self.dias_retraso_carga:
+            etiqueta = (_('Vencido luego de 1 día') if self.dias_retraso_carga == 1
+                        else _('Vencido luego de %s días', self.dias_retraso_carga))
+            color = 'danger'
+        maquina = self.maquina_id.sudo()
+        return {
+            'id': self.id,
+            'tipo': self.tipo,
+            'tipo_label': dict(TIPO_CERTIFICADO).get(self.tipo, ''),
+            'fecha': str(self.fecha or ''),
+            'fecha_vencimiento': str(self.fecha_vencimiento or ''),
+            'estado_certificado': self.estado_certificado,
+            'estado_certificado_label': etiqueta,
+            'tag_badge': color,
+            'concesionario_name': self.concesionario_id.name or '',
+            'archivo_nombre': self.archivo_nombre or '',
+            'active': self.active,
+            'maquina_id': maquina.id,
+            'maquina_name': maquina.name or '',
+        }
+
+    @api.model
+    def get_portal_list_data(self, search_term='', tipo_filter='', estado_filter=''):
+        """Certificados visibles por el usuario para el listado del portal."""
+        domain = [('active', '=', True)]
+        if search_term:
+            domain += ['|', '|', ('maquina_id.of', 'ilike', search_term), ('archivo_nombre', 'ilike', search_term),
+                       ('concesionario_id.name', 'ilike', search_term)]
+        if tipo_filter:
+            domain.append(('tipo', '=', tipo_filter))
+        if estado_filter:
+            domain.append(('estado_certificado', '=', estado_filter))
+        mi_concesionario = self.env['pv.concesionario']._get_concesionario_for_user()
+        res = []
+        for cert in self.search(domain):
+            maquina = cert.maquina_id.sudo()
+            valores = cert._get_portal_values()
+            valores['puede_ver_maquina'] = bool(mi_concesionario) and mi_concesionario in (
+                maquina.concesionario_id, maquina.concesionario_destino_id if maquina.estado == 'pendiente' else False)
+            res.append(valores)
+        return res
 
     def action_view_tickets(self):
         self.ensure_one()
@@ -175,413 +330,5 @@ class PvCertificado(models.Model):
             'res_model': 'pv.ticket',
             'view_mode': 'list,form',
             'domain': [('certificado_id', '=', self.id)],
-            'context': {
-                'default_maquina_id': self.maquina_id.id,
-                'default_certificado_id': self.id,
-            },
+            'context': {'default_maquina_id': self.maquina_id.id, 'default_certificado_id': self.id},
         }
-
-    @api.depends('tipo', 'maquina_id.of')
-    def _compute_name(self):
-        for rec in self:
-            tipo_label = dict(TIPO_CERTIFICADO).get(rec.tipo, '')
-            of = rec.maquina_id.sudo().of or ''
-            rec.name = f"{tipo_label} - {of}"
-
-    @api.constrains('tipo', 'maquina_id', 'estado_certificado', 'active')
-    def _check_certificado_order(self):
-        for rec in self:
-            if not rec.active or rec.estado_certificado != 'vigente':
-                continue
-            if not rec.maquina_id:
-                continue
-
-            # Bloqueo si la máquina está en proceso de transferencia
-            if rec.maquina_id.estado == 'pendiente':
-                raise ValidationError(_(
-                    'No se pueden cargar certificados en la máquina %s porque se encuentra en proceso de transferencia pendiente.',
-                    rec.maquina_id.name
-                ))
-
-            # Si es concesionario, validar que la máquina pertenezca a su concesionario
-            if self.env.user.has_group('posventa.group_pv_concesionario') and not self.env.user.has_group('posventa.group_pv_staff'):
-                concesionario = self.env['pv.concesionario']._get_concesionario_for_user(self.env.user)
-                if not concesionario or rec.maquina_id.concesionario_id.id != concesionario.id:
-                    raise ValidationError(_('No puede cargar certificados para una máquina que no pertenece a su concesionario actual.'))
-
-            if rec.tipo == 'feu':
-                fru_exists = self.search_count([
-                    ('maquina_id', '=', rec.maquina_id.id),
-                    ('tipo', '=', 'fru'),
-                    ('estado_certificado', 'in', ('vigente', 'vencido')),
-                    ('active', '=', True),
-                    ('id', '!=', rec.id),
-                ])
-                if not fru_exists:
-                    raise ValidationError(_(
-                        'No se puede cargar un Formulario de Entrega de Unidad (FEU) sin antes haber cargado '
-                        'el Formulario de Recepción de Unidad (FRU) para la máquina %s.', rec.maquina_id.name
-                    ))
-            elif rec.tipo == 'cpm':
-                fru_exists = self.search_count([
-                    ('maquina_id', '=', rec.maquina_id.id),
-                    ('tipo', '=', 'fru'),
-                    ('estado_certificado', 'in', ('vigente', 'vencido')),
-                    ('active', '=', True),
-                    ('id', '!=', rec.id),
-                ])
-                feu_vigente = self.search_count([
-                    ('maquina_id', '=', rec.maquina_id.id),
-                    ('tipo', '=', 'feu'),
-                    ('estado_certificado', '=', 'vigente'),
-                    ('active', '=', True),
-                    ('id', '!=', rec.id),
-                ])
-                feu_vencido = self.search_count([
-                    ('maquina_id', '=', rec.maquina_id.id),
-                    ('tipo', '=', 'feu'),
-                    ('estado_certificado', '=', 'vencido'),
-                    ('active', '=', True),
-                    ('id', '!=', rec.id),
-                ])
-                if not fru_exists:
-                    raise ValidationError(_(
-                        'No se puede cargar un Certificado de Puesta en Marcha (CPM) sin antes haber cargado '
-                        'el Formulario de Recepción (FRU) para la máquina %s.', rec.maquina_id.name
-                    ))
-                if feu_vencido and not feu_vigente:
-                    raise ValidationError(_(
-                        'El Formulario de Entrega de Unidad (FEU) de la máquina %s se encuentra vencido. '
-                        'Debe renovarlo antes de poder cargar el Certificado de Puesta en Marcha (CPM).', rec.maquina_id.name
-                    ))
-                if not feu_vigente:
-                    raise ValidationError(_(
-                        'No se puede cargar un Certificado de Puesta en Marcha (CPM) sin antes haber cargado '
-                        'un Formulario de Entrega de Unidad (FEU) vigente para la máquina %s.', rec.maquina_id.name
-                    ))
-
-    def _get_fecha_carga(self):
-        """Fecha real en que se subió el certificado (no la fecha que declara el usuario)."""
-        self.ensure_one()
-        return fields.Date.to_date(self.create_date) if self.create_date else fields.Date.today()
-
-    @staticmethod
-    def _get_dias_retraso(plazo_nominal, fecha_carga):
-        if plazo_nominal and fecha_carga > plazo_nominal:
-            return (fecha_carga - plazo_nominal).days
-        return 0
-
-    @api.constrains('fecha')
-    def _check_fecha_no_futura(self):
-        hoy = fields.Date.today()
-        for rec in self:
-            if rec.fecha and rec.fecha > hoy:
-                raise ValidationError(_('La fecha del certificado no puede ser posterior a hoy.'))
-
-    def _get_calculated_vencimiento(self, tipo, fecha, maquina):
-        """Calcula la fecha de vencimiento real de la vigencia/gracia para reclamos."""
-        from datetime import timedelta
-        if not maquina or tipo == 'cpm':
-            return False
-
-        param_obj = self.env['ir.config_parameter'].sudo()
-        ref_date = fields.Date.to_date(fecha) if fecha else fields.Date.today()
-        
-        if tipo == 'fru':
-            try:
-                fru_grace_days = int(param_obj.get_param('posventa.fru_grace_days', 3))
-            except ValueError:
-                fru_grace_days = 3
-            return ref_date + timedelta(days=fru_grace_days)
-        elif tipo == 'feu':
-            try:
-                feu_validity_days = int(param_obj.get_param('posventa.feu_claims_validity_days', 90))
-            except ValueError:
-                feu_validity_days = 90
-            return ref_date + timedelta(days=feu_validity_days)
-        return False
-
-    def _get_plazo_nominal_carga(self, tipo, maquina):
-        """Devuelve la fecha límite nominal que tenía la máquina para cargar este tipo de certificado."""
-        from datetime import timedelta
-        if not maquina or tipo == 'cpm':
-            return False
-
-        raw_base = maquina.fecha_liberacion or (fields.Date.to_date(maquina.create_date) if maquina.create_date else fields.Date.today())
-        base_date = fields.Date.to_date(raw_base) or fields.Date.today()
-        param_obj = self.env['ir.config_parameter'].sudo()
-        
-        if tipo == 'fru':
-            try:
-                fru_days = int(param_obj.get_param('posventa.fru_expiration_days', 10))
-            except ValueError:
-                fru_days = 10
-            return base_date + timedelta(days=fru_days)
-        elif tipo == 'feu':
-            try:
-                feu_days = int(param_obj.get_param('posventa.feu_expiration_days', 20))
-            except ValueError:
-                feu_days = 20
-            return base_date + timedelta(days=feu_days)
-        return False
-
-    @api.model_create_multi
-    def create(self, vals_list):
-        hoy = fields.Date.today()
-        es_staff = self.env.su or self.env.user.has_group('posventa.group_pv_staff')
-        concesionario_usuario = self.env['pv.concesionario']._get_concesionario_for_user(self.env.user)
-        for vals in vals_list:
-            maquina = self.env['pv.maquina'].sudo().browse(vals.get('maquina_id'))
-            fecha_emision = fields.Date.to_date(vals.get('fecha')) if vals.get('fecha') else hoy
-            if not es_staff:
-                # El concesionario solo carga certificados vigentes a su nombre; estado y emisor no son suyos de elegir
-                if not concesionario_usuario:
-                    raise UserError(_('Su usuario no está asociado a ningún concesionario.'))
-                vals['concesionario_id'] = concesionario_usuario.id
-                vals['estado_certificado'] = 'vigente'
-                vals['active'] = True
-                if maquina.exists() and maquina.fecha_liberacion and fecha_emision < maquina.fecha_liberacion:
-                    raise ValidationError(_(
-                        'La fecha del certificado no puede ser anterior a la fecha de liberación de la máquina (%s).',
-                        maquina.fecha_liberacion))
-            elif not vals.get('concesionario_id'):
-                if concesionario_usuario:
-                    vals['concesionario_id'] = concesionario_usuario.id
-                elif maquina.exists() and maquina.concesionario_id:
-                    vals['concesionario_id'] = maquina.concesionario_id.id
-            if maquina.exists():
-                tipo = vals.get('tipo')
-                vals['fecha_vencimiento'] = self._get_calculated_vencimiento(tipo, fecha_emision, maquina)
-                plazo_nominal = self._get_plazo_nominal_carga(tipo, maquina)
-                vals['fecha_limite_carga'] = plazo_nominal
-                vals['dias_retraso_carga'] = self._get_dias_retraso(plazo_nominal, hoy)
-
-        records = super().create(vals_list)
-        for rec in records:
-            rec.maquina_id.modified(['certificado_ids'])
-            if rec.active and rec.estado_certificado == 'vigente':
-                if rec.tipo == 'fru':
-                    rec.maquina_id.sudo().write({'estado': 'stock'})
-                    rec.maquina_id.sudo().message_post(
-                        body=_('Formulario de Recepción de Unidad (FRU) cargado. La máquina pasa a estado STOCK.'),
-                        message_type='notification',
-                        subtype_xmlid='mail.mt_note'
-                    )
-                elif rec.tipo == 'cpm':
-                    rec.maquina_id.sudo().write({'estado': 'vendida'})
-                    rec.maquina_id.sudo().message_post(
-                        body=_('Certificado de Puesta en Marcha (CPM) cargado. La máquina pasa a estado VENDIDA.'),
-                        message_type='notification',
-                        subtype_xmlid='mail.mt_note'
-                    )
-        return records
-
-    def write(self, vals):
-        # El documento cargado es inmutable salvo para el Administrador (el concesionario no tiene write por ACL)
-        if not self.env.su and not self.env.user.has_group('posventa.group_pv_admin'):
-            if {'tipo', 'maquina_id', 'archivo', 'archivo_nombre', 'fecha'}.intersection(vals):
-                raise UserError(_('No se puede modificar un certificado una vez guardado. Si necesita cambios, '
-                                  'solicite al Administrador de Posventa que lo archive.'))
-
-        res = super().write(vals)
-
-        if 'active' in vals or 'estado_certificado' in vals or 'maquina_id' in vals:
-            for rec in self:
-                rec.maquina_id.modified(['certificado_ids'])
-
-        if ('active' in vals and vals['active']) or ('estado_certificado' in vals and vals['estado_certificado'] == 'vigente'):
-            for rec in self:
-                if rec.estado_certificado == 'vigente':
-                    if rec.tipo == 'fru':
-                        rec.maquina_id.sudo().write({'estado': 'stock'})
-                    elif rec.tipo == 'cpm':
-                        rec.maquina_id.sudo().write({'estado': 'vendida'})
-        return res
-
-    @api.constrains('maquina_id', 'tipo', 'estado_certificado', 'active')
-    def _check_unique_tipo_maquina(self):
-        for rec in self:
-            if rec.estado_certificado != 'vigente' or not rec.active:
-                continue
-            if rec.tipo == 'fru':
-                # El FRU no se puede renovar: no puede haber más de un FRU (vigente o vencido)
-                fru_count = self.search_count([
-                    ('maquina_id', '=', rec.maquina_id.id),
-                    ('tipo', '=', 'fru'),
-                    ('estado_certificado', 'in', ('vigente', 'vencido')),
-                    ('active', '=', True),
-                    ('id', '!=', rec.id)
-                ])
-                if fru_count > 0:
-                    raise ValidationError(_('El Formulario de Recepción de Unidad (FRU) ya ha sido cargado para esta máquina y no puede renovarse. Debe cargar el Formulario de Entrega (FEU).'))
-            else:
-                domain = [
-                    ('maquina_id', '=', rec.maquina_id.id),
-                    ('tipo', '=', rec.tipo),
-                    ('estado_certificado', '=', 'vigente'),
-                    ('active', '=', True),
-                    ('id', '!=', rec.id)
-                ]
-                if self.search_count(domain) > 0:
-                    tipo_label = dict(TIPO_CERTIFICADO).get(rec.tipo, rec.tipo)
-                    raise ValidationError(_('Ya existe un certificado vigente de tipo "%s" para esta máquina.', tipo_label))
-
-    @api.constrains('maquina_id', 'estado_certificado', 'active')
-    def _check_maquina_cpm_completa(self):
-        for rec in self:
-            if not rec.active or rec.estado_certificado != 'vigente' or not rec.maquina_id:
-                continue
-            cpm_exists = self.search_count([
-                ('maquina_id', '=', rec.maquina_id.id),
-                ('tipo', '=', 'cpm'),
-                ('estado_certificado', '=', 'vigente'),
-                ('active', '=', True),
-                ('id', '!=', rec.id),
-            ])
-            if cpm_exists:
-                raise ValidationError(_(
-                    'La máquina %s ya posee un Certificado de Puesta en Marcha (CPM) vigente. '
-                    'No se pueden agregar más certificados a una máquina completa.', rec.maquina_id.name
-                ))
-
-    @api.constrains('archivo', 'archivo_nombre')
-    def _check_archivo_pdf(self):
-        extensiones_validas = ('.pdf', '.jpg', '.jpeg', '.png')
-        for rec in self:
-            if not rec.archivo:
-                raise ValidationError(_('El archivo adjunto es obligatorio.'))
-            if rec.archivo_nombre and not rec.archivo_nombre.lower().endswith(extensiones_validas):
-                raise ValidationError(_('El archivo debe tener una de las siguientes extensiones: %s y este es: %s', extensiones_validas, rec.archivo_nombre))
-
-    @api.model
-    def _archive_expired_certificates(self):
-        """Cron diario: marcar certificados vencidos cuya fecha límite de vigencia de reclamos haya expirado (excluyendo máquinas con CPM / vendidas)."""
-        hoy = fields.Date.today()
-        certificados_vencidos = self.search([
-            ('active', '=', True),
-            ('estado_certificado', '=', 'vigente'),
-            ('tipo', '!=', 'cpm'),
-            ('maquina_id.tiene_cpm', '=', False),
-            ('maquina_id.estado', '!=', 'vendida'),
-            ('fecha_limite_vigencia', '!=', False),
-            ('fecha_limite_vigencia', '<', hoy)
-        ])
-        
-        for cert in certificados_vencidos:
-            tipo_label = dict(TIPO_CERTIFICADO).get(cert.tipo, cert.tipo)
-            cert.maquina_id.sudo().message_post(
-                body=_('El certificado %s ha superado su vigencia para reclamos (límite: %s). Su estado pasa a Vencido.') % (tipo_label, cert.fecha_limite_vigencia),
-                message_type='notification',
-                subtype_xmlid='mail.mt_note'
-            )
-        
-        if certificados_vencidos:
-            certificados_vencidos.write({'estado_certificado': 'vencido'})
-
-    @api.model
-    def _notify_upcoming_certificate_expiration(self):
-        """Cron diario: Notificar a los concesionarios 3 días antes de que venza cualquier certificado."""
-        from datetime import timedelta
-        hoy = fields.Date.today()
-        tres_dias_despues = hoy + timedelta(days=3)
-        
-        certificados_por_vencer = self.search([
-            ('active', '=', True),
-            ('estado_certificado', '=', 'vigente'),
-            ('fecha_vencimiento', '=', tres_dias_despues)
-        ])
-        
-        for cert in certificados_por_vencer:
-            tipo_label = dict(TIPO_CERTIFICADO).get(cert.tipo, cert.tipo)
-            body_msg = _(
-                "⚠️ El certificado %s de la máquina %s vencerá en 3 días (el %s)."
-            ) % (tipo_label, cert.maquina_id.name, cert.fecha_vencimiento)
-            
-            cert.maquina_id.sudo().message_post(
-                body=body_msg,
-                message_type='notification',
-                subtype_xmlid='mail.mt_note'
-            )
-            
-            partner = cert.concesionario_id.partner_id
-            if partner and partner.email:
-                self.env['mail.mail'].sudo().create({
-                    'subject': _('Vencimiento Próximo de Certificado: %s') % cert.maquina_id.name,
-                    'body_html': f'<p>Estimado/a Concesionario {cert.concesionario_id.name},</p>'
-                                  f'<p>Le informamos que el certificado <b>{tipo_label}</b> para la máquina '
-                                  f'<b>{cert.maquina_id.name}</b> vencerá el {cert.fecha_vencimiento}.</p>'
-                                  f'<p>Por favor, ingrese un nuevo certificado a la brevedad para evitar bloqueos.</p>',
-                     'email_to': partner.email,
-                }).send()
-
-    @api.model
-    def get_portal_list_data(self, search_term="", tipo_filter="", estado_filter=""):
-        """Return list of certificates for the concesionario portal."""
-        domain = [('active', '=', True)]
-        if search_term:
-            domain += ['|', '|',
-                ('maquina_id.of', 'ilike', search_term),
-                ('archivo_nombre', 'ilike', search_term),
-                ('concesionario_id.name', 'ilike', search_term),
-            ]
-        if tipo_filter:
-            domain += [('tipo', '=', tipo_filter)]
-        if estado_filter:
-            domain += [('estado_certificado', '=', estado_filter)]
-
-        records = self.search(domain, order='fecha desc, id desc')
-        res = []
-        is_internal = self.env.user.has_group('posventa.group_pv_staff')
-        mi_concesionario = self.env['pv.concesionario']._get_concesionario_for_user()
-        for c in records:
-            retraso = c.dias_retraso_carga or 0
-            if c.estado_certificado == 'vigente':
-                if retraso > 0:
-                    tag_label = _('Vencido luego de 1 día') if retraso == 1 else _('Vencido luego de %s días') % retraso
-                    tag_badge = 'danger'
-                else:
-                    tag_label = _('Vigente')
-                    tag_badge = 'success'
-            elif c.estado_certificado == 'vencido':
-                tag_label = _('Vencido')
-                tag_badge = 'danger'
-            elif c.estado_certificado == 'archivado_traslado':
-                tag_label = _('Archivado por Traslado')
-                tag_badge = 'warning'
-            elif c.estado_certificado in ('archivado_manual', 'legacy'):
-                tag_label = _('Archivado Manualmente')
-                tag_badge = 'secondary'
-            else:
-                tag_label = dict(self._fields['estado_certificado'].selection).get(c.estado_certificado, c.estado_certificado)
-                tag_badge = 'secondary'
-
-            m = c.maquina_id.sudo() if c.maquina_id else None
-            puede_ver_maquina = bool(
-                is_internal or
-                (m and mi_concesionario and m.concesionario_id == mi_concesionario) or
-                (m and mi_concesionario and m.concesionario_destino_id == mi_concesionario and m.estado == 'pendiente')
-            )
-
-            res.append({
-                'id': c.id,
-                'name': c.name or '',
-                'tipo': c.tipo,
-                'tipo_label': dict(self._fields['tipo'].selection).get(c.tipo, ''),
-                'maquina_id': m.id if m else False,
-                'maquina_name': m.name or '' if m else '',
-                'maquina_of': m.of or '' if m else '',
-                'maquina_tipo_label': dict(self.env['pv.maquina']._fields['tipo'].selection).get(m.tipo, '') if m else '',
-                'puede_ver_maquina': puede_ver_maquina,
-                'fecha': str(c.fecha) if c.fecha else '',
-                'fecha_vencimiento': str(c.fecha_vencimiento) if c.fecha_vencimiento else '',
-                'fecha_limite_vigencia': str(c.fecha_limite_vigencia) if c.fecha_limite_vigencia else '',
-                'dias_para_vencer': c.dias_para_vencer or 0,
-                'dias_retraso_carga': retraso,
-                'estado_certificado': c.estado_certificado,
-                'estado_certificado_label': tag_label,
-                'tag_badge': tag_badge,
-                'concesionario_name': c.concesionario_id.name or '',
-                'archivo_nombre': c.archivo_nombre or '',
-            })
-        return res
-

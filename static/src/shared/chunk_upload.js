@@ -1,8 +1,14 @@
 /** @odoo-module **/
 import { _t } from "@web/core/l10n/translation";
 
-/** Archivos de hasta este tamaño se adjuntan como ir.attachment; los mayores van por fragmentos. */
-export const MAX_STANDARD_SIZE = 20 * 1024 * 1024;
+export function formatFileSize(bytes) {
+    if (!bytes) {
+        return "0 B";
+    }
+    const sizes = ["B", "KB", "MB", "GB"];
+    const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), sizes.length - 1);
+    return parseFloat((bytes / Math.pow(1024, i)).toFixed(1)) + " " + sizes[i];
+}
 
 export function newUploadUuid() {
     return "file_" + Math.random().toString(36).substring(2, 10) + "_" + Date.now();
@@ -15,6 +21,16 @@ export function fileToBase64(file) {
         reader.onerror = (error) => reject(error);
         reader.readAsDataURL(file);
     });
+}
+
+/** Adjunta un archivo chico al ticket (hasta `max_adjunto_bytes` de get_wizard_catalog_data). */
+export async function adjuntarArchivo(orm, ticketId, file, datas = null) {
+    return orm.call("pv.ticket", "portal_adjuntar_archivo", [
+        [ticketId],
+        file.name,
+        datas || (await fileToBase64(file)),
+        file.type || "application/octet-stream",
+    ]);
 }
 
 /**

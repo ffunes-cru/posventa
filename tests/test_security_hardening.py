@@ -27,8 +27,7 @@ class TestSecurityHardening(TestPosventaCommon):
     def _ticket_a(self, **vals):
         values = {
             'maquina_id': self.maquina_a.id,
-            'tipo_ticket': 'pre_pm',
-            'desvio_tipo': 'faltante',
+            'desvio_tipo_id': self.desvio_faltante.id,
             'descripcion': 'Falta manual',
             'multimedia_url': 'https://drive.google.com/test-file',
         }
@@ -94,7 +93,7 @@ class TestSecurityHardening(TestPosventaCommon):
         })
         user_contacto_b = self.env['res.users'].create({
             'name': 'Operador B', 'login': 'operador_b', 'partner_id': contacto_b.id,
-            'group_ids': [(6, 0, [self.group_internal.id, self.group_concesionario.id])],
+            'group_ids': [(6, 0, [self.group_portal.id, self.group_concesionario.id])],
         })
         self.maquina_a.with_user(self.user_concesionario_a).action_iniciar_transferencia_portal(
             self.concesionario_b.id, self.state.id, 'Córdoba')
@@ -106,7 +105,7 @@ class TestSecurityHardening(TestPosventaCommon):
         """Un usuario concesionario sin empresa asociada no ve datos de nadie."""
         huerfano = self.env['res.users'].create({
             'name': 'Sin Concesionario', 'login': 'huerfano',
-            'group_ids': [(6, 0, [self.group_internal.id, self.group_concesionario.id])],
+            'group_ids': [(6, 0, [self.group_portal.id, self.group_concesionario.id])],
         })
         self._ticket_a()
         self.assertFalse(self.env['pv.maquina'].with_user(huerfano).search([]))

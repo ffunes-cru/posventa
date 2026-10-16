@@ -74,14 +74,14 @@
             <form string="Ticket de Reclamo">
                 <header>
                     <button name="action_enviar_ticket" string="Enviar Ticket" type="object" class="oe_highlight" invisible="estado != 'borrador'"/>
-                    <button name="action_tomar_ticket" string="Tomar Ticket" type="object" class="oe_highlight" invisible="estado != 'abierto'" groups="posventa.group_pv_staff"/>
-                    <button name="action_aceptar_ticket" string="Aceptar Reclamo" type="object" class="oe_highlight" invisible="estado != 'en_proceso'" groups="posventa.group_pv_staff"/>
-                    <button name="action_rechazar_ticket" string="Rechazar Reclamo" type="object" class="btn-danger" invisible="estado != 'en_proceso'" groups="posventa.group_pv_staff"/>
-                    <button name="action_cerrar_ticket" string="Cerrar Ticket" type="object" class="oe_highlight" invisible="estado != 'aceptado'" groups="posventa.group_pv_staff"/>
+                    <button name="action_tomar_ticket" string="Tomar Ticket" type="object" class="oe_highlight" invisible="estado != 'abierto'"/>
+                    <button name="action_aceptar_ticket" string="Aceptar Reclamo" type="object" class="oe_highlight" invisible="estado != 'en_proceso'"/>
+                    <button name="action_rechazar_ticket" string="Rechazar Reclamo" type="object" class="btn-danger" invisible="estado != 'en_proceso'"/>
+                    <button name="action_cerrar_ticket" string="Cerrar Ticket" type="object" class="oe_highlight" invisible="estado != 'aceptado'"/>
                     
                     <button name="action_back_to_borrador" string="Volver a Borrador" type="object" class="btn-secondary" invisible="estado != 'abierto'" groups="posventa.group_pv_admin"/>
-                    <button name="action_back_to_abierto" string="Volver a Abierto" type="object" class="btn-secondary" invisible="estado != 'en_proceso'" groups="posventa.group_pv_staff"/>
-                    <button name="action_back_to_en_proceso" string="Volver a En Proceso" type="object" class="btn-secondary" invisible="estado not in ('aceptado', 'rechazado')" groups="posventa.group_pv_staff"/>
+                    <button name="action_back_to_abierto" string="Volver a Abierto" type="object" class="btn-secondary" invisible="estado != 'en_proceso'"/>
+                    <button name="action_back_to_en_proceso" string="Volver a En Proceso" type="object" class="btn-secondary" invisible="estado not in ('aceptado', 'rechazado')"/>
                     <button name="action_back_to_aceptado" string="Volver a Aceptado" type="object" class="btn-secondary" invisible="estado != 'cerrado'" groups="posventa.group_pv_admin"/>
                     
                     <field name="estado" widget="statusbar" statusbar_visible="abierto,en_proceso,aceptado,cerrado"/>
@@ -114,8 +114,7 @@
                         </group>
                         <group string="Operador e Información General">
                             <field name="operador_id" readonly="estado != 'borrador'"/>
-                            <field name="responsable_id" readonly="1" groups="!posventa.group_pv_staff"/>
-                            <field name="responsable_id" readonly="estado in ('borrador', 'abierto')" groups="posventa.group_pv_staff"/>
+                            <field name="responsable_id" readonly="estado in ('borrador', 'abierto')"/>
                             <field name="tipo_garantia" widget="badge" invisible="estado not in ('aceptado', 'cerrado')"/>
                             <field name="multimedia_url" widget="url" placeholder="https://drive.google.com/drive/folders/..." readonly="estado in ('rechazado', 'cerrado')"/>
                         </group>
@@ -137,7 +136,6 @@
                     <group string="Clasificación Pre-PM" invisible="tipo_ticket == 'post_pm'">
                         <group>
                             <field name="desvio_tipo_id" required="tipo_ticket == 'pre_pm'" readonly="estado != 'borrador'" options="{'no_create_edit': False}"/>
-                            <field name="desvio_tipo" invisible="1"/>
                         </group>
                     </group>
                     <group string="Información Dinámica del Subsistema" invisible="not campo_extra_ids or tipo_ticket == 'pre_pm'">
@@ -153,8 +151,7 @@
                         <field name="placeholder_descripcion" invisible="not subsistema_id or not placeholder_descripcion"/>
                         <field name="descripcion" required="1" readonly="estado != 'borrador'" placeholder="Describa brevemente el problema..."/>
                         <field name="acciones_realizadas" readonly="estado != 'borrador'" placeholder="Indique qué acciones..."/>
-                        <field name="rechazo_tag_ids" widget="many2many_tags" options="{'color_field': 'color', 'no_create': True}" invisible="estado not in ('en_proceso', 'rechazado')" readonly="estado != 'en_proceso'" placeholder="Requerido para rechazar el reclamo..." groups="posventa.group_pv_staff"/>
-                        <field name="rechazo_tag_ids" widget="many2many_tags" options="{'color_field': 'color'}" invisible="estado != 'rechazado'" readonly="1" groups="!posventa.group_pv_staff"/>
+                        <field name="rechazo_tag_ids" widget="many2many_tags" options="{'color_field': 'color', 'no_create': True}" invisible="estado not in ('en_proceso', 'rechazado')" readonly="estado != 'en_proceso'" placeholder="Requerido para rechazar el reclamo..."/>
                     </group>
                     <notebook>
                         <page string="Análisis de Garantía" name="garantia" invisible="estado not in ('aceptado', 'cerrado')">
@@ -168,7 +165,7 @@
                                 <field name="garantia_adjunto_name" invisible="1"/>
                             </group>
                         </page>
-                        <page string="Datos SAP (IT / PV)" name="sap" groups="posventa.group_pv_staff">
+                        <page string="Datos SAP (IT / PV)" name="sap">
                             <group>
                                 <group>
                                     <field name="sap_numero_aviso" readonly="estado not in ('aceptado', 'en_proceso')"/>
@@ -194,21 +191,13 @@
                                 <group string="Indicadores (Horas)">
                                     <field name="t1_horas" string="T1 - Primera Atención"/>
                                     <field name="t2_horas" string="T2 - Solución"/>
-                                    <field name="t3_horas" string="T3 - Solución Definitiva (Interno)" groups="posventa.group_pv_staff"/>
+                                    <field name="t3_horas" string="T3 - Solución Definitiva (Interno)"/>
                                 </group>
                             </group>
                         </page>
 
                         <page string="Medidas y Seguimiento" name="medidas">
-                            <field name="medida_ids" mode="list" groups="!posventa.group_pv_staff" readonly="1">
-                                <list>
-                                    <field name="name"/>
-                                    <field name="tipo"/>
-                                    <field name="fecha_vencimiento"/>
-                                    <field name="estado" widget="badge"/>
-                                </list>
-                            </field>
-                            <field name="medida_ids" mode="list" groups="posventa.group_pv_staff">
+                            <field name="medida_ids" mode="list">
                                 <list editable="bottom">
                                     <field name="name"/>
                                     <field name="tipo"/>
@@ -234,18 +223,17 @@
                                 </div>
                             </div>
                             <field name="multimedia_ids" mode="list" readonly="1">
-                                <list decoration-muted="estado_sync == 'subiendo'" decoration-info="estado_sync == 'procesando'" decoration-success="estado_sync == 'disponible'" decoration-danger="estado_sync == 'error'" delete="true">
+                                <list decoration-info="estado_sync == 'procesando'" decoration-success="estado_sync == 'disponible'" decoration-danger="estado_sync == 'error'" delete="true">
                                     <field name="is_video" column_invisible="True"/>
                                     <field name="name" string="Archivo"/>
                                     <field name="file_size_display" string="Tamaño"/>
                                     <field name="mimetype" string="Formato"/>
-                                    <field name="fecha_subida" string="Fecha Carga"/>
+                                    <field name="create_date" string="Fecha Carga"/>
                                     <field name="usuario_id" string="Cargado por"/>
                                     <field name="estado_sync" widget="badge" 
                                         decoration-info="estado_sync == 'procesando'" 
                                         decoration-success="estado_sync == 'disponible'" 
-                                        decoration-danger="estado_sync == 'error'" 
-                                        decoration-warning="estado_sync == 'subiendo'"/>
+                                        decoration-danger="estado_sync == 'error'"/>
                                     <field name="error_message" string="Detalle Error" optional="show" invisible="estado_sync != 'error'"/>
                                     <button name="action_abrir_drive" type="object" string="Ver en Drive" class="btn-sm btn-primary" icon="fa-external-link" invisible="not drive_url"/>
                                     <button name="action_reintentar_sync" type="object" string="Reintentar Sync" class="btn-sm btn-outline-danger" icon="fa-refresh" invisible="estado_sync != 'error'"/>
@@ -309,7 +297,7 @@
                 <header>
                     <button name="action_abrir_drive" type="object" string="Abrir en Google Drive" class="btn-primary" icon="fa-external-link" invisible="not drive_url"/>
                     <button name="action_reintentar_sync" type="object" string="Reintentar Sincronización" class="btn-secondary" icon="fa-refresh" invisible="estado_sync == 'disponible'"/>
-                    <field name="estado_sync" widget="statusbar" statusbar_visible="subiendo,procesando,disponible"/>
+                    <field name="estado_sync" widget="statusbar" statusbar_visible="procesando,disponible"/>
                 </header>
                 <sheet>
                     <div class="oe_title">
@@ -333,7 +321,7 @@
                         <group string="Ubicación y Almacenamiento">
                             <field name="drive_url" widget="url" readonly="1" invisible="not drive_url"/>
                             <field name="drive_folder_url" widget="url" readonly="1" invisible="not drive_folder_url"/>
-                            <field name="fecha_subida" readonly="1"/>
+                            <field name="create_date" string="Fecha de Carga" readonly="1"/>
                             <field name="usuario_id" readonly="1"/>
                         </group>
                     </group>

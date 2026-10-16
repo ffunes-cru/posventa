@@ -46,8 +46,7 @@ class TestTicketWorkflow(TestPosventaCommon):
         # 1. Create ticket in Borrador and Send directly (Portal behavior)
         ticket = self.env['pv.ticket'].with_user(self.user_concesionario_a).create({
             'maquina_id': self.maquina_stock.id,
-            'tipo_ticket': 'pre_pm',
-            'desvio_tipo': 'rotura',
+            'desvio_tipo_id': self.desvio_rotura.id,
             'descripcion': 'Manguera hidráulica cortada en transporte',
             'acciones_realizadas': 'Se verificó en descarga y se fotografió',
         })
@@ -55,14 +54,10 @@ class TestTicketWorkflow(TestPosventaCommon):
         self.assertEqual(ticket.certificado_id, self.fru)
 
         # Attach standard ir.attachment
-        attachment = self.env['ir.attachment'].with_user(self.user_concesionario_a).create({
-            'name': 'foto_rotura.png',
-            'datas': DUMMY_PDF_BASE64,
-            'res_model': 'pv.ticket',
-            'res_id': ticket.id,
-            'mimetype': 'image/png',
-        })
-        self.assertTrue(attachment.id)
+        # El concesionario (usuario portal) adjunta por el método del modelo, no creando ir.attachment
+        attachment_id = ticket.with_user(self.user_concesionario_a).portal_adjuntar_archivo(
+            'foto_rotura.png', DUMMY_PDF_BASE64, 'image/png')
+        self.assertTrue(attachment_id)
 
         # Concessionaire sends ticket via action_enviar_ticket
         ticket.with_user(self.user_concesionario_a).action_enviar_ticket()
@@ -111,7 +106,6 @@ class TestTicketWorkflow(TestPosventaCommon):
         """Concessionaire creates Post-PM ticket, associates CPM, and Staff rejects it with reason."""
         ticket = self.env['pv.ticket'].with_user(self.user_concesionario_a).create({
             'maquina_id': self.maquina_sold.id,
-            'tipo_ticket': 'post_pm',
             'sistema_id': self.sistema.id,
             'subsistema_id': self.subsistema.id,
             'problema_id': self.problema.id,
@@ -137,8 +131,7 @@ class TestTicketWorkflow(TestPosventaCommon):
         from .common import DUMMY_PDF_BASE64
         ticket = self.env['pv.ticket'].with_user(self.user_concesionario_a).create({
             'maquina_id': self.maquina_stock.id,
-            'tipo_ticket': 'pre_pm',
-            'desvio_tipo': 'faltante',
+            'desvio_tipo_id': self.desvio_faltante.id,
             'descripcion': 'Falta manual y bulón',
             'multimedia_url': 'https://drive.google.com/test-mandatory-file-1',
         })
@@ -153,8 +146,7 @@ class TestTicketWorkflow(TestPosventaCommon):
         # 2. Case A: Close without SAP order -> opens wizard and classifies as 'comercial'
         ticket_no_sap = self.env['pv.ticket'].with_user(self.user_concesionario_a).create({
             'maquina_id': self.maquina_stock.id,
-            'tipo_ticket': 'pre_pm',
-            'desvio_tipo': 'faltante',
+            'desvio_tipo_id': self.desvio_faltante.id,
             'descripcion': 'Falta calco lateral',
             'multimedia_url': 'https://drive.google.com/test-mandatory-file-2',
         })
@@ -219,12 +211,10 @@ class TestTicketWorkflow(TestPosventaCommon):
 
         ticket = self.env['pv.ticket'].create({
             'maquina_id': self.maquina_stock.id,
-            'tipo_ticket': 'pre_pm',
             'desvio_tipo_id': desvio.id,
             'descripcion': 'Falta documentación de cabina',
             'multimedia_url': 'https://drive.google.com/test-doc',
         })
-        self.assertEqual(ticket.desvio_tipo, 'faltante')
         self.assertEqual(ticket.desvio_tipo_id, desvio)
 
         # Rejection tag integration
@@ -240,8 +230,7 @@ class TestTicketWorkflow(TestPosventaCommon):
     def _ticket_en_proceso(self, descripcion='Falta bulón'):
         ticket = self.env['pv.ticket'].with_user(self.user_concesionario_a).create({
             'maquina_id': self.maquina_stock.id,
-            'tipo_ticket': 'pre_pm',
-            'desvio_tipo': 'faltante',
+            'desvio_tipo_id': self.desvio_faltante.id,
             'descripcion': descripcion,
             'multimedia_url': 'https://drive.google.com/test-file',
         })
@@ -327,10 +316,10 @@ class TestTicketWorkflow(TestPosventaCommon):
         })
         self._ticket_en_proceso('Otro atendido').sudo().write({'fecha_primera_atencion': False})
         pendiente = self.env['pv.ticket'].with_user(self.user_concesionario_a).create({
-            'maquina_id': self.maquina_stock.id, 'desvio_tipo': 'faltante',
+            'maquina_id': self.maquina_stock.id, 'desvio_tipo_id': self.desvio_faltante.id,
             'descripcion': 'Sin atender', 'multimedia_url': 'https://drive.google.com/x',
         })
         pendiente.action_enviar_ticket()
         self.env.flush_all()
-        data = self.env['pv.dashboard'].with_user(self.user_concesionario_a).get_concesionario_portal_data()
+        data = self.concesionario_a.with_user(self.user_concesionario_a)._get_portal_resumen()
         self.assertAlmostEqual(data['kpis']['avg_t1'], 10.0, places=1)

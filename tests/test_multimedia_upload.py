@@ -28,8 +28,7 @@ class TestMultimediaUpload(TestPosventaCommon):
         })
         self.ticket = self.env['pv.ticket'].with_user(self.user_concesionario_a).create({
             'maquina_id': self.maquina.id,
-            'tipo_ticket': 'pre_pm',
-            'desvio_tipo': 'rotura',
+            'desvio_tipo_id': self.desvio_rotura.id,
             'descripcion': 'Falla en cilindro hidráulico',
         })
 
@@ -98,7 +97,7 @@ class TestMultimediaUpload(TestPosventaCommon):
         self.assertEqual(action_folder['url'], 'https://drive.google.com/drive/folders/abcdef')
 
     def test_03_rclone_sync_execution_mocked(self):
-        """Valida el worker _run_rclone_sync simulando llamadas exitosas de rclone."""
+        """Valida _sync_to_drive simulando llamadas exitosas de rclone."""
         temp_dir = tempfile.mkdtemp(prefix='pv_test_')
         temp_file = os.path.join(temp_dir, 'video_diagnostico.mp4')
         with open(temp_file, 'wb') as f:
@@ -126,8 +125,10 @@ class TestMultimediaUpload(TestPosventaCommon):
             return mock_res
 
         with patch('subprocess.run', side_effect=fake_subprocess_run), \
-             patch.object(type(self.ticket), '_is_rclone_configured', return_value=(True, "OK")):
-            success = self.ticket._run_rclone_sync(multimedia, temp_file)
+             patch('odoo.addons.posventa.models.pv_ticket_multimedia.PvTicketMultimedia._is_rclone_configured', return_value=(True, "OK")):
+            # La sincronización la ejecuta el cron como sistema, no el concesionario
+            multimedia.staging_path = temp_file
+            success = multimedia.sudo()._sync_to_drive()
             self.assertTrue(success)
 
         self.assertEqual(multimedia.estado_sync, 'disponible')
@@ -171,9 +172,9 @@ class TestMultimediaUpload(TestPosventaCommon):
         mock_request.make_json_response = fake_make_json_response
 
         with patch('odoo.addons.posventa.controllers.multimedia.request', mock_request), \
-             patch('odoo.addons.posventa.models.pv_ticket.PvTicket._trigger_drive_sync') as mock_trigger, \
-             patch('odoo.addons.posventa.models.pv_ticket.PvTicket._is_rclone_configured', return_value=(True, "OK")), \
-             patch('odoo.addons.posventa.models.pv_ticket.PvTicket._get_chunk_size_bytes', return_value=len(chunk_1)):
+             patch('odoo.addons.posventa.models.pv_ticket_multimedia.PvTicketMultimedia._encolar_sync') as mock_trigger, \
+             patch('odoo.addons.posventa.models.pv_ticket_multimedia.PvTicketMultimedia._is_rclone_configured', return_value=(True, "OK")), \
+             patch('odoo.addons.posventa.models.pv_ticket_multimedia.PvTicketMultimedia._get_chunk_size_bytes', return_value=len(chunk_1)):
 
             # Enviar Chunk 0
             storage_1 = FileStorage(stream=io.BytesIO(chunk_1), filename='part_0')
@@ -223,7 +224,6 @@ class TestMultimediaUpload(TestPosventaCommon):
 
     def test_05_backend_multimedia_wizard_and_retry(self):
         """Valida el asistente backend pv.ticket.multimedia.wizard y el reintento de sincronización."""
-        import base64
         # 1. Apertura de wizard desde ticket
         action = self.ticket.action_adjuntar_multimedia()
         self.assertEqual(action['res_model'], 'pv.ticket.multimedia.wizard')
@@ -246,32 +246,25 @@ class TestMultimediaUpload(TestPosventaCommon):
         self.assertEqual(multimedia_drive.estado_sync, 'disponible')
         self.assertEqual(multimedia_drive.drive_url, 'https://drive.google.com/drive/folders/test12345')
 
-        # 3. Carga vía archivo binario sin rclone configurado (debe levantar UserError)
-        dummy_content = b"TEST_VIDEO_BYTES_WIZARD"
+        # 3. Confirmar sin haber subido el archivo (el widget no terminó) -> error
         wizard_file = self.env['pv.ticket.multimedia.wizard'].create({
-            'ticket_id': self.ticket.id,
-            'tipo_carga': 'archivo',
-            'filename': 'prueba_wizard.mp4',
-            'file': base64.b64encode(dummy_content),
+            'ticket_id': self.ticket.id, 'tipo_carga': 'archivo', 'name': 'Prueba de campo',
         })
-        with patch.object(type(self.ticket), '_is_rclone_configured', return_value=(False, "No configurado")):
-            with self.assertRaises(UserError):
-                wizard_file.action_adjuntar()
-
-        # 3b. Carga con rclone configurado
-        with patch.object(type(self.ticket), '_is_rclone_configured', return_value=(True, "OK")), \
-             patch.object(type(self.ticket), '_trigger_drive_sync') as mock_sync:
+        with self.assertRaises(UserError):
             wizard_file.action_adjuntar()
-            self.assertTrue(mock_sync.called)
 
-        multimedia_file = self.env['pv.ticket.multimedia'].search([
-            ('ticket_id', '=', self.ticket.id),
-            ('name', '=', 'prueba_wizard.mp4'),
-        ], limit=1)
-        self.assertTrue(multimedia_file.exists())
-        self.assertEqual(multimedia_file.file_size, len(dummy_content))
-        self.assertEqual(multimedia_file.estado_sync, 'procesando')
-        self.assertTrue(bool(multimedia_file.staging_path))
+        # 3b. Archivo ya subido por el widget: el título lo renombra conservando la extensión
+        staging_dir = tempfile.mkdtemp(prefix='pv_test_')
+        staging_file = os.path.join(staging_dir, 'prueba_wizard.mp4')
+        with open(staging_file, 'wb') as f:
+            f.write(b"TEST_VIDEO_BYTES_WIZARD")
+        multimedia_file = self.env['pv.ticket.multimedia'].create({
+            'ticket_id': self.ticket.id, 'name': 'prueba_wizard.mp4',
+            'estado_sync': 'procesando', 'staging_path': staging_file,
+        })
+        wizard_file.uploaded_multimedia_id = multimedia_file
+        wizard_file.action_adjuntar()
+        self.assertEqual(multimedia_file.name, 'Prueba de campo.mp4')
 
         # 4. Simulación de reintento de sincronización cuando está en error
         multimedia_file.write({
@@ -293,17 +286,18 @@ class TestMultimediaUpload(TestPosventaCommon):
         multimedia = self.env['pv.ticket.multimedia'].create({
             'ticket_id': self.ticket.id, 'name': 'falla.mp4', 'estado_sync': 'procesando',
         })
-        mensajes_iniciales = len(self.ticket.message_ids)
-        with patch.object(type(self.ticket), '_is_rclone_configured', return_value=(False, "rclone no configurado")):
+        ticket = self.ticket.sudo()  # el cron corre como sistema; las notas internas no las ve el concesionario
+        mensajes_iniciales = len(ticket.message_ids)
+        with patch('odoo.addons.posventa.models.pv_ticket_multimedia.PvTicketMultimedia._is_rclone_configured', return_value=(False, "rclone no configurado")):
             for intento in range(1, 6):
                 multimedia.sync_intentos = intento
-                self.assertFalse(self.ticket._run_rclone_sync(multimedia))
+                self.assertFalse(multimedia.sudo()._sync_to_drive())
                 self.assertEqual(multimedia.estado_sync, 'error')
                 if intento < 5:
                     self.assertTrue(multimedia.sync_proximo_intento)
         self.assertFalse(multimedia.sync_proximo_intento)  # agotado: sin reintento automático
-        self.ticket.invalidate_recordset(['message_ids'])
-        self.assertEqual(len(self.ticket.message_ids) - mensajes_iniciales, 2)
+        ticket.invalidate_recordset(['message_ids'])
+        self.assertEqual(len(ticket.message_ids) - mensajes_iniciales, 2)
 
     def test_07_controller_rechaza_archivo_excedido(self):
         """El tamaño máximo se valida en el servidor."""
@@ -319,7 +313,7 @@ class TestMultimediaUpload(TestPosventaCommon):
             return res
         mock_request.make_json_response = fake_make_json_response
         with patch('odoo.addons.posventa.controllers.multimedia.request', mock_request), \
-             patch('odoo.addons.posventa.models.pv_ticket.PvTicket._get_max_upload_bytes', return_value=100):
+             patch('odoo.addons.posventa.models.pv_ticket_multimedia.PvTicketMultimedia._get_max_upload_bytes', return_value=100):
             resp = PosventaMultimediaController().upload_chunk(
                 ticket_id=self.ticket.id, file_uuid='uuid_grande', filename='grande.mp4',
                 chunk_index=0, total_chunks=1, file_size=101,
