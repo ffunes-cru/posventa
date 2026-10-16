@@ -24,6 +24,7 @@ Módulo para la gestión integral de reclamos de posventa:
         'base',
         'mail',
         'board',
+        'portal',
     ],
     'data': [
         # Security
@@ -56,6 +57,7 @@ Módulo para la gestión integral de reclamos de posventa:
         'views/pv_dashboard_views.xml',
         'views/pv_portal_action.xml',
         'views/pv_menu.xml',
+        'views/portal_templates.xml',
         # Report
         'report/pv_ticket_report.xml',
     ],
@@ -68,6 +70,17 @@ Módulo para la gestión integral de reclamos de posventa:
         ],
         'web.assets_web_dark': [
             'posventa/static/src/**/*.dark.scss',
+        ],
+        # Portal web del concesionario (/my/posventa): reutiliza los wizards OWL del portal backend
+        'web.assets_frontend': [
+            'posventa/static/src/portal/portal_concesionario.scss',
+            'posventa/static/src/portal/wizards/chunk_upload.js',
+            'posventa/static/src/portal/wizards/ticket_wizard.*',
+            'posventa/static/src/portal/wizards/certificado_wizard.*',
+            'posventa/static/src/frontend/**/*',
+        ],
+        'web.assets_tests': [
+            'posventa/static/tests/tours/**/*',
         ],
     },
     'external_dependencies': {

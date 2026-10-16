@@ -2,6 +2,7 @@
 import { Component, useState, onWillStart } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
 import { _t } from "@web/core/l10n/translation";
+import { MAX_STANDARD_SIZE, fileToBase64, newUploadUuid, uploadFileInChunks } from "./chunk_upload";
 
 // Valor del selector de problema cuando la falla no figura en el catálogo
 const PROBLEMA_NO_LISTADO = "no_listado";
@@ -167,7 +168,6 @@ export class TicketWizard extends Component {
     // Attachments Handling
     async onFilesChange(ev) {
         const files = Array.from(ev.target.files || []);
-        const MAX_STANDARD_SIZE = 20 * 1024 * 1024; // 20 MB
 
         for (const file of files) {
             // Si el archivo supera 20MB, redirigir automáticamente a la carga pesada (Drive) para evitar OOM
@@ -180,16 +180,7 @@ export class TicketWizard extends Component {
                 continue;
             }
 
-            const base64Data = await new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => {
-                    const res = reader.result;
-                    const base64 = res.split(",")[1] || "";
-                    resolve(base64);
-                };
-                reader.onerror = error => reject(error);
-                reader.readAsDataURL(file);
-            });
+            const base64Data = await fileToBase64(file);
             this.state.attachments.push({
                 name: file.name,
                 size: file.size,
@@ -209,7 +200,7 @@ export class TicketWizard extends Component {
             );
             return;
         }
-        const uuid = "file_" + Math.random().toString(36).substring(2, 10) + "_" + Date.now();
+        const uuid = newUploadUuid();
         this.state.heavyFiles.push({
             file: file,
             name: file.name,
@@ -238,76 +229,30 @@ export class TicketWizard extends Component {
     }
 
     async uploadHeavyFile(ticketId, item) {
-        const CHUNK_SIZE = this.chunkSizeBytes || (768 * 1024);
-        const file = item.file;
-        const totalChunks = Math.ceil(file.size / CHUNK_SIZE) || 1;
-
         item.status = "uploading";
         item.progress = 0;
-
-        for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
-            const start = chunkIndex * CHUNK_SIZE;
-            const end = Math.min(start + CHUNK_SIZE, file.size);
-            const blobChunk = file.slice(start, end);
-
-            const formData = new FormData();
-            formData.append("ticket_id", ticketId);
-            formData.append("file_uuid", item.uuid);
-            formData.append("filename", item.name);
-            formData.append("chunk_index", chunkIndex);
-            formData.append("total_chunks", totalChunks);
-            formData.append("file_size", file.size);
-            formData.append("chunk", blobChunk, item.name);
-
-            this.state.uploadProgressText = _t(
-                "Subiendo %s (%s)... Bloque %s de %s",
-                item.name,
-                this.formatFileSize(file.size),
-                chunkIndex + 1,
-                totalChunks
-            );
-
-            let success = false;
-            let retries = 3;
-            let lastError = null;
-
-            while (!success && retries > 0) {
-                try {
-                    const response = await fetch("/posventa/ticket/upload_chunk", {
-                        method: "POST",
-                        body: formData,
-                    });
-                    if (!response.ok) {
-                        let errMsg = `Error del servidor (HTTP ${response.status})`;
-                        if (response.status === 413) {
-                            errMsg = _t("El archivo o bloque supera el límite admitido por el servidor (HTTP 413).");
-                        } else {
-                            try {
-                                const errData = await response.json();
-                                if (errData.error) errMsg = errData.error;
-                            } catch (_) {}
-                        }
-                        throw new Error(errMsg);
-                    }
-                    const data = await response.json();
-                    if (data.error) {
-                        throw new Error(data.error);
-                    }
-                    success = true;
-                } catch (err) {
-                    retries--;
-                    lastError = err;
-                    if (retries === 0) {
-                        item.status = "error";
-                        throw err;
-                    }
-                    await new Promise(r => setTimeout(r, 1000));
-                }
-            }
-
-            item.progress = Math.round(((chunkIndex + 1) / totalChunks) * 100);
+        try {
+            await uploadFileInChunks({
+                ticketId,
+                file: item.file,
+                uuid: item.uuid,
+                name: item.name,
+                chunkSize: this.chunkSizeBytes || 768 * 1024,
+                onProgress: (done, total) => {
+                    item.progress = Math.round((done / total) * 100);
+                    this.state.uploadProgressText = _t(
+                        "Subiendo %s (%s)... Bloque %s de %s",
+                        item.name,
+                        this.formatFileSize(item.size),
+                        done,
+                        total
+                    );
+                },
+            });
+        } catch (err) {
+            item.status = "error";
+            throw err;
         }
-
         item.status = "completed";
     }
 

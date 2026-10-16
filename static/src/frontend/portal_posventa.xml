@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <t t-name="posventa.PortalMaquinaError">
+        <div class="alert alert-warning" role="alert">
+            <t t-esc="message"/>
+            <div class="mt-2"><a t-att-href="url" class="btn btn-sm btn-secondary">Volver a la máquina</a></div>
+        </div>
+    </t>
+
+    <t t-name="posventa.PortalTicketWizard">
+        <div class="o_pv_frontend_wizard">
+            <t t-if="state.error">
+                <t t-call="posventa.PortalMaquinaError"><t t-set="message" t-value="state.error"/><t t-set="url" t-value="maquinaUrl"/></t>
+            </t>
+            <t t-elif="state.maquina and !state.maquina.puede_crear_ticket">
+                <t t-call="posventa.PortalMaquinaError">
+                    <t t-set="message">No se pueden crear reclamos para esta máquina: necesita un certificado vigente y no estar liberada ni en traslado.</t>
+                    <t t-set="url" t-value="maquinaUrl"/>
+                </t>
+            </t>
+            <TicketWizard t-elif="state.maquina" maquina="state.maquina" onClose.bind="onClose" onSuccess.bind="onSuccess"/>
+        </div>
+    </t>
+
+    <t t-name="posventa.PortalCertificadoWizard">
+        <div class="o_pv_frontend_wizard">
+            <t t-if="state.error">
+                <t t-call="posventa.PortalMaquinaError"><t t-set="message" t-value="state.error"/><t t-set="url" t-value="maquinaUrl"/></t>
+            </t>
+            <t t-elif="state.maquina and (!state.maquina.puede_crear_certificado or state.maquina.es_pendiente_transferencia)">
+                <t t-call="posventa.PortalMaquinaError">
+                    <t t-set="message">No se pueden cargar certificados para esta máquina en su estado actual.</t>
+                    <t t-set="url" t-value="maquinaUrl"/>
+                </t>
+            </t>
+            <CertificadoWizard t-elif="state.maquina" maquina="state.maquina" onClose.bind="onClose" onSuccess.bind="onSuccess"/>
+        </div>
+    </t>
+
+    <t t-name="posventa.PortalTicketUploader">
+        <div class="o_pv_ticket_uploader border rounded p-2">
+            <label class="form-label small text-muted mb-1" for="pv_uploader_input">Agregar fotos o videos</label>
+            <input id="pv_uploader_input" type="file" class="form-control" multiple="multiple" accept="image/*,video/*,application/pdf"
+                   t-att-disabled="state.uploading" t-on-change="onFilesChange"/>
+            <ul t-if="state.files.length" class="list-unstyled small my-2">
+                <li t-foreach="state.files" t-as="file" t-key="file_index" class="d-flex justify-content-between align-items-center">
+                    <span><i class="fa fa-file-o me-1"/><t t-esc="file.name"/></span>
+                    <button t-if="!state.uploading" type="button" class="btn btn-sm btn-link text-danger" t-on-click="() => this.removeFile(file_index)">Quitar</button>
+                </li>
+            </ul>
+            <div t-if="state.progressText" class="small text-muted mb-2"><i class="fa fa-spinner fa-spin me-1"/><t t-esc="state.progressText"/></div>
+            <button t-if="state.files.length" type="button" class="btn btn-primary btn-sm" t-att-disabled="state.uploading" t-on-click="upload">
+                <i class="fa fa-cloud-upload me-1"/>Subir archivos
+            </button>
+        </div>
+    </t>
+
+</templates>

@@ -77,7 +77,7 @@ PRIORIDAD = [
 class PvTicket(models.Model):
     _name = 'pv.ticket'
     _description = 'Ticket de Reclamo Posventa'
-    _inherit = ['mail.thread', 'mail.activity.mixin']
+    _inherit = ['portal.mixin', 'mail.thread', 'mail.activity.mixin']
     _order = 'create_date desc'
 
     # --- Identificación ---
@@ -413,6 +413,11 @@ class PvTicket(models.Model):
         store=True,
         help='Tiempo de cierre definitivo: desde creación hasta cierre (interno)',
     )
+
+    def _compute_access_url(self):
+        super()._compute_access_url()
+        for rec in self:
+            rec.access_url = f'/my/posventa/ticket/{rec.id}'
 
     # --- Color for kanban ---
     color = fields.Integer(string='Color')

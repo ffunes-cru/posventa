@@ -1,0 +1,524 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- ============================================================ -->
+    <!-- Integración con /my                                           -->
+    <!-- ============================================================ -->
+    <template id="portal_my_home_posventa" name="Posventa" inherit_id="portal.portal_my_home" priority="40">
+        <xpath expr="//div[hasclass('o_portal_docs')]" position="before">
+            <t t-set="portal_client_category_enable" t-value="True"/>
+        </xpath>
+        <div id="portal_client_category" position="inside">
+            <t groups="posventa.group_pv_concesionario">
+                <t t-call="portal.portal_docs_entry">
+                    <t t-set="icon" t-value="'/posventa/static/description/icon.png'"/>
+                    <t t-set="title">Posventa</t>
+                    <t t-set="url" t-value="'/my/posventa'"/>
+                    <t t-set="text">Máquinas, certificados y reclamos de garantía</t>
+                    <t t-set="placeholder_count" t-value="'pv_ticket_count'"/>
+                    <t t-set="config_card" t-value="True"/>
+                </t>
+            </t>
+        </div>
+    </template>
+
+    <template id="portal_breadcrumbs_posventa" name="Posventa Breadcrumbs" inherit_id="portal.portal_breadcrumbs" priority="40">
+        <xpath expr="//ol[hasclass('o_portal_submenu')]" position="inside">
+            <t t-if="page_name and page_name.startswith('pv_')">
+                <li t-if="page_name == 'pv_home'" class="breadcrumb-item active">Posventa</li>
+                <li t-else="" class="breadcrumb-item"><a href="/my/posventa">Posventa</a></li>
+                <li t-if="page_name == 'pv_maquinas'" class="breadcrumb-item active">Máquinas</li>
+                <t t-if="page_name in ('pv_maquina', 'pv_ticket_nuevo', 'pv_certificado_nuevo')">
+                    <li class="breadcrumb-item"><a href="/my/posventa/maquinas">Máquinas</a></li>
+                    <li t-if="page_name == 'pv_maquina'" class="breadcrumb-item active" t-out="maquina.of"/>
+                    <li t-else="" class="breadcrumb-item"><a t-attf-href="/my/posventa/maquina/#{maquina.id}" t-out="maquina.of"/></li>
+                    <li t-if="page_name == 'pv_ticket_nuevo'" class="breadcrumb-item active">Nuevo reclamo</li>
+                    <li t-if="page_name == 'pv_certificado_nuevo'" class="breadcrumb-item active">Cargar certificado</li>
+                </t>
+                <li t-if="page_name == 'pv_certificados'" class="breadcrumb-item active">Certificados</li>
+                <li t-if="page_name == 'pv_tickets'" class="breadcrumb-item active">Reclamos</li>
+                <t t-if="page_name == 'pv_ticket'">
+                    <li class="breadcrumb-item"><a href="/my/posventa/tickets">Reclamos</a></li>
+                    <li class="breadcrumb-item active" t-out="ticket.name"/>
+                </t>
+            </t>
+        </xpath>
+    </template>
+
+    <!-- ============================================================ -->
+    <!-- Piezas comunes                                                -->
+    <!-- ============================================================ -->
+    <template id="portal_flash" name="Posventa: mensaje">
+        <div t-if="pv_flash" t-attf-class="alert alert-#{pv_flash['tipo']} alert-dismissible fade show" role="alert">
+            <t t-out="pv_flash['mensaje']"/>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"/>
+        </div>
+    </template>
+
+    <template id="portal_badge_ticket" name="Posventa: estado de ticket">
+        <t t-set="clase" t-value="{'borrador': 'secondary', 'abierto': 'info', 'en_proceso': 'warning', 'aceptado': 'primary', 'rechazado': 'danger', 'cerrado': 'success'}.get(estado, 'secondary')"/>
+        <span t-attf-class="badge rounded-pill text-bg-#{clase}" t-out="dict(estados_ticket).get(estado, estado)"/>
+    </template>
+
+    <template id="portal_badge_maquina" name="Posventa: estado de máquina">
+        <t t-set="clase" t-value="{'liberada': 'secondary', 'stock': 'warning', 'vendida': 'success', 'pendiente': 'info'}.get(m.estado, 'secondary')"/>
+        <span t-attf-class="badge rounded-pill text-bg-#{clase}" t-field="m.estado"/>
+    </template>
+
+    <template id="portal_posventa_nav" name="Posventa: navegación">
+        <ul class="nav nav-pills flex-nowrap overflow-auto mb-3 pb-1">
+            <li class="nav-item"><a t-attf-class="nav-link text-nowrap #{'active' if page_name == 'pv_home' else ''}" href="/my/posventa"><i class="fa fa-home me-1"/>Inicio</a></li>
+            <li class="nav-item"><a t-attf-class="nav-link text-nowrap #{'active' if page_name in ('pv_maquinas', 'pv_maquina') else ''}" href="/my/posventa/maquinas"><i class="fa fa-cogs me-1"/>Máquinas</a></li>
+            <li class="nav-item"><a t-attf-class="nav-link text-nowrap #{'active' if page_name in ('pv_tickets', 'pv_ticket') else ''}" href="/my/posventa/tickets"><i class="fa fa-ticket me-1"/>Reclamos</a></li>
+            <li class="nav-item"><a t-attf-class="nav-link text-nowrap #{'active' if page_name == 'pv_certificados' else ''}" href="/my/posventa/certificados"><i class="fa fa-file-text-o me-1"/>Certificados</a></li>
+        </ul>
+    </template>
+
+    <template id="portal_layout_posventa" name="Posventa: layout">
+        <t t-call="portal.portal_layout">
+            <div class="o_pv_portal">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                    <h3 class="mb-0"><t t-out="titulo"/></h3>
+                    <span t-if="pv_concesionario" class="text-muted small"><i class="fa fa-building-o me-1"/><t t-out="pv_concesionario.name"/></span>
+                </div>
+                <t t-call="posventa.portal_posventa_nav"/>
+                <t t-call="posventa.portal_flash"/>
+                <t t-out="0"/>
+            </div>
+        </t>
+    </template>
+
+    <template id="portal_sin_concesionario" name="Posventa: sin concesionario">
+        <t t-call="portal.portal_layout">
+            <div class="alert alert-warning mt-3" role="alert">
+                <h4 class="alert-heading">Su usuario no está asociado a un concesionario</h4>
+                <p class="mb-0">Para operar en el portal de Posventa, el Administrador de Posventa debe vincular su usuario a la empresa del concesionario.</p>
+            </div>
+        </t>
+    </template>
+
+    <!-- ============================================================ -->
+    <!-- Inicio                                                        -->
+    <!-- ============================================================ -->
+    <template id="portal_posventa_home" name="Posventa: inicio">
+        <t t-call="posventa.portal_layout_posventa">
+            <t t-set="titulo">Portal de Posventa</t>
+
+            <div t-foreach="transferencias" t-as="m" class="alert alert-info d-flex flex-wrap justify-content-between align-items-center gap-2" role="status">
+                <span><i class="fa fa-exchange me-1"/> <strong t-out="m.concesionario_id.name"/> le propone el traslado de la máquina <strong t-out="m.name"/>.</span>
+                <a t-attf-href="/my/posventa/maquina/#{m.id}" class="btn btn-sm btn-primary">Revisar traslado</a>
+            </div>
+            <div t-foreach="alertas" t-as="a" class="alert alert-warning d-flex flex-wrap justify-content-between align-items-center gap-2" role="alert">
+                <span>
+                    <i class="fa fa-exclamation-triangle me-1"/> <strong t-out="a['maquina'].name"/>:
+                    <t t-out="a['info']['tipo_label']"/>
+                    <t t-if="a['info']['estado'] == 'vence_hoy'">vence <strong>hoy</strong>.</t>
+                    <t t-else="">vencido hace <strong t-out="-a['info']['dias_restantes']"/> día(s).</t>
+                </span>
+                <a t-attf-href="/my/posventa/maquina/#{a['maquina'].id}/certificado/nuevo" class="btn btn-sm btn-warning">Cargar certificado</a>
+            </div>
+
+            <div class="row g-3 mb-4">
+                <div class="col-6 col-md-4">
+                    <a href="/my/posventa/maquinas" class="card h-100 text-decoration-none">
+                        <div class="card-body">
+                            <div class="text-muted small"><i class="fa fa-cogs me-1"/>Máquinas</div>
+                            <div class="fs-2 fw-bold" t-out="data['maquina_count']"/>
+                        </div>
+                    </a>
+                </div>
+                <div class="col-6 col-md-4">
+                    <a href="/my/posventa/certificados" class="card h-100 text-decoration-none">
+                        <div class="card-body">
+                            <div class="text-muted small"><i class="fa fa-file-text-o me-1"/>Certificados</div>
+                            <div class="fs-2 fw-bold" t-out="data['certificado_count']"/>
+                        </div>
+                    </a>
+                </div>
+                <div class="col-12 col-md-4">
+                    <a href="/my/posventa/maquinas?estado=pendiente" class="card h-100 text-decoration-none">
+                        <div class="card-body">
+                            <div class="text-muted small"><i class="fa fa-exchange me-1"/>Traslados pendientes</div>
+                            <div class="fs-2 fw-bold" t-out="data['transferencias_pendientes']"/>
+                        </div>
+                    </a>
+                </div>
+            </div>
+
+            <h5>Reclamos</h5>
+            <div class="row g-2 mb-4">
+                <div t-foreach="estados_ticket" t-as="e" class="col-6 col-md-4 col-lg-2">
+                    <a t-attf-href="/my/posventa/tickets?estado=#{e[0]}" class="card h-100 text-decoration-none text-center">
+                        <div class="card-body py-2">
+                            <div class="fs-3 fw-bold" t-out="data['counts'].get(e[0], 0)"/>
+                            <t t-call="posventa.portal_badge_ticket"><t t-set="estado" t-value="e[0]"/></t>
+                        </div>
+                    </a>
+                </div>
+            </div>
+
+            <h5>Tiempos de atención promedio</h5>
+            <div class="row g-2">
+                <div class="col-4"><div class="card text-center"><div class="card-body py-2"><div class="text-muted small">Primera atención</div><div class="fs-5 fw-bold"><t t-out="data['kpis']['avg_t1']"/> h</div></div></div></div>
+                <div class="col-4"><div class="card text-center"><div class="card-body py-2"><div class="text-muted small">Validación</div><div class="fs-5 fw-bold"><t t-out="data['kpis']['avg_t2']"/> h</div></div></div></div>
+                <div class="col-4"><div class="card text-center"><div class="card-body py-2"><div class="text-muted small">Cierre</div><div class="fs-5 fw-bold"><t t-out="data['kpis']['avg_t3']"/> h</div></div></div></div>
+            </div>
+        </t>
+    </template>
+
+    <!-- ============================================================ -->
+    <!-- Máquinas                                                      -->
+    <!-- ============================================================ -->
+    <template id="portal_posventa_maquinas" name="Posventa: máquinas">
+        <t t-call="posventa.portal_layout_posventa">
+            <t t-set="titulo">Máquinas</t>
+            <form method="get" action="/my/posventa/maquinas" class="d-flex flex-wrap gap-2 mb-3">
+                <input type="search" name="search" class="form-control flex-grow-1 w-auto" placeholder="Buscar por OF, máquina o cliente..." t-att-value="search"/>
+                <select name="estado" class="form-select w-auto" onchange="this.form.submit()">
+                    <option value="">Todos los estados</option>
+                    <option t-foreach="estados_maquina" t-as="e" t-att-value="e[0]" t-att-selected="estado == e[0]" t-out="e[1]"/>
+                </select>
+                <button type="submit" class="btn btn-secondary"><i class="fa fa-search"/></button>
+            </form>
+            <div t-if="not maquinas" class="alert alert-light">No se encontraron máquinas.</div>
+            <div class="list-group mb-3">
+                <a t-foreach="maquinas" t-as="m" t-attf-href="/my/posventa/maquina/#{m.id}" class="list-group-item list-group-item-action">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                        <div>
+                            <div class="fw-bold" t-out="m.name"/>
+                            <div class="small text-muted">
+                                <t t-if="m.cliente_id"><i class="fa fa-user me-1"/><t t-out="m.cliente_id.name"/> · </t>
+                                <t t-out="m.ciudad or ''"/>
+                                <t t-if="m.estado == 'pendiente'"> · Traslado a <t t-out="m.concesionario_destino_id.name"/></t>
+                            </div>
+                        </div>
+                        <div class="d-flex align-items-center gap-1">
+                            <span t-if="m.liberacion_solicitada" class="badge text-bg-light border">Liberación solicitada</span>
+                            <t t-call="posventa.portal_badge_maquina"/>
+                        </div>
+                    </div>
+                </a>
+            </div>
+            <t t-call="portal.pager"/>
+        </t>
+    </template>
+
+    <template id="portal_posventa_maquina" name="Posventa: detalle de máquina">
+        <t t-call="posventa.portal_layout_posventa">
+            <t t-set="titulo" t-value="maquina.name"/>
+            <t t-set="d" t-value="detalle"/>
+            <t t-set="prox" t-value="d['proximo_certificado']"/>
+
+            <div class="card mb-3">
+                <div class="card-body">
+                    <div class="d-flex flex-wrap justify-content-between gap-2 mb-2">
+                        <div>
+                            <div class="text-muted small">OF <t t-out="d['of']"/> · <t t-out="d['tipo_label']"/></div>
+                            <div><i class="fa fa-user me-1"/><t t-out="d['cliente'] or 'Sin cliente asignado'"/></div>
+                            <div class="text-muted small"><t t-out="d['ciudad']"/><t t-if="d['provincia']">, <t t-out="d['provincia']"/></t></div>
+                        </div>
+                        <div><t t-call="posventa.portal_badge_maquina"><t t-set="m" t-value="maquina"/></t></div>
+                    </div>
+                    <div t-if="prox['tipo'] and prox['estado'] != 'completa'" t-attf-class="alert mb-0 alert-#{'danger' if prox['estado'] == 'vencido' else 'warning' if prox['estado'] == 'vence_hoy' else 'info'}" role="status">
+                        <strong>Próximo certificado:</strong> <t t-out="prox['tipo_label']"/>
+                        <t t-if="prox['fecha_limite']">— plazo de carga <t t-out="prox['fecha_limite']"/>
+                            <t t-if="prox['dias_restantes'] &gt; 0">(quedan <t t-out="prox['dias_restantes']"/> días)</t>
+                            <t t-elif="prox['dias_restantes'] &lt; 0">(vencido hace <t t-out="-prox['dias_restantes']"/> días)</t>
+                            <t t-else="">(vence hoy)</t>
+                        </t>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Traslados -->
+            <div t-if="d['es_pendiente_transferencia'] and d['es_concesionario_destino']" class="alert alert-warning d-flex flex-wrap justify-content-between align-items-center gap-2" role="alert">
+                <span><i class="fa fa-exchange me-1"/> Le proponen el traslado de esta máquina a su concesionario.</span>
+                <span class="d-flex gap-2">
+                    <form method="post" t-attf-action="/my/posventa/maquina/#{maquina.id}/transferencia/aceptar">
+                        <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                        <button type="submit" class="btn btn-sm btn-success" data-pv-confirm="Al aceptar, la máquina pasa a LIBERADA y debe cargar sus certificados desde cero. ¿Continuar?">Aceptar</button>
+                    </form>
+                    <form method="post" t-attf-action="/my/posventa/maquina/#{maquina.id}/transferencia/rechazar">
+                        <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                        <button type="submit" class="btn btn-sm btn-outline-danger">Rechazar</button>
+                    </form>
+                </span>
+            </div>
+            <div t-elif="d['es_pendiente_transferencia'] and d['es_concesionario_origen']" class="alert alert-info d-flex flex-wrap justify-content-between align-items-center gap-2" role="status">
+                <span><i class="fa fa-clock-o me-1"/> Traslado a <strong t-out="d['concesionario_destino_name']"/> pendiente de aceptación.</span>
+                <form method="post" t-attf-action="/my/posventa/maquina/#{maquina.id}/transferencia/cancelar">
+                    <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                    <button type="submit" class="btn btn-sm btn-outline-danger">Cancelar traslado</button>
+                </form>
+            </div>
+            <div t-if="d['liberacion_solicitada']" class="alert alert-info" role="status">
+                <i class="fa fa-clock-o me-1"/> <strong>Liberación solicitada</strong>, pendiente de aprobación del Administrador de Posventa. Motivo: <t t-out="d['liberacion_motivo']"/>
+            </div>
+
+            <!-- Acciones -->
+            <div class="d-flex flex-wrap gap-2 mb-4">
+                <a t-if="d['puede_crear_ticket']" t-attf-href="/my/posventa/maquina/#{maquina.id}/ticket/nuevo" class="btn btn-primary"><i class="fa fa-plus-circle me-1"/>Nuevo reclamo</a>
+                <button t-else="" class="btn btn-primary" disabled="disabled" title="La máquina necesita un certificado vigente y no estar liberada ni en traslado"><i class="fa fa-plus-circle me-1"/>Nuevo reclamo</button>
+                <a t-if="d['puede_crear_certificado'] and not d['es_pendiente_transferencia']" t-attf-href="/my/posventa/maquina/#{maquina.id}/certificado/nuevo" class="btn btn-success"><i class="fa fa-upload me-1"/>Cargar certificado</a>
+                <button t-if="d['puede_transferir']" class="btn btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#pv_form_traslado"><i class="fa fa-exchange me-1"/>Trasladar</button>
+                <button t-if="d['puede_solicitar_liberacion']" class="btn btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#pv_form_liberacion"><i class="fa fa-undo me-1"/>Solicitar liberación</button>
+            </div>
+
+            <form t-if="d['puede_transferir']" id="pv_form_traslado" method="post" t-attf-action="/my/posventa/maquina/#{maquina.id}/trasladar" class="collapse card card-body mb-4">
+                <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                <p class="text-muted small">La máquina queda <strong>pendiente de traslado</strong> hasta que el concesionario destino la acepte.</p>
+                <div class="row g-2">
+                    <div class="col-md-4">
+                        <label class="form-label" for="pv_destino">Concesionario destino</label>
+                        <select id="pv_destino" name="concesionario_destino_id" class="form-select" required="required">
+                            <option value="">Seleccione...</option>
+                            <option t-foreach="concesionarios_destino" t-as="c" t-att-value="c['id']" t-out="c['name']"/>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="pv_provincia">Provincia</label>
+                        <select id="pv_provincia" name="provincia_destino_id" class="form-select" required="required">
+                            <option value="">Seleccione...</option>
+                            <option t-foreach="provincias" t-as="p" t-att-value="p['id']" t-out="p['name']"/>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="pv_ciudad">Ciudad</label>
+                        <input id="pv_ciudad" name="ciudad_destino" class="form-control" required="required"/>
+                    </div>
+                </div>
+                <div class="mt-3"><button type="submit" class="btn btn-warning">Enviar solicitud de traslado</button></div>
+            </form>
+
+            <form t-if="d['puede_solicitar_liberacion']" id="pv_form_liberacion" method="post" t-attf-action="/my/posventa/maquina/#{maquina.id}/solicitar_liberacion" class="collapse card card-body mb-4">
+                <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                <p class="text-muted small">Si el Administrador de Posventa la aprueba, la máquina vuelve a <strong>LIBERADA</strong>: se archivan sus certificados y hay que cargarlos desde cero.</p>
+                <label class="form-label" for="pv_motivo">Motivo</label>
+                <textarea id="pv_motivo" name="motivo" class="form-control" rows="3" required="required" placeholder="Ej: canje de unidad, error en la carga de certificados..."/>
+                <div class="mt-3"><button type="submit" class="btn btn-warning">Enviar solicitud</button></div>
+            </form>
+
+            <h5>Certificados</h5>
+            <div t-if="not d['certificados']" class="alert alert-light">La máquina todavía no tiene certificados cargados.</div>
+            <div class="list-group mb-4">
+                <div t-foreach="d['certificados']" t-as="c" class="list-group-item d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <div>
+                        <div class="fw-bold" t-out="c['tipo_label']"/>
+                        <div class="small text-muted">
+                            Fecha <t t-out="c['fecha']"/>
+                            <t t-if="c['fecha_vencimiento']"> · Vigente para reclamos hasta <t t-out="c['fecha_vencimiento']"/></t>
+                            · <t t-out="c['concesionario_name']"/>
+                        </div>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <span t-attf-class="badge rounded-pill text-bg-#{c['tag_badge']}" t-out="c['estado_certificado_label']"/>
+                        <a t-attf-href="/web/content/pv.certificado/#{c['id']}/archivo/#{c['archivo_nombre']}?download=true" class="btn btn-sm btn-light" title="Descargar"><i class="fa fa-download"/></a>
+                    </div>
+                </div>
+            </div>
+
+            <h5>Reclamos</h5>
+            <div t-if="not d['tickets']" class="alert alert-light">La máquina no tiene reclamos.</div>
+            <div class="list-group">
+                <a t-foreach="d['tickets']" t-as="t" t-attf-href="/my/posventa/ticket/#{t['id']}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center gap-2">
+                    <div>
+                        <div class="fw-bold" t-out="t['name']"/>
+                        <div class="small text-muted text-truncate" style="max-width: 32rem;" t-out="t['descripcion']"/>
+                    </div>
+                    <t t-call="posventa.portal_badge_ticket"><t t-set="estado" t-value="t['estado']"/></t>
+                </a>
+            </div>
+        </t>
+    </template>
+
+    <template id="portal_posventa_ticket_nuevo" name="Posventa: nuevo reclamo">
+        <t t-call="posventa.portal_layout_posventa">
+            <t t-set="titulo">Nuevo reclamo</t>
+            <owl-component name="posventa.portal_ticket_wizard" t-att-props="json.dumps({'maquinaId': maquina.id})"/>
+        </t>
+    </template>
+
+    <template id="portal_posventa_certificado_nuevo" name="Posventa: cargar certificado">
+        <t t-call="posventa.portal_layout_posventa">
+            <t t-set="titulo">Cargar certificado</t>
+            <owl-component name="posventa.portal_certificado_wizard" t-att-props="json.dumps({'maquinaId': maquina.id})"/>
+        </t>
+    </template>
+
+    <!-- ============================================================ -->
+    <!-- Certificados                                                  -->
+    <!-- ============================================================ -->
+    <template id="portal_posventa_certificados" name="Posventa: certificados">
+        <t t-call="posventa.portal_layout_posventa">
+            <t t-set="titulo">Certificados</t>
+            <form method="get" action="/my/posventa/certificados" class="d-flex flex-wrap gap-2 mb-3">
+                <input type="search" name="search" class="form-control flex-grow-1 w-auto" placeholder="Buscar por OF o archivo..." t-att-value="search"/>
+                <select name="tipo" class="form-select w-auto" onchange="this.form.submit()">
+                    <option value="">Todos los tipos</option>
+                    <option t-foreach="tipos_certificado" t-as="e" t-att-value="e[0]" t-att-selected="tipo == e[0]" t-out="e[1]"/>
+                </select>
+                <select name="estado" class="form-select w-auto" onchange="this.form.submit()">
+                    <option value="">Todos los estados</option>
+                    <option t-foreach="estados_certificado" t-as="e" t-att-value="e[0]" t-att-selected="estado == e[0]" t-out="e[1]"/>
+                </select>
+                <button type="submit" class="btn btn-secondary"><i class="fa fa-search"/></button>
+            </form>
+            <div t-if="not certificados" class="alert alert-light">No se encontraron certificados.</div>
+            <div class="list-group mb-3">
+                <div t-foreach="certificados" t-as="c" class="list-group-item d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <div>
+                        <div class="fw-bold"><t t-out="c['tipo_label']"/></div>
+                        <div class="small text-muted">
+                            <a t-if="c['puede_ver_maquina']" t-attf-href="/my/posventa/maquina/#{c['maquina_id']}" t-out="c['maquina_name']"/>
+                            <span t-else="" t-out="c['maquina_name']"/>
+                            · Fecha <t t-out="c['fecha']"/>
+                            <t t-if="c['fecha_vencimiento']"> · Vigente hasta <t t-out="c['fecha_vencimiento']"/></t>
+                        </div>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <span t-attf-class="badge rounded-pill text-bg-#{c['tag_badge']}" t-out="c['estado_certificado_label']"/>
+                        <a t-attf-href="/web/content/pv.certificado/#{c['id']}/archivo/#{c['archivo_nombre']}?download=true" class="btn btn-sm btn-light" title="Descargar"><i class="fa fa-download"/></a>
+                    </div>
+                </div>
+            </div>
+            <t t-call="portal.pager"/>
+        </t>
+    </template>
+
+    <!-- ============================================================ -->
+    <!-- Reclamos                                                      -->
+    <!-- ============================================================ -->
+    <template id="portal_posventa_tickets" name="Posventa: reclamos">
+        <t t-call="posventa.portal_layout_posventa">
+            <t t-set="titulo">Reclamos</t>
+            <form method="get" action="/my/posventa/tickets" class="d-flex flex-wrap gap-2 mb-3">
+                <input type="search" name="search" class="form-control flex-grow-1 w-auto" placeholder="Buscar por número, OF o descripción..." t-att-value="search"/>
+                <select name="estado" class="form-select w-auto" onchange="this.form.submit()">
+                    <option value="">Todos los estados</option>
+                    <option t-foreach="estados_ticket" t-as="e" t-att-value="e[0]" t-att-selected="estado == e[0]" t-out="e[1]"/>
+                </select>
+                <button type="submit" class="btn btn-secondary"><i class="fa fa-search"/></button>
+            </form>
+            <div t-if="not tickets" class="alert alert-light">No se encontraron reclamos.</div>
+            <div class="list-group mb-3">
+                <a t-foreach="tickets" t-as="t" t-attf-href="/my/posventa/ticket/#{t.id}" class="list-group-item list-group-item-action">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                        <div>
+                            <div class="fw-bold"><t t-out="t.name"/> <span class="fw-normal text-muted">· <t t-out="t.maquina_id.name"/></span></div>
+                            <div class="small text-muted">
+                                <t t-out="t.fecha_creacion" t-options="{'widget': 'date'}"/> ·
+                                <t t-if="t.tipo_ticket == 'post_pm'"><t t-out="t.sistema_id.name"/> / <t t-out="t.subsistema_id.name"/></t>
+                                <t t-else=""><t t-out="t.desvio_tipo_id.name"/></t>
+                            </div>
+                        </div>
+                        <t t-call="posventa.portal_badge_ticket"><t t-set="estado" t-value="t.estado"/></t>
+                    </div>
+                </a>
+            </div>
+            <t t-call="portal.pager"/>
+        </t>
+    </template>
+
+    <template id="portal_posventa_ticket" name="Posventa: detalle de reclamo">
+        <t t-call="posventa.portal_layout_posventa">
+            <t t-set="titulo" t-value="ticket.name"/>
+
+            <div class="card mb-3">
+                <div class="card-body">
+                    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+                        <div>
+                            <a t-attf-href="/my/posventa/maquina/#{ticket.maquina_id.id}" class="fw-bold" t-out="ticket.maquina_id.name"/>
+                            <div class="small text-muted">
+                                <span t-field="ticket.tipo_ticket"/> · Certificado: <t t-out="ticket.certificado_id.name"/>
+                                · Creado el <t t-out="ticket.fecha_creacion" t-options="{'widget': 'date'}"/> por <t t-out="ticket.operador_id.name"/>
+                            </div>
+                        </div>
+                        <t t-call="posventa.portal_badge_ticket"><t t-set="estado" t-value="ticket.estado"/></t>
+                    </div>
+
+                    <div t-if="ticket.estado == 'borrador'" class="alert alert-warning d-flex flex-wrap justify-content-between align-items-center gap-2" role="alert">
+                        <span>El reclamo está en <strong>borrador</strong>: el Staff de Posventa todavía no lo ve. Adjunte al menos una foto o video y envíelo.</span>
+                        <form method="post" t-attf-action="/my/posventa/ticket/#{ticket.id}/enviar">
+                            <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                            <button type="submit" class="btn btn-primary"><i class="fa fa-paper-plane me-1"/>Enviar a revisión</button>
+                        </form>
+                    </div>
+                    <div t-if="ticket.estado == 'rechazado'" class="alert alert-danger" role="alert">
+                        <strong>Reclamo rechazado</strong> por error de carga: <t t-out="', '.join(ticket.rechazo_tag_ids.mapped('name'))"/>.
+                        Si corresponde, cree un nuevo reclamo con la información correcta.
+                    </div>
+                    <div t-if="ticket.estado == 'aceptado'" class="alert alert-primary" role="status">
+                        El reclamo fue <strong>aceptado</strong> y la garantía está en evaluación.
+                    </div>
+                    <div t-if="ticket.estado == 'cerrado'" t-attf-class="alert #{'alert-success' if ticket.garantia_aceptada else 'alert-warning'}" role="status">
+                        <div t-if="ticket.garantia_aceptada"><strong>Cerrado con garantía.</strong></div>
+                        <div t-else="">
+                            <strong>Cerrado sin garantía:</strong> la pieza la abona el concesionario/cliente.
+                            Motivos: <t t-out="', '.join(ticket.garantia_rechazo_tag_ids.mapped('name'))"/>.
+                        </div>
+                        <div t-if="ticket.solucion_aplicada" class="mt-1"><strong>Solución aplicada:</strong> <span t-field="ticket.solucion_aplicada"/></div>
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <h6 class="text-muted">Clasificación</h6>
+                            <t t-if="ticket.tipo_ticket == 'post_pm'">
+                                <div><t t-out="ticket.sistema_id.name"/> / <t t-out="ticket.subsistema_id.name"/></div>
+                                <div>Problema: <t t-if="ticket.problema_no_listado">no está en la lista</t><t t-else="" t-out="ticket.problema_id.name"/></div>
+                                <div class="small text-muted"><t t-out="ticket.hectareas"/> ha<t t-if="ticket.ubicacion_actual"> · <t t-out="ticket.ubicacion_actual"/></t></div>
+                            </t>
+                            <div t-else="">Desvío: <t t-out="ticket.desvio_tipo_id.name"/></div>
+                            <div t-foreach="ticket.campo_extra_ids" t-as="c" class="small"><t t-out="c.campo_nombre"/>: <t t-out="c.valor"/></div>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="text-muted">Atención</h6>
+                            <div>Responsable: <t t-out="ticket.responsable_id.name or 'Sin asignar'"/></div>
+                        </div>
+                    </div>
+                    <h6 class="text-muted mt-3">Descripción</h6>
+                    <p class="mb-2" t-field="ticket.descripcion"/>
+                    <t t-if="ticket.acciones_realizadas">
+                        <h6 class="text-muted">Acciones realizadas</h6>
+                        <p class="mb-0" t-field="ticket.acciones_realizadas"/>
+                    </t>
+                </div>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h5 class="card-title">Fotos y videos</h5>
+                    <div t-if="not adjuntos and not ticket.multimedia_ids and not ticket.multimedia_url" class="text-muted small mb-2">Todavía no hay archivos adjuntos.</div>
+                    <ul class="list-unstyled mb-2">
+                        <li t-foreach="adjuntos" t-as="a"><i class="fa fa-paperclip me-1"/><a t-attf-href="/web/content/#{a.id}?download=true" t-out="a.name"/></li>
+                        <li t-foreach="ticket.multimedia_ids" t-as="mm">
+                            <i class="fa fa-film me-1"/>
+                            <a t-if="mm.drive_url" t-att-href="mm.drive_url" target="_blank" t-out="mm.name"/>
+                            <span t-else="" t-out="mm.name"/>
+                            <span t-if="mm.estado_sync != 'disponible'" class="badge text-bg-light border" t-field="mm.estado_sync"/>
+                        </li>
+                        <li t-if="ticket.multimedia_url and not ticket.multimedia_ids"><i class="fa fa-link me-1"/><a t-att-href="ticket.multimedia_url" target="_blank" t-out="ticket.multimedia_url"/></li>
+                    </ul>
+                    <owl-component t-if="puede_adjuntar" name="posventa.portal_ticket_uploader" t-att-props="json.dumps({'ticketId': ticket.id})"/>
+                </div>
+            </div>
+
+            <div t-if="ticket.medida_ids" class="card mb-3">
+                <div class="card-body">
+                    <h5 class="card-title">Seguimiento</h5>
+                    <ul class="list-unstyled mb-0">
+                        <li t-foreach="ticket.medida_ids" t-as="med" class="d-flex justify-content-between gap-2 py-1 border-bottom">
+                            <span><t t-out="med.name"/><t t-if="med.fecha_vencimiento"> <span class="small text-muted">· <t t-out="med.fecha_vencimiento"/></span></t></span>
+                            <span class="badge text-bg-light border" t-field="med.estado"/>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Comunicación con Posventa</h5>
+                    <t t-call="portal.message_thread"/>
+                </div>
+            </div>
+        </t>
+    </template>
+</odoo>
