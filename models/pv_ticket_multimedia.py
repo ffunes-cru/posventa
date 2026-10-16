@@ -31,6 +31,9 @@ SYNC_BACKOFF_MINUTOS = 5
 # En modo de almacenamiento 'odoo' el archivo se carga entero en memoria del worker: tope propio
 ODOO_STORAGE_MAX_MB = 200
 
+# Fotos/archivos chicos van como adjunto del ticket; los mayores, por fragmentos (Drive o almacenamiento Odoo)
+MAX_ADJUNTO_MB = 20
+
 ESTADO_SYNC = [
     ('procesando', 'Sincronizando a Drive'),
     ('disponible', 'Disponible en Google Drive'),
@@ -103,6 +106,20 @@ class PvTicketMultimedia(models.Model):
     def _get_storage_mode(self):
         mode = self._get_param('posventa.storage_mode', 'drive')
         return mode if mode in ('drive', 'odoo') else 'drive'
+
+    @api.model
+    def get_upload_config(self):
+        """Límites y destino de subida que usan los asistentes JS (portal y backend)."""
+        storage_mode = self._get_storage_mode()
+        rclone_configured, rclone_msg = self._is_rclone_configured() if storage_mode == 'drive' else (True, 'OK')
+        return {
+            'storage_mode': storage_mode,
+            'chunk_size_bytes': self._get_chunk_size_bytes(),
+            'max_adjunto_bytes': MAX_ADJUNTO_MB * 1024 * 1024,
+            'max_file_size_bytes': self._get_max_upload_bytes(),
+            'rclone_configured': rclone_configured,
+            'rclone_msg': rclone_msg,
+        }
 
     @api.model
     def _get_chunk_size_bytes(self):

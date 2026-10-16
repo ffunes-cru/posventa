@@ -3,6 +3,7 @@ from odoo import api, fields, models, _
 from odoo.exceptions import AccessError, UserError, ValidationError
 
 from .pv_maquina import ESTADO_MAQUINA, ESTADOS_MAQUINA_SIN_TICKETS
+from .pv_ticket_multimedia import MAX_ADJUNTO_MB
 
 
 ESTADO_TICKET = [
@@ -28,9 +29,6 @@ PRIORIDAD = [
 
 # Certificado que respalda el reclamo según el tipo de ticket, en orden de preferencia
 TIPOS_CERTIFICADO_POR_TICKET = {'post_pm': ['cpm'], 'pre_pm': ['feu', 'fru']}
-
-# Fotos/archivos chicos van como adjunto; los mayores, por fragmentos (Drive o almacenamiento Odoo)
-MAX_ADJUNTO_MB = 20
 
 # Datos que carga el concesionario: no se modifican una vez enviado el ticket (salvo admin)
 CAMPOS_CARGA_CONCESIONARIO = {
@@ -566,10 +564,8 @@ class PvTicket(models.Model):
     def get_wizard_catalog_data(self, sistema_id=None, subsistema_id=None):
         """Catálogo para el asistente de reclamo: desplegables en cascada, campos adicionales y límites de subida."""
         activos = [('active', '=', True)]
-        Multimedia = self.env['pv.ticket.multimedia']
-        storage_mode = Multimedia._get_storage_mode()
-        rclone_configured, rclone_msg = Multimedia._is_rclone_configured() if storage_mode == 'drive' else (True, 'OK')
         return {
+            **self.env['pv.ticket.multimedia'].get_upload_config(),
             'sistemas': self.env['pv.sistema'].search_read(activos, ['id', 'name', 'codigo']),
             'subsistemas': self.env['pv.subsistema'].search_read(
                 activos + [('sistema_id', '=', sistema_id)], ['id', 'name', 'codigo', 'placeholder_descripcion']
@@ -585,12 +581,6 @@ class PvTicket(models.Model):
                 'opciones': [o.strip() for o in (c.opciones or '').split('|') if o.strip()],
             } for c in self.env['pv.subsistema.campo'].search([('subsistema_id', '=', subsistema_id)])] if subsistema_id else [],
             'tipos_desvio': self.env['pv.tipo.desvio'].search_read(activos, ['id', 'name', 'codigo']),
-            'storage_mode': storage_mode,
-            'chunk_size_bytes': Multimedia._get_chunk_size_bytes(),
-            'max_adjunto_bytes': MAX_ADJUNTO_MB * 1024 * 1024,
-            'max_file_size_bytes': Multimedia._get_max_upload_bytes(),
-            'rclone_configured': rclone_configured,
-            'rclone_msg': rclone_msg,
         }
 
     # --- Acciones del backend ---

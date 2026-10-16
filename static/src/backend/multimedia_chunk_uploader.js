@@ -23,14 +23,9 @@ export class PvMultimediaChunkUploader extends Component {
             fileSizeDisplay: "",
             progress: 0,
             errorMessage: "",
-            chunkSizeBytes: 768 * 1024,
-            maxFileSizeBytes: 1024 * 1024 * 1024,
         });
         onWillStart(async () => {
-            const data = await this.orm.call("pv.ticket", "get_wizard_catalog_data", []);
-            this.state.chunkSizeBytes = data.chunk_size_bytes;
-            this.state.maxFileSizeBytes = data.max_file_size_bytes;
-            this.rcloneMsg = data.rclone_configured ? "" : data.rclone_msg;
+            this.config = await this.orm.call("pv.ticket.multimedia", "get_upload_config", []);
         });
     }
 
@@ -47,13 +42,13 @@ export class PvMultimediaChunkUploader extends Component {
         if (!file) {
             return;
         }
-        if (this.rcloneMsg) {
-            this.notification.add(this.rcloneMsg, { type: "danger" });
+        if (!this.config.rclone_configured) {
+            this.notification.add(this.config.rclone_msg, { type: "danger" });
             return;
         }
-        if (file.size > this.state.maxFileSizeBytes) {
+        if (file.size > this.config.max_file_size_bytes) {
             this.notification.add(
-                _t("El archivo '%s' supera el límite máximo de %s.", file.name, formatFileSize(this.state.maxFileSizeBytes)),
+                _t("El archivo '%s' supera el límite máximo de %s.", file.name, formatFileSize(this.config.max_file_size_bytes)),
                 { type: "danger" }
             );
             return;
@@ -73,7 +68,7 @@ export class PvMultimediaChunkUploader extends Component {
                 ticketId: this.ticketId,
                 file: this.currentFile,
                 uuid: newUploadUuid(),
-                chunkSize: this.state.chunkSizeBytes,
+                chunkSize: this.config.chunk_size_bytes,
                 onProgress: (done, total) => (this.state.progress = Math.round((done / total) * 100)),
             });
             await this.props.record.update({

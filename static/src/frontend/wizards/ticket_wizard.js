@@ -18,9 +18,24 @@ function certificadosParaReclamo(maquina, tipoTicket) {
     );
 }
 
+function nombreDe(lista, id) {
+    return lista.find((x) => x.id === parseInt(id))?.name || "";
+}
+
+function mensajeDeError(error, porDefecto) {
+    return error.data?.message || error.message || porDefecto;
+}
+
 // Valor del selector de problema cuando la falla no figura en el catálogo
 const PROBLEMA_NO_LISTADO = "no_listado";
 
+/**
+ * Asistente de alta de reclamo en el portal. Pasos: máquina y certificado, clasificación,
+ * información adicional (solo Post-PM con campos del subsistema), descripción y archivos, confirmación.
+ * Al confirmar crea el ticket en Borrador, sube los archivos (chicos como adjunto, pesados por
+ * fragmentos) y, si se pidió, lo envía. Si falla una subida el ticket queda creado y se ofrece
+ * reintentar, omitir ese archivo o dejarlo en Borrador.
+ */
 export class TicketWizard extends Component {
     static template = "posventa.TicketWizard";
     static props = {
@@ -32,92 +47,75 @@ export class TicketWizard extends Component {
     setup() {
         this.orm = useService("orm");
         this.notification = useService("notification");
+        this.formatFileSize = formatFileSize;
+        this.problemaNoListadoValue = PROBLEMA_NO_LISTADO;
+        this.limites = {}; // de get_upload_config, vía loadCatalogs
 
         const tipoTicket = this.props.maquina.tiene_cpm ? "post_pm" : "pre_pm";
         const [certificadoInicial] = certificadosParaReclamo(this.props.maquina, tipoTicket);
-
         this.state = useState({
-            currentStepIndex: 0, // 0-indexed: 0..N
+            currentStepIndex: 0,
             submitting: false,
-            tipoTicket: tipoTicket,
-            certificadoId: certificadoInicial ? certificadoInicial.id : false,
-            // Step Classification
+            tipoTicket,
+            certificadoId: certificadoInicial?.id || false,
+            // Clasificación
             sistemaId: false,
             subsistemaId: false,
             problemaId: false,
             desvioTipoId: false,
-            tiposDesvio: [],
-            storageMode: "drive",
             ubicacionActual: "",
             hectareas: "",
-            // Catalogs
+            camposValues: {}, // { campo_id: valor }
+            // Catálogos (get_wizard_catalog_data)
             sistemas: [],
             subsistemas: [],
             problemas: [],
             camposExtras: [],
-            camposValues: {}, // { campo_id: val }
-            // Details
+            tiposDesvio: [],
+            storageMode: "drive",
+            // Descripción y archivos
             placeholderDescripcion: "",
             descripcion: "",
             accionesRealizadas: "",
             multimediaUrl: "",
-            attachments: [], // [{ name, size, type, data }]
-            heavyFiles: [], // [{ file, name, size, type, uuid, progress, status }]
+            attachments: [], // archivos chicos: { name, size, type, data, status }
+            heavyFiles: [], // archivos pesados: { file, name, size, type, uuid, progress, status }
             isUploadingHeavy: false,
             uploadProgressText: "",
+            // Envío
             createdTicketId: false,
             uploadError: null, // { filename, error, fileItem }
             wantsSendDirect: false,
         });
 
-        this.chunkSizeBytes = 768 * 1024;
-        this.maxFileSizeBytes = 1024 * 1024 * 1024;
-
-        onWillStart(async () => {
-            await this.loadCatalogs();
-        });
+        onWillStart(() => this.loadCatalogs());
     }
 
-    get problemaNoListadoValue() {
-        return PROBLEMA_NO_LISTADO;
-    }
-
-    get borradoresExistentes() {
-        return ((this.props.maquina && this.props.maquina.tickets) || []).filter(t => t.estado === "borrador");
-    }
-
-    get availableCertificates() {
-        return certificadosParaReclamo(this.props.maquina, this.state.tipoTicket);
-    }
-
-    get selectedCertificado() {
-        return (this.props.maquina.certificados || []).find((c) => c.id === parseInt(this.state.certificadoId));
-    }
-
+    // --- Catálogos ---
     async loadCatalogs() {
         try {
             const data = await this.orm.call("pv.ticket", "get_wizard_catalog_data", [], {
-                sistema_id: this.state.sistemaId ? parseInt(this.state.sistemaId) : null,
-                subsistema_id: this.state.subsistemaId ? parseInt(this.state.subsistemaId) : null,
+                sistema_id: parseInt(this.state.sistemaId) || null,
+                subsistema_id: parseInt(this.state.subsistemaId) || null,
             });
-            this.state.sistemas = data.sistemas || [];
-            this.state.subsistemas = data.subsistemas || [];
-            this.state.problemas = data.problemas || [];
-            this.state.camposExtras = data.campos_extras || [];
-            this.state.tiposDesvio = data.tipos_desvio || [];
-            this.state.storageMode = data.storage_mode || "drive";
-            if (!this.state.desvioTipoId && this.state.tiposDesvio.length) {
-                this.state.desvioTipoId = this.state.tiposDesvio[0].id;
-            }
-            this.maxAdjuntoBytes = data.max_adjunto_bytes;
-            if (data.chunk_size_bytes) {
-                this.chunkSizeBytes = data.chunk_size_bytes;
-            }
-            if (data.max_file_size_bytes) {
-                this.maxFileSizeBytes = data.max_file_size_bytes;
-            }
+            Object.assign(this.state, {
+                sistemas: data.sistemas,
+                subsistemas: data.subsistemas,
+                problemas: data.problemas,
+                camposExtras: data.campos_extras,
+                tiposDesvio: data.tipos_desvio,
+                storageMode: data.storage_mode,
+            });
+            this.state.desvioTipoId ||= data.tipos_desvio[0]?.id || false;
+            this.limites = {
+                adjunto: data.max_adjunto_bytes,
+                archivoPesado: data.max_file_size_bytes,
+                fragmento: data.chunk_size_bytes,
+            };
         } catch (e) {
-            console.error("Error loading wizard catalogs", e);
+            this.notification.add(mensajeDeError(e, _t("No se pudo cargar el catálogo de reclamos.")), {
+                type: "danger",
+            });
         }
     }
 
@@ -126,92 +124,82 @@ export class TicketWizard extends Component {
     }
 
     async onSistemaChange(ev) {
-        const val = parseInt(ev.target.value) || false;
-        this.state.sistemaId = val;
-        this.state.subsistemaId = false;
-        this.state.problemaId = false;
-        this.state.camposExtras = [];
-        this.state.camposValues = {};
+        Object.assign(this.state, {
+            sistemaId: parseInt(ev.target.value) || false,
+            subsistemaId: false,
+            problemaId: false,
+            camposExtras: [],
+            camposValues: {},
+        });
         await this.loadCatalogs();
     }
 
     async onSubsistemaChange(ev) {
-        const val = parseInt(ev.target.value) || false;
-        this.state.subsistemaId = val;
-        this.state.problemaId = false;
-        this.state.camposValues = {};
-
-        const sub = this.state.subsistemas.find(s => s.id === val);
-        this.state.placeholderDescripcion = sub ? (sub.placeholder_descripcion || "") : "";
-
+        const subsistemaId = parseInt(ev.target.value) || false;
+        const subsistema = this.state.subsistemas.find((s) => s.id === subsistemaId);
+        Object.assign(this.state, {
+            subsistemaId,
+            problemaId: false,
+            placeholderDescripcion: subsistema?.placeholder_descripcion || "",
+        });
         await this.loadCatalogs();
-
-        for (const c of this.state.camposExtras) {
-            if (c.tipo_campo === 'booleano') {
-                this.state.camposValues[c.id] = 'false';
-            } else {
-                this.state.camposValues[c.id] = '';
-            }
-        }
+        this.state.camposValues = Object.fromEntries(
+            this.state.camposExtras.map((c) => [c.id, c.tipo_campo === "booleano" ? "false" : ""])
+        );
     }
 
     setCampoValue(campoId, val) {
         this.state.camposValues[campoId] = val;
     }
 
-    // Attachments Handling
+    // --- Archivos ---
     async onFilesChange(ev) {
-        const files = Array.from(ev.target.files || []);
-
-        for (const file of files) {
-            // Los archivos pesados van por fragmentos para no cargarlos enteros en memoria
-            if (file.size > this.maxAdjuntoBytes) {
-                this.addHeavyFileDirect(file);
+        for (const file of ev.target.files || []) {
+            if (file.size > this.limites.adjunto) {
+                // Los pesados van por fragmentos para no cargarlos enteros en memoria
+                this.agregarArchivoPesado(file);
                 this.notification.add(
-                    _t("El archivo '%s' supera %s y se subirá como archivo pesado.", file.name, formatFileSize(this.maxAdjuntoBytes)),
+                    _t("El archivo '%s' supera %s y se subirá como archivo pesado.", file.name, formatFileSize(this.limites.adjunto)),
                     { type: "info" }
                 );
                 continue;
             }
-
-            const base64Data = await fileToBase64(file);
             this.state.attachments.push({
                 name: file.name,
                 size: file.size,
                 type: file.type || "application/octet-stream",
-                data: base64Data,
+                data: await fileToBase64(file),
+                status: "pending",
             });
         }
         ev.target.value = "";
     }
 
-    addHeavyFileDirect(file) {
-        const MAX_HEAVY_SIZE = this.maxFileSizeBytes || (1024 * 1024 * 1024);
-        if (file.size > MAX_HEAVY_SIZE) {
+    onHeavyFilesChange(ev) {
+        for (const file of ev.target.files || []) {
+            this.agregarArchivoPesado(file);
+        }
+        ev.target.value = "";
+    }
+
+    agregarArchivoPesado(file) {
+        if (file.size > this.limites.archivoPesado) {
             this.notification.add(
-                _t("El archivo '%s' supera el tamaño máximo permitido de %s (%s).", file.name, this.formatFileSize(MAX_HEAVY_SIZE), this.formatFileSize(file.size)),
+                _t("El archivo '%s' supera el tamaño máximo permitido de %s (%s).",
+                    file.name, formatFileSize(this.limites.archivoPesado), formatFileSize(file.size)),
                 { type: "danger" }
             );
             return;
         }
-        const uuid = newUploadUuid();
         this.state.heavyFiles.push({
-            file: file,
+            file,
             name: file.name,
             size: file.size,
             type: file.type || "application/octet-stream",
-            uuid: uuid,
+            uuid: newUploadUuid(),
             progress: 0,
             status: "pending",
         });
-    }
-
-    onHeavyFilesChange(ev) {
-        const files = Array.from(ev.target.files || []);
-        for (const file of files) {
-            this.addHeavyFileDirect(file);
-        }
-        ev.target.value = "";
     }
 
     removeAttachment(index) {
@@ -222,133 +210,64 @@ export class TicketWizard extends Component {
         this.state.heavyFiles.splice(index, 1);
     }
 
-    async uploadHeavyFile(ticketId, item) {
-        item.status = "uploading";
-        item.progress = 0;
-        try {
-            await uploadFileInChunks({
-                ticketId,
-                file: item.file,
-                uuid: item.uuid,
-                name: item.name,
-                chunkSize: this.chunkSizeBytes || 768 * 1024,
-                onProgress: (done, total) => {
-                    item.progress = Math.round((done / total) * 100);
-                    this.state.uploadProgressText = _t(
-                        "Subiendo %s (%s)... Bloque %s de %s",
-                        item.name,
-                        this.formatFileSize(item.size),
-                        done,
-                        total
-                    );
-                },
-            });
-        } catch (err) {
-            item.status = "error";
-            throw err;
-        }
-        item.status = "completed";
-    }
-
-    formatFileSize(bytes) {
-        return formatFileSize(bytes);
-    }
-
-    // Dynamic Step Definitions
+    // --- Pasos ---
     get steps() {
-        const list = [
-            { key: "machine", label: _t("1. Máquina y Certificado") },
-            { key: "classification", label: _t("2. Clasificación") },
+        const pasos = [
+            { key: "machine", label: _t("Máquina y Certificado") },
+            { key: "classification", label: _t("Clasificación") },
         ];
-        let idx = 3;
-        if (this.state.tipoTicket === "post_pm" && this.state.camposExtras.length > 0) {
-            list.push({ key: "extra_fields", label: `${idx}. Info Adicional` });
-            idx++;
+        if (this.state.tipoTicket === "post_pm" && this.state.camposExtras.length) {
+            pasos.push({ key: "extra_fields", label: _t("Info Adicional") });
         }
-        list.push({ key: "description", label: `${idx}. Descripción y Fotos` });
-        idx++;
-        list.push({ key: "summary", label: `${idx}. Confirmar` });
-        return list;
+        pasos.push({ key: "description", label: _t("Descripción y Fotos") }, { key: "summary", label: _t("Confirmar") });
+        return pasos.map((paso, i) => ({ ...paso, label: `${i + 1}. ${paso.label}` }));
     }
 
     get currentStepKey() {
-        const s = this.steps[this.state.currentStepIndex];
-        return s ? s.key : "machine";
+        return this.steps[this.state.currentStepIndex]?.key || "machine";
     }
 
-    validateCurrentStep() {
-        const key = this.currentStepKey;
-        if (key === "machine") {
-            if (!this.state.certificadoId) {
-                this.notification.add(_t("Debe seleccionar un Certificado Vigente para asociar al reclamo."), { type: "warning" });
-                return false;
+    /** Mensaje que impide avanzar desde el paso dado, o "" si está completo. */
+    stepError(key) {
+        const s = this.state;
+        switch (key) {
+            case "machine":
+                return s.certificadoId ? "" : _t("Debe seleccionar un Certificado Vigente para asociar al reclamo.");
+            case "classification":
+                if (s.tipoTicket !== "post_pm") {
+                    return s.desvioTipoId ? "" : _t("Por favor seleccione el Tipo de Desvío.");
+                }
+                if (!s.sistemaId) {
+                    return _t("Por favor seleccione un Sistema.");
+                }
+                if (!s.subsistemaId) {
+                    return _t("Por favor seleccione un Subsistema.");
+                }
+                if (!s.problemaId) {
+                    return _t("Seleccione el problema o indique que no está en la lista.");
+                }
+                return parseFloat(s.hectareas) > 0 ? "" : _t("Indique las hectáreas trabajadas por la máquina.");
+            case "extra_fields": {
+                const faltante = s.camposExtras.find((c) => c.obligatorio && !s.camposValues[c.id]);
+                return faltante ? _t("El campo '%s' es obligatorio.", faltante.name) : "";
             }
-            return true;
+            case "description":
+                if (!s.descripcion.trim()) {
+                    return _t("La descripción del reclamo es obligatoria.");
+                }
+                if (!s.attachments.length && !s.heavyFiles.length && !s.multimediaUrl.trim()) {
+                    return _t("Es obligatorio adjuntar al menos una imagen o video donde se observe la problemática antes de continuar.");
+                }
         }
-
-        if (key === "classification") {
-            if (this.state.tipoTicket === "post_pm") {
-                if (!this.state.sistemaId) {
-                    this.notification.add(_t("Por favor seleccione un Sistema."), { type: "warning" });
-                    return false;
-                }
-                if (!this.state.subsistemaId) {
-                    this.notification.add(_t("Por favor seleccione un Subsistema."), { type: "warning" });
-                    return false;
-                }
-                if (!this.state.problemaId) {
-                    this.notification.add(_t("Seleccione el problema o indique que no está en la lista."), { type: "warning" });
-                    return false;
-                }
-                if (!(parseFloat(this.state.hectareas) > 0)) {
-                    this.notification.add(_t("Indique las hectáreas trabajadas por la máquina."), { type: "warning" });
-                    return false;
-                }
-            } else {
-                if (!this.state.desvioTipoId) {
-                    this.notification.add(_t("Por favor seleccione el Tipo de Desvío."), { type: "warning" });
-                    return false;
-                }
-            }
-            return true;
-        }
-
-        if (key === "extra_fields") {
-            for (const c of this.state.camposExtras) {
-                if (c.obligatorio && !this.state.camposValues[c.id]) {
-                    this.notification.add(_t("El campo '%s' es obligatorio.", c.name), { type: "warning" });
-                    return false;
-                }
-            }
-            return true;
-        }
-
-        if (key === "description") {
-            if (!this.state.descripcion || !this.state.descripcion.trim()) {
-                this.notification.add(_t("La descripción del reclamo es obligatoria."), { type: "warning" });
-                return false;
-            }
-            const hasAttachments = (this.state.attachments && this.state.attachments.length > 0) ||
-                                  (this.state.heavyFiles && this.state.heavyFiles.length > 0) ||
-                                  (this.state.multimediaUrl && this.state.multimediaUrl.trim().length > 0);
-            if (!hasAttachments) {
-                this.notification.add(
-                    _t("Es obligatorio adjuntar al menos una imagen o video donde se observe la problemática antes de continuar."),
-                    { type: "warning" }
-                );
-                return false;
-            }
-            return true;
-        }
-
-        return true;
+        return "";
     }
 
     nextStep() {
-        if (this.validateCurrentStep()) {
-            if (this.state.currentStepIndex < this.steps.length - 1) {
-                this.state.currentStepIndex++;
-            }
+        const error = this.stepError(this.currentStepKey);
+        if (error) {
+            this.notification.add(error, { type: "warning" });
+        } else if (this.state.currentStepIndex < this.steps.length - 1) {
+            this.state.currentStepIndex++;
         }
     }
 
@@ -358,166 +277,157 @@ export class TicketWizard extends Component {
         }
     }
 
-    // Helper getters for summary step display
+    // --- Datos para el paso de confirmación ---
+    get borradoresExistentes() {
+        return (this.props.maquina.tickets || []).filter((t) => t.estado === "borrador");
+    }
+
+    get availableCertificates() {
+        return certificadosParaReclamo(this.props.maquina, this.state.tipoTicket);
+    }
+
+    get selectedCertificado() {
+        return (this.props.maquina.certificados || []).find((c) => c.id === parseInt(this.state.certificadoId));
+    }
+
     get selectedSistemaName() {
-        const s = this.state.sistemas.find(x => x.id === parseInt(this.state.sistemaId));
-        return s ? s.name : "";
+        return nombreDe(this.state.sistemas, this.state.sistemaId);
     }
 
     get selectedSubsistemaName() {
-        const sub = this.state.subsistemas.find(x => x.id === parseInt(this.state.subsistemaId));
-        return sub ? sub.name : "";
+        return nombreDe(this.state.subsistemas, this.state.subsistemaId);
     }
 
     get selectedProblemaName() {
         if (this.state.problemaId === PROBLEMA_NO_LISTADO) {
             return _t("No está en la lista (ver descripción)");
         }
-        const p = this.state.problemas.find(x => x.id === parseInt(this.state.problemaId));
-        return p ? p.name : "";
+        return nombreDe(this.state.problemas, this.state.problemaId);
     }
 
     get desvioTipoLabel() {
-        const found = this.state.tiposDesvio.find((t) => t.id === this.state.desvioTipoId);
-        return found ? found.name : "";
+        return nombreDe(this.state.tiposDesvio, this.state.desvioTipoId);
     }
 
-    // Submit Action
-    async submitTicket(enviarDirecto = false) {
-        if (this.state.submitting) return;
-        this.state.submitting = true;
-        this.state.uploadError = null;
-        this.state.wantsSendDirect = Boolean(enviarDirecto);
+    // --- Envío ---
+    ticketVals() {
+        const s = this.state;
+        const vals = {
+            maquina_id: this.props.maquina.id,
+            certificado_id: parseInt(s.certificadoId),
+            descripcion: s.descripcion,
+            acciones_realizadas: s.accionesRealizadas,
+            multimedia_url: s.multimediaUrl,
+        };
+        if (s.tipoTicket !== "post_pm") {
+            return { ...vals, desvio_tipo_id: s.desvioTipoId };
+        }
+        const problema = s.problemaId === PROBLEMA_NO_LISTADO
+            ? { problema_no_listado: true }
+            : { problema_id: parseInt(s.problemaId) };
+        return {
+            ...vals,
+            ...problema,
+            sistema_id: parseInt(s.sistemaId),
+            subsistema_id: parseInt(s.subsistemaId),
+            ubicacion_actual: s.ubicacionActual,
+            hectareas: parseFloat(s.hectareas) || 0,
+            campo_extra_ids: s.camposExtras.map((c) => [0, 0, {
+                campo_id: c.id,
+                campo_nombre: c.name,
+                valor: String(s.camposValues[c.id] || ""),
+            }]),
+        };
+    }
 
+    async subirArchivo(ticketId, item) {
+        if (!item.file) {
+            return adjuntarArchivo(this.orm, ticketId, item, item.data);
+        }
+        this.state.isUploadingHeavy = true;
+        item.progress = 0;
+        await uploadFileInChunks({
+            ticketId,
+            file: item.file,
+            uuid: item.uuid,
+            name: item.name,
+            chunkSize: this.limites.fragmento,
+            onProgress: (done, total) => {
+                item.progress = Math.round((done / total) * 100);
+                this.state.uploadProgressText = _t(
+                    "Subiendo %s (%s)... Bloque %s de %s", item.name, formatFileSize(item.size), done, total
+                );
+            },
+        });
+    }
+
+    /** Sube los archivos pendientes en orden. Si uno falla lo deja en uploadError y devuelve false. */
+    async subirArchivosPendientes(ticketId) {
+        const pendientes = [...this.state.attachments, ...this.state.heavyFiles].filter(
+            (item) => item.status !== "completed" && !item.skipped
+        );
         try {
-            let ticketId = this.state.createdTicketId;
-            if (!ticketId) {
-                const ticketVals = {
-                    maquina_id: this.props.maquina.id,
-                    certificado_id: parseInt(this.state.certificadoId),
-                    descripcion: this.state.descripcion,
-                    acciones_realizadas: this.state.accionesRealizadas || "",
-                    multimedia_url: this.state.multimediaUrl || "",
-                };
-
-                if (this.state.tipoTicket === "post_pm") {
-                    ticketVals.sistema_id = parseInt(this.state.sistemaId);
-                    ticketVals.subsistema_id = parseInt(this.state.subsistemaId);
-                    if (this.state.problemaId === PROBLEMA_NO_LISTADO) {
-                        ticketVals.problema_no_listado = true;
-                    } else {
-                        ticketVals.problema_id = parseInt(this.state.problemaId);
-                    }
-                    ticketVals.ubicacion_actual = this.state.ubicacionActual || "";
-                    ticketVals.hectareas = parseFloat(this.state.hectareas) || 0.0;
-
-                    if (this.state.camposExtras.length > 0) {
-                        const extraLines = [];
-                        for (const c of this.state.camposExtras) {
-                            const val = this.state.camposValues[c.id] || "";
-                            extraLines.push([0, 0, {
-                                campo_id: c.id,
-                                campo_nombre: c.name,
-                                valor: String(val),
-                            }]);
-                        }
-                        ticketVals.campo_extra_ids = extraLines;
-                    }
-                } else {
-                    ticketVals.desvio_tipo_id = this.state.desvioTipoId;
-                }
-
-                const resIds = await this.orm.create("pv.ticket", [ticketVals]);
-                ticketId = resIds[0];
-                this.state.createdTicketId = ticketId;
-            }
-
-            // Adjuntos estándar de Odoo: si uno falla se detiene el envío (el ticket queda en Borrador)
-            for (const att of this.state.attachments) {
-                if (att.uploaded || att.skipped) continue;
+            for (const item of pendientes) {
+                item.status = "uploading";
                 try {
-                    await adjuntarArchivo(this.orm, ticketId, att, att.data);
-                    att.uploaded = true;
-                } catch (attErr) {
-                    console.error("Error al subir adjunto:", att.name, attErr);
+                    await this.subirArchivo(ticketId, item);
+                } catch (e) {
+                    item.status = "error";
                     this.state.uploadError = {
-                        filename: att.name,
-                        error: attErr.data?.message || attErr.message || _t("Error al subir el archivo."),
-                        fileItem: att,
+                        filename: item.name,
+                        error: mensajeDeError(e, _t("Error al subir el archivo.")),
+                        fileItem: item,
                     };
-                    this.state.submitting = false;
-                    return;
+                    return false;
                 }
+                item.status = "completed";
             }
+            return true;
+        } finally {
+            this.state.isUploadingHeavy = false;
+            this.state.uploadProgressText = "";
+        }
+    }
 
-            // Subida por fragmentos de archivos pesados (hasta 1 GB)
-            if (this.state.heavyFiles.length > 0) {
-                this.state.isUploadingHeavy = true;
-                for (let i = 0; i < this.state.heavyFiles.length; i++) {
-                    const hf = this.state.heavyFiles[i];
-                    if (hf.status === "completed" || hf.skipped) continue;
-                    try {
-                        await this.uploadHeavyFile(ticketId, hf);
-                    } catch (uploadErr) {
-                        console.error("Error al subir archivo pesado:", hf.name, uploadErr);
-                        this.state.isUploadingHeavy = false;
-                        this.state.uploadProgressText = "";
-                        this.state.uploadError = {
-                            filename: hf.name,
-                            error: uploadErr.message || _t("Error en la transmisión de red o proxy."),
-                            fileItem: hf,
-                        };
-                        this.state.submitting = false;
-                        // DETENEMOS: no enviamos a abierto ni cerramos el modal
-                        return;
-                    }
-                }
-                this.state.isUploadingHeavy = false;
-                this.state.uploadProgressText = "";
+    async submitTicket(enviarDirecto = false) {
+        if (this.state.submitting) {
+            return;
+        }
+        Object.assign(this.state, { submitting: true, uploadError: null, wantsSendDirect: Boolean(enviarDirecto) });
+        try {
+            if (!this.state.createdTicketId) {
+                [this.state.createdTicketId] = await this.orm.create("pv.ticket", [this.ticketVals()]);
             }
-
-            await this.finalizeTicket(enviarDirecto);
-
+            const ticketId = this.state.createdTicketId;
+            // Si falla una subida no se envía: el ticket queda en Borrador hasta que el usuario decida
+            if (!(await this.subirArchivosPendientes(ticketId))) {
+                return;
+            }
+            if (enviarDirecto) {
+                await this.orm.call("pv.ticket", "action_enviar_ticket", [[ticketId]]);
+                this.notification.add(_t("Ticket creado y enviado a revisión técnica."), { type: "success" });
+            } else {
+                this.notification.add(_t("Ticket guardado en estado Borrador."), { type: "info" });
+            }
+            this.props.onSuccess(ticketId);
         } catch (e) {
-            console.error("Error creating ticket", e);
-            const msg = e.data?.message || e.message || _t("Error al crear el ticket.");
-            this.notification.add(msg, { type: "danger" });
+            this.notification.add(mensajeDeError(e, _t("Error al crear el ticket.")), { type: "danger" });
         } finally {
             this.state.submitting = false;
         }
     }
 
-    async finalizeTicket(enviarDirecto = false) {
-        const ticketId = this.state.createdTicketId;
-        if (!ticketId) return;
-
-        if (enviarDirecto) {
-            await this.orm.call("pv.ticket", "action_enviar_ticket", [[ticketId]]);
-            this.notification.add(_t("Ticket creado y enviado a revisión técnica."), { type: "success" });
-        } else {
-            this.notification.add(_t("Ticket guardado en estado Borrador."), { type: "info" });
-        }
-
-        this.props.onSuccess(ticketId);
-    }
-
+    // --- Opciones ante una subida fallida ---
     async retryUpload() {
-        if (!this.state.uploadError || !this.state.createdTicketId) return;
-        this.state.uploadError = null;
         await this.submitTicket(this.state.wantsSendDirect);
     }
 
     async proceedWithoutFailedFile() {
-        if (!this.state.uploadError || !this.state.createdTicketId) return;
-        // Se omite solo el archivo que falló; el resto se sigue subiendo
         this.state.uploadError.fileItem.skipped = true;
-        this.state.uploadError = null;
         await this.submitTicket(this.state.wantsSendDirect);
     }
 
-    async keepInDraft() {
-        if (!this.state.createdTicketId) return;
-        this.state.uploadError = null;
+    keepInDraft() {
         this.notification.add(
             _t("El ticket quedó guardado en estado Borrador. Podrá adjuntar el archivo desde el detalle del reclamo."),
             { type: "info" }

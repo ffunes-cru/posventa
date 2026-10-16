@@ -11,7 +11,7 @@
                         <field name="archivo_nombre" invisible="1"/>
                     </group>
                     <group>
-                        <div class="alert alert-info">
+                        <div class="alert alert-info" role="status">
                             <p><strong>Formato esperado del archivo Excel:</strong></p>
                             <p>Columnas: <code>of</code>, <code>tipo</code>, <code>concesionario</code>,
                             <code>cliente</code>, <code>ciudad</code>, <code>provincia</code>, <code>estado</code></p>

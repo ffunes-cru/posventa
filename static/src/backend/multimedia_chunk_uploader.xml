@@ -14,10 +14,10 @@
                     </div>
                     <h6 class="fw-bold mb-1 text-dark">Haga clic aquí para seleccionar un archivo o video</h6>
                     <p class="text-muted small mb-2">
-                        Admite videos en alta resolución y archivos pesados (hasta <t t-esc="formatFileSize(state.maxFileSizeBytes)"/>).
+                        Admite videos en alta resolución y archivos pesados (hasta <t t-esc="formatFileSize(config.max_file_size_bytes)"/>).
                     </p>
                     <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-3 py-1">
-                        <i class="fa fa-shield me-1"/> Subida optimizada en paquetes de <t t-esc="Math.round(state.chunkSizeBytes / 1024)"/> KB (compatible con cualquier proxy)
+                        <i class="fa fa-shield me-1"/> Subida optimizada en paquetes de <t t-esc="Math.round(config.chunk_size_bytes / 1024)"/> KB (compatible con cualquier proxy)
                     </span>
                 </div>
             </t>

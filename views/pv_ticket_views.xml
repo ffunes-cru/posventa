@@ -49,7 +49,7 @@
                             <field name="estado" widget="label_selection" options="{'classes': {'borrador': 'secondary', 'abierto': 'info', 'en_proceso': 'warning', 'aceptado': 'success', 'rechazado': 'danger', 'cerrado': 'dark'}}" class="ms-auto flex-shrink-0"/>
                         </div>
                         <div class="d-flex align-items-center text-muted mb-2 small" t-if="record.cliente_id.raw_value">
-                            <i class="fa fa-user me-1 text-secondary"/> <field name="cliente_id" class="fw-semibold text-dark"/>
+                            <i class="fa fa-user me-1 text-secondary" title="Cliente"/> <field name="cliente_id" class="fw-semibold text-dark"/>
                         </div>
                         <footer class="align-items-end">
                             <div class="d-flex flex-wrap gap-1 text-muted text-nowrap align-items-center">
@@ -89,7 +89,7 @@
                 <sheet>
                     <field name="storage_mode" invisible="1"/>
                     <div class="alert alert-warning border-start border-4 border-warning shadow-sm rounded-3 mb-3 p-2" role="alert" invisible="estado != 'borrador'">
-                        <i class="fa fa-info-circle me-1"/> <strong>Requisito para envío:</strong> Es obligatorio adjuntar al menos una imagen o video donde se observe la problemática antes de enviar el ticket a revisión técnica.
+                        <i class="fa fa-info-circle me-1" title="Información"/> <strong>Requisito para envío:</strong> Es obligatorio adjuntar al menos una imagen o video donde se observe la problemática antes de enviar el ticket a revisión técnica.
                     </div>
                     <div class="oe_button_box" name="button_box">
                         <button name="action_abrir_carpeta_drive" type="object" class="oe_stat_button" icon="fa-video-camera" invisible="multimedia_count == 0 and not drive_folder_url and not multimedia_url">
@@ -210,7 +210,7 @@
 
                         <page string="Multimedia y Videos (Drive)" name="multimedia">
                             <div class="alert alert-info py-2 mb-3" role="status" invisible="storage_mode != 'odoo'">
-                                <i class="fa fa-info-circle me-1"/> El modo de almacenamiento seleccionado en los ajustes es <strong>Estándar de Odoo</strong>. Puede arrastrar y adjuntar archivos directamente en el Chatter. Los archivos previamente guardados en Drive se conservan disponibles.
+                                <i class="fa fa-info-circle me-1" title="Información"/> El modo de almacenamiento seleccionado en los ajustes es <strong>Estándar de Odoo</strong>. Puede arrastrar y adjuntar archivos directamente en el Chatter. Los archivos previamente guardados en Drive se conservan disponibles.
                             </div>
                             <div class="d-flex justify-content-between align-items-center mb-3">
                                 <div>

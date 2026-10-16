@@ -102,6 +102,80 @@ registry.category("web_tour.tours").add("posventa_portal_cargar_certificado", {
 });
 
 // Adjuntar una foto a un ticket existente desde su detalle
+/** Paso que elige la opción cuyo texto contiene `texto`, una vez cargada (los ids dependen de la base). */
+function elegirOpcion(content, texto) {
+    return {
+        content,
+        trigger: `.pv-wizard-content select:has(option:contains(${texto}))`,
+        run() {
+            this.anchor.value = [...this.anchor.options].find((o) => o.text.includes(texto)).value;
+            this.anchor.dispatchEvent(new Event("change", { bubbles: true }));
+        },
+    };
+}
+
+// Reclamo Post-PM: catálogo en cascada, campo adicional obligatorio, problema no listado y foto adjunta
+registry.category("web_tour.tours").add("posventa_portal_ticket_post_pm", {
+    steps: () => [
+        {
+            content: "El wizard OWL se monta con el CPM preseleccionado",
+            trigger: ".o_pv_portal .pv-wizard-content:contains(CPM)",
+        },
+        siguiente,
+        elegirOpcion("Sistema", "Sistema Hidráulico"),
+        elegirOpcion("Subsistema", "Válvula de Presión"),
+        elegirOpcion("Problema no listado", "no está en la lista"),
+        siguiente,
+        {
+            content: "Sin hectáreas no avanza",
+            trigger: ".o_notification:contains(hectáreas)",
+        },
+        {
+            content: "Hectáreas trabajadas",
+            trigger: ".pv-wizard-content input[type=number]",
+            run: "edit 350",
+        },
+        siguiente,
+        {
+            content: "Campo adicional del subsistema",
+            trigger: ".pv-wizard-content .pv-form-group:contains(Presión medida) input",
+            run: "edit 12 bar",
+        },
+        siguiente,
+        {
+            content: "Descripción del reclamo",
+            trigger: ".pv-wizard-content textarea[placeholder*='Describa detalladamente']",
+            run: "edit Pierde aceite la válvula (tour post-pm)",
+        },
+        {
+            content: "Foto del problema",
+            trigger: ".pv-wizard-content input[type=file][accept^=image]",
+            run() {
+                elegirArchivo(this.anchor, "valvula.png", "image/png", "PNGDATA");
+            },
+        },
+        {
+            content: "La foto queda en la lista",
+            trigger: ".pv-wizard-content:contains(valvula.png)",
+        },
+        siguiente,
+        {
+            content: "El resumen muestra el problema no listado",
+            trigger: ".pv-wizard-content:contains(No está en la lista)",
+        },
+        {
+            content: "Guardar y enviar",
+            trigger: ".pv-wizard-footer button.pv-btn-success:contains(Enviar)",
+            run: "click",
+            expectUnloadPage: true,
+        },
+        {
+            content: "Redirige al detalle del ticket, ya enviado",
+            trigger: ".o_pv_portal .badge:contains(ABIERTO)",
+        },
+    ],
+});
+
 registry.category("web_tour.tours").add("posventa_portal_adjuntar_foto", {
     steps: () => [
         {

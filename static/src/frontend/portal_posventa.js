@@ -77,18 +77,14 @@ export class PortalTicketUploader extends Component {
         this.orm = useService("orm");
         this.notification = useService("notification");
         this.state = useState({ files: [], uploading: false, progressText: "" });
-        this.config = { chunkSizeBytes: 768 * 1024, maxFileSizeBytes: 1024 * 1024 * 1024 };
         onWillStart(async () => {
-            const data = await this.orm.call("pv.ticket", "get_wizard_catalog_data", []);
-            this.config.chunkSizeBytes = data.chunk_size_bytes || this.config.chunkSizeBytes;
-            this.config.maxFileSizeBytes = data.max_file_size_bytes || this.config.maxFileSizeBytes;
-            this.config.maxAdjuntoBytes = data.max_adjunto_bytes;
+            this.config = await this.orm.call("pv.ticket.multimedia", "get_upload_config", []);
         });
     }
 
     onFilesChange(ev) {
         for (const file of ev.target.files || []) {
-            if (file.size > this.config.maxFileSizeBytes) {
+            if (file.size > this.config.max_file_size_bytes) {
                 this.notification.add(_t("El archivo '%s' supera el tamaño máximo permitido.", file.name), {
                     type: "danger",
                 });
@@ -111,14 +107,14 @@ export class PortalTicketUploader extends Component {
         try {
             for (const file of [...this.state.files]) {
                 this.state.progressText = _t("Subiendo %s...", file.name);
-                if (file.size <= this.config.maxAdjuntoBytes) {
+                if (file.size <= this.config.max_adjunto_bytes) {
                     await adjuntarArchivo(this.orm, this.props.ticketId, file);
                 } else {
                     await uploadFileInChunks({
                         ticketId: this.props.ticketId,
                         file,
                         uuid: newUploadUuid(),
-                        chunkSize: this.config.chunkSizeBytes,
+                        chunkSize: this.config.chunk_size_bytes,
                         onProgress: (done, total) => {
                             this.state.progressText = _t("Subiendo %s... bloque %s de %s", file.name, done, total);
                         },

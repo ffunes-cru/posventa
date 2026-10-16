@@ -106,6 +106,31 @@ class TestPortalPosventa(TestPosventaCommon, HttpCase):
         self.assertEqual(nuevo.estado, 'abierto')
         self.assertEqual(nuevo.concesionario_id, self.concesionario_a)
 
+    def test_05b_tour_ticket_post_pm(self):
+        """Wizard Post-PM: catálogo en cascada, campos adicionales, foto adjunta y envío."""
+        maquina = self.env['pv.maquina'].create({
+            'tipo': 'drilor', 'of': 'OF-PORTAL-PM', 'concesionario_id': self.concesionario_a.id,
+        })
+        for tipo in ('fru', 'feu', 'cpm'):
+            self.env['pv.certificado'].create({
+                'maquina_id': maquina.id, 'tipo': tipo, 'fecha': fields.Date.today(),
+                'archivo': DUMMY_PDF_BASE64, 'archivo_nombre': f'{tipo}.pdf',
+            })
+        self.env['pv.subsistema.campo'].create({
+            'subsistema_id': self.subsistema.id, 'name': 'Presión medida', 'obligatorio': True,
+        })
+        # En modo Odoo las fotos van como adjunto del ticket (en modo Drive, por fragmentos vía rclone)
+        self.env['ir.config_parameter'].set_param('posventa.storage_mode', 'odoo')
+        self.start_tour(f'/my/posventa/maquina/{maquina.id}/ticket/nuevo',
+                        'posventa_portal_ticket_post_pm', login='concesionario_a')
+        ticket = maquina.ticket_ids
+        self.assertEqual(ticket.estado, 'abierto')
+        self.assertEqual((ticket.tipo_ticket, ticket.subsistema_id, ticket.hectareas), ('post_pm', self.subsistema, 350))
+        self.assertTrue(ticket.problema_no_listado)
+        self.assertEqual(ticket.campo_extra_ids.valor, '12 bar')
+        self.assertTrue(self.env['ir.attachment'].search_count([
+            ('res_model', '=', 'pv.ticket'), ('res_id', '=', ticket.id), ('name', '=', 'valvula.png')]))
+
     def test_06_tour_cargar_certificado(self):
         maquina = self.env['pv.maquina'].create({
             'tipo': 'gringa', 'of': 'OF-PORTAL-CERT', 'concesionario_id': self.concesionario_a.id,
