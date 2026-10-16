@@ -34,9 +34,9 @@
 
                     <button name="action_aprobar_liberacion" string="Aprobar Liberación" type="object" class="oe_highlight" invisible="not liberacion_solicitada" groups="posventa.group_pv_admin" confirm="La máquina vuelve a LIBERADA y se archivan sus certificados. ¿Continuar?"/>
                     <button name="action_rechazar_liberacion" string="Rechazar Liberación" type="object" class="btn-secondary" invisible="not liberacion_solicitada" groups="posventa.group_pv_admin"/>
-                    <button name="action_abrir_wizard_liberacion" string="Liberar Máquina (Canje)" type="object" class="btn-secondary" invisible="liberacion_solicitada or estado not in ('stock', 'vendida', 'cpm_vencido')" groups="posventa.group_pv_admin"/>
+                    <button name="action_abrir_wizard_liberacion" string="Liberar Máquina (Canje)" type="object" class="btn-secondary" invisible="liberacion_solicitada or estado not in ('stock', 'vendida')" groups="posventa.group_pv_admin"/>
 
-                    <field name="estado" widget="statusbar" statusbar_visible="liberada,stock,vendida,cpm_vencido"/>
+                    <field name="estado" widget="statusbar" statusbar_visible="liberada,stock,vendida"/>
                 </header>
                 <sheet>
                     <field name="es_concesionario_destino" invisible="1"/>
@@ -117,6 +117,9 @@
                 <filter string="Liberada" name="state_liberada" domain="[('estado', '=', 'liberada')]"/>
                 <filter string="En Stock" name="state_stock" domain="[('estado', '=', 'stock')]"/>
                 <filter string="Vendida" name="state_vendida" domain="[('estado', '=', 'vendida')]"/>
+                <filter string="Pendiente de Transferencia" name="state_pendiente" domain="[('estado', '=', 'pendiente')]"/>
+                <separator/>
+                <filter string="Liberación Solicitada" name="liberacion_solicitada" domain="[('liberacion_solicitada', '=', True)]"/>
                 <separator/>
                 <filter string="Sin CPM" name="no_cpm" domain="[('tiene_cpm', '=', False)]"/>
                 <filter string="Con CPM" name="has_cpm" domain="[('tiene_cpm', '=', True)]"/>

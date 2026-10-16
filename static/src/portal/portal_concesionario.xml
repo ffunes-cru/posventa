@@ -160,7 +160,6 @@
                             <button class="pv-filter-btn" t-att-class="{'active': state.estadoFilter === 'stock'}" t-on-click="() => this.setEstadoFilter('stock')">Stock</button>
                             <button class="pv-filter-btn" t-att-class="{'active': state.estadoFilter === 'vendida'}" t-on-click="() => this.setEstadoFilter('vendida')">Vendida</button>
                             <button class="pv-filter-btn" t-att-class="{'active': state.estadoFilter === 'pendiente'}" t-on-click="() => this.setEstadoFilter('pendiente')">Pendiente Transferencia</button>
-                            <button class="pv-filter-btn" t-att-class="{'active': state.estadoFilter === 'cpm_vencido'}" t-on-click="() => this.setEstadoFilter('cpm_vencido')">CPM Vencido</button>
                         </div>
                     </div>
 

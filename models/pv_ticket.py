@@ -8,7 +8,7 @@ import mimetypes
 from markupsafe import Markup, escape
 from odoo import api, fields, models, _
 from odoo.exceptions import AccessError, UserError, ValidationError
-from .pv_maquina import ESTADO_MAQUINA
+from .pv_maquina import ESTADO_MAQUINA, ESTADOS_MAQUINA_SIN_TICKETS
 
 _logger = logging.getLogger(__name__)
 
@@ -26,9 +26,6 @@ TIPO_TICKET = [
     ('pre_pm', 'Pre Puesta en Marcha'),
     ('post_pm', 'Post Puesta en Marcha'),
 ]
-
-# Estados de máquina en los que no se pueden crear ni enviar tickets
-ESTADOS_MAQUINA_SIN_TICKETS = ('liberada', 'pendiente', 'cpm_vencido')
 
 # Datos que carga el concesionario: no se modifican una vez enviado el ticket (salvo admin)
 CAMPOS_CARGA_CONCESIONARIO = {
@@ -114,7 +111,7 @@ class PvTicket(models.Model):
         'pv.maquina',
         string='Máquina',
         required=True,
-        domain="[('estado', 'not in', ('liberada', 'pendiente', 'cpm_vencido'))]",
+        domain="[('estado', 'not in', ('liberada', 'pendiente'))]",
         tracking=True,
     )
     of = fields.Char(
@@ -510,7 +507,7 @@ class PvTicket(models.Model):
         maquina_id = res.get('maquina_id') or self.env.context.get('default_maquina_id')
         if maquina_id:
             maquina = self.env['pv.maquina'].browse(maquina_id)
-            if maquina.exists() and maquina.estado in ('liberada', 'pendiente', 'cpm_vencido'):
+            if maquina.exists() and maquina.estado in ESTADOS_MAQUINA_SIN_TICKETS:
                 estado_label = dict(ESTADO_MAQUINA).get(maquina.estado, maquina.estado)
                 raise UserError(_(
                     'No se puede crear un ticket para la máquina %s porque se encuentra en estado "%s".'
@@ -519,7 +516,7 @@ class PvTicket(models.Model):
 
     @api.onchange('maquina_id')
     def _onchange_maquina_id_valida(self):
-        if self.maquina_id and self.maquina_id.estado in ('liberada', 'pendiente', 'cpm_vencido'):
+        if self.maquina_id and self.maquina_id.estado in ESTADOS_MAQUINA_SIN_TICKETS:
             estado_label = dict(ESTADO_MAQUINA).get(self.maquina_id.estado, self.maquina_id.estado)
             return {
                 'warning': {
@@ -555,7 +552,7 @@ class PvTicket(models.Model):
                 raise UserError(_('Acción denegada: hay datos del ticket que solo puede cargar el Staff de Posventa.'))
             if vals.get('maquina_id'):
                 maquina = self.env['pv.maquina'].browse(vals['maquina_id'])
-                if maquina.exists() and maquina.estado in ('liberada', 'pendiente', 'cpm_vencido'):
+                if maquina.exists() and maquina.estado in ESTADOS_MAQUINA_SIN_TICKETS:
                     estado_label = dict(ESTADO_MAQUINA).get(maquina.estado, maquina.estado)
                     raise ValidationError(_(
                         'No se puede crear un ticket para la máquina %s porque se encuentra en estado "%s".', maquina.name or maquina.of, estado_label

@@ -3,6 +3,8 @@ from .common import TestPosventaCommon, DUMMY_PDF_BASE64
 from odoo.exceptions import AccessError, UserError, ValidationError
 from odoo import fields
 from datetime import timedelta
+from psycopg2 import IntegrityError
+from odoo.tools import mute_logger
 
 
 class TestSecurityHardening(TestPosventaCommon):
@@ -241,3 +243,10 @@ class TestSecurityHardening(TestPosventaCommon):
             self._cert_vals(maquina, concesionario_id=self.concesionario_b.id, estado_certificado='legacy'))
         self.assertEqual(fru.concesionario_id, self.concesionario_a)
         self.assertEqual(fru.estado_certificado, 'vigente')
+
+    # --- Máquinas ---
+    def test_15_of_unica(self):
+        with self.assertRaises(IntegrityError), mute_logger('odoo.sql_db'):
+            self.env['pv.maquina'].create({
+                'tipo': 'drilor', 'of': self.maquina_a.of, 'concesionario_id': self.concesionario_b.id,
+            })

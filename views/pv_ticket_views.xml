@@ -106,7 +106,7 @@
                     </div>
                     <group>
                         <group string="Datos de Máquina">
-                            <field name="maquina_id" readonly="estado != 'borrador'" domain="[('estado', 'not in', ('liberada', 'pendiente', 'cpm_vencido'))]"/>
+                            <field name="maquina_id" readonly="estado != 'borrador'" domain="[('estado', 'not in', ('liberada', 'pendiente'))]"/>
                             <field name="tipo_ticket" readonly="1" force_save="1"/>
                             <field name="certificado_id" readonly="1"/>
                             <field name="cliente_id" readonly="1"/>

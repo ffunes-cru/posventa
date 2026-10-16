@@ -16,11 +16,13 @@ ESTADO_MAQUINA = [
     ('liberada', 'LIBERADA'),
     ('stock', 'STOCK'),
     ('vendida', 'VENDIDA'),
-    ('cpm_vencido', 'CPM VENCIDO'),
 ]
 
 # Estados desde los que el admin puede liberar la máquina (canje / reset)
-ESTADOS_LIBERABLES = ('stock', 'vendida', 'cpm_vencido')
+ESTADOS_LIBERABLES = ('stock', 'vendida')
+
+# Estados en los que no se pueden crear ni enviar tickets
+ESTADOS_MAQUINA_SIN_TICKETS = ('liberada', 'pendiente')
 
 
 class PvMaquina(models.Model):
@@ -153,10 +155,10 @@ class PvMaquina(models.Model):
 
     active = fields.Boolean(default=True)
 
-    _sql_constraints = [
-        ('of_unique', 'UNIQUE(of)',
-         'Ya existe una máquina con esta Orden de Fabricación.'),
-    ]
+    _of_unique = models.Constraint(
+        'UNIQUE(of)',
+        'Ya existe una máquina con esta Orden de Fabricación.',
+    )
 
     is_pv_admin = fields.Boolean(compute='_compute_is_pv_admin', store=False)
 
@@ -226,7 +228,7 @@ class PvMaquina(models.Model):
             'domain': [('maquina_id', '=', self.id)],
             'context': {
                 'default_maquina_id': self.id,
-                'create': self.estado not in ('liberada', 'pendiente', 'cpm_vencido'),
+                'create': self.estado not in ESTADOS_MAQUINA_SIN_TICKETS,
             },
         }
 
@@ -438,7 +440,7 @@ class PvMaquina(models.Model):
                 'descripcion': (t.descripcion or '')[:100],
             })
         tiene_cert_vigente = any(c.active and c.estado_certificado == 'vigente' for c in self.certificado_ids)
-        puede_crear_ticket = self.estado not in ('liberada', 'pendiente', 'cpm_vencido') and tiene_cert_vigente
+        puede_crear_ticket = self.estado not in ESTADOS_MAQUINA_SIN_TICKETS and tiene_cert_vigente
         mi_concesionario = self.env['pv.concesionario']._get_concesionario_for_user()
         es_concesionario_origen = bool(mi_concesionario) and self.concesionario_id == mi_concesionario
         es_concesionario_destino = self.es_concesionario_destino
