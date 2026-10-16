@@ -50,10 +50,10 @@ class PosventaMultimediaController(http.Controller):
                     'error': 'Parámetros de subida inválidos (se requiere un ticket válido).'
                 }, status=400)
 
-            # Verificar acceso al ticket
-            ticket = request.env['pv.ticket'].browse(ticket_id)
-            if not ticket.exists():
-                return request.make_json_response({'error': 'El ticket no existe.'}, status=404)
+            # Verificar acceso al ticket (ACL + record rules del usuario)
+            ticket = request.env['pv.ticket'].browse(ticket_id).exists()
+            if not ticket or not ticket.has_access('write'):
+                return request.make_json_response({'error': 'El ticket no existe o no tiene acceso.'}, status=404)
 
             # Verificar si rclone y Google Drive están configurados en el servidor
             is_configured, rclone_err = ticket._is_rclone_configured()
@@ -61,10 +61,8 @@ class PosventaMultimediaController(http.Controller):
                 return request.make_json_response({'error': rclone_err}, status=400)
 
             # Verificar pertenencia para concesionarios
-            if request.env.user.has_group('posventa.group_pv_concesionario') and not request.env.user.has_group('posventa.group_pv_staff'):
-                concesionario = request.env['pv.concesionario']._get_concesionario_for_user(request.env.user)
-                if not concesionario or ticket.concesionario_id.id != concesionario.id:
-                    return request.make_json_response({'error': 'Acceso denegado a este reclamo.'}, status=403)
+            if not request.env.user.has_group('posventa.group_pv_staff') and not ticket.concesionario_id._is_member():
+                return request.make_json_response({'error': 'Acceso denegado a este reclamo.'}, status=403)
 
             # Directorio staging del upload
             safe_uuid = re.sub(r'[^a-zA-Z0-9_\-]', '', file_uuid)
@@ -148,11 +146,11 @@ class PosventaMultimediaController(http.Controller):
             _logger.exception("Error al recibir chunk de multimedia: %s", e)
             return request.make_json_response({'error': str(e)}, status=500)
 
-    @http.route('/posventa/ticket/upload_status', type='json', auth='user')
+    @http.route('/posventa/ticket/upload_status', type='jsonrpc', auth='user')
     def upload_status(self, multimedia_id):
         """Consulta el estado actual de sincronización de un archivo."""
-        multimedia = request.env['pv.ticket.multimedia'].browse(int(multimedia_id))
-        if not multimedia.exists():
+        multimedia = request.env['pv.ticket.multimedia'].browse(int(multimedia_id)).exists()
+        if not multimedia or not multimedia.has_access('read'):
             return {'error': 'Archivo no encontrado.'}
 
         return {

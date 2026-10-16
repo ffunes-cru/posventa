@@ -45,24 +45,19 @@
     <!-- Record Rules                                                  -->
     <!-- ============================================================ -->
 
-    <!-- Concesionario: solo ve sus propias máquinas -->
+    <!--
+        Pertenencia a un concesionario: el usuario es su usuario principal, o su partner
+        es el partner del concesionario o un contacto de esa empresa (commercial_partner_id).
+        Debe coincidir con pv.concesionario._get_concesionario_for_user().
+    -->
+
     <record id="rule_pv_maquina_concesionario" model="ir.rule">
-        <field name="name">Máquinas: solo propias (Concesionario)</field>
+        <field name="name">Máquinas: propias o con transferencia pendiente hacia el concesionario</field>
         <field name="model_id" ref="model_pv_maquina"/>
-        <field name="domain_force">[
-            '|',
-                '|', ('concesionario_id.user_id', '=', user.id),
-                '|', ('concesionario_id.partner_id', '=', user.partner_id.id),
-                     ('concesionario_id.partner_id', '=', user.partner_id.parent_id.id),
-                '&amp;', ('estado', '=', 'pendiente'),
-                    '|', ('concesionario_destino_id.user_id', '=', user.id),
-                    '|', ('concesionario_destino_id.partner_id', '=', user.partner_id.id),
-                         ('concesionario_destino_id.partner_id', '=', user.partner_id.parent_id.id)
-        ]</field>
+        <field name="domain_force">['|', '|', ('concesionario_id.user_id', '=', user.id), ('concesionario_id.partner_id', 'in', [user.partner_id.id, user.partner_id.commercial_partner_id.id]), '&amp;', ('estado', '=', 'pendiente'), '|', ('concesionario_destino_id.user_id', '=', user.id), ('concesionario_destino_id.partner_id', 'in', [user.partner_id.id, user.partner_id.commercial_partner_id.id])]</field>
         <field name="groups" eval="[(4, ref('group_pv_concesionario'))]"/>
     </record>
 
-    <!-- Staff/Admin: ve todas las máquinas -->
     <record id="rule_pv_maquina_staff" model="ir.rule">
         <field name="name">Máquinas: todas (Staff)</field>
         <field name="model_id" ref="model_pv_maquina"/>
@@ -70,19 +65,13 @@
         <field name="groups" eval="[(4, ref('group_pv_staff'))]"/>
     </record>
 
-    <!-- Concesionario: solo ve sus propios tickets -->
     <record id="rule_pv_ticket_concesionario" model="ir.rule">
         <field name="name">Tickets: solo propios (Concesionario)</field>
         <field name="model_id" ref="model_pv_ticket"/>
-        <field name="domain_force">[
-            '|', ('concesionario_id.user_id', '=', user.id),
-            '|', ('concesionario_id.partner_id', '=', user.partner_id.id),
-                 ('concesionario_id.partner_id', '=', user.partner_id.parent_id.id)
-        ]</field>
+        <field name="domain_force">['|', ('concesionario_id.user_id', '=', user.id), ('concesionario_id.partner_id', 'in', [user.partner_id.id, user.partner_id.commercial_partner_id.id])]</field>
         <field name="groups" eval="[(4, ref('group_pv_concesionario'))]"/>
     </record>
 
-    <!-- Staff: ve todos los tickets no borradores -->
     <record id="rule_pv_ticket_staff" model="ir.rule">
         <field name="name">Tickets: todos no borradores (Staff)</field>
         <field name="model_id" ref="model_pv_ticket"/>
@@ -90,7 +79,6 @@
         <field name="groups" eval="[(4, ref('group_pv_staff'))]"/>
     </record>
 
-    <!-- Admin: ve todos los tickets sin excepción -->
     <record id="rule_pv_ticket_admin" model="ir.rule">
         <field name="name">Tickets: todos sin restricción (Admin)</field>
         <field name="model_id" ref="model_pv_ticket"/>
@@ -98,23 +86,13 @@
         <field name="groups" eval="[(4, ref('group_pv_admin'))]"/>
     </record>
 
-    <!-- Concesionario: ve certificados propios o de sus máquinas actuales -->
     <record id="rule_pv_certificado_concesionario" model="ir.rule">
-        <field name="name">Certificados: propios o de máquinas propias (Concesionario)</field>
+        <field name="name">Certificados: emitidos por el concesionario o de sus máquinas actuales</field>
         <field name="model_id" ref="model_pv_certificado"/>
-        <field name="domain_force">[
-            '|',
-                '|', ('concesionario_id.user_id', '=', user.id),
-                '|', ('concesionario_id.partner_id', '=', user.partner_id.id),
-                     ('concesionario_id.partner_id', '=', user.partner_id.parent_id.id),
-                '|', ('maquina_id.concesionario_id.user_id', '=', user.id),
-                '|', ('maquina_id.concesionario_id.partner_id', '=', user.partner_id.id),
-                     ('maquina_id.concesionario_id.partner_id', '=', user.partner_id.parent_id.id)
-        ]</field>
+        <field name="domain_force">['|', '|', ('concesionario_id.user_id', '=', user.id), ('concesionario_id.partner_id', 'in', [user.partner_id.id, user.partner_id.commercial_partner_id.id]), '|', ('maquina_id.concesionario_id.user_id', '=', user.id), ('maquina_id.concesionario_id.partner_id', 'in', [user.partner_id.id, user.partner_id.commercial_partner_id.id])]</field>
         <field name="groups" eval="[(4, ref('group_pv_concesionario'))]"/>
     </record>
 
-    <!-- Staff/Admin: ve todos los certificados -->
     <record id="rule_pv_certificado_staff" model="ir.rule">
         <field name="name">Certificados: todos (Staff)</field>
         <field name="model_id" ref="model_pv_certificado"/>
@@ -123,31 +101,77 @@
     </record>
 
     <record id="rule_pv_concesionario_concesionario" model="ir.rule">
-        <field name="name">Concesionarios: lectura global, escritura propia</field>
+        <field name="name">Concesionarios: lectura global (Concesionario)</field>
         <field name="model_id" ref="model_pv_concesionario"/>
-        <field name="domain_force">[(1, '=', 1)]</field> <field name="groups" eval="[(4, ref('group_pv_concesionario'))]"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="groups" eval="[(4, ref('group_pv_concesionario'))]"/>
         <field name="perm_read" eval="True"/>
         <field name="perm_write" eval="False"/>
         <field name="perm_create" eval="False"/>
         <field name="perm_unlink" eval="False"/>
     </record>
 
-    <record id="rule_pv_concesionario_propio_write" model="ir.rule">
-        <field name="name">Concesionarios: modificación propia</field>
-        <field name="model_id" ref="model_pv_concesionario"/>
-        <field name="domain_force">[('user_id', '=', user.id)]</field>
-        <field name="groups" eval="[(4, ref('group_pv_concesionario'))]"/>
-        <field name="perm_read" eval="False"/>
-        <field name="perm_write" eval="True"/>
-        <field name="perm_create" eval="False"/>
-        <field name="perm_unlink" eval="False"/>
-    </record>
-
-    <!-- Staff/Admin: ve todos los concesionarios -->
     <record id="rule_pv_concesionario_staff" model="ir.rule">
         <field name="name">Concesionarios: todos (Staff)</field>
         <field name="model_id" ref="model_pv_concesionario"/>
         <field name="domain_force">[(1, '=', 1)]</field>
         <field name="groups" eval="[(4, ref('group_pv_staff'))]"/>
     </record>
+
+    <record id="rule_pv_concesionario_contacto_concesionario" model="ir.rule">
+        <field name="name">Personal histórico: solo del propio concesionario</field>
+        <field name="model_id" ref="model_pv_concesionario_contacto"/>
+        <field name="domain_force">['|', ('concesionario_id.user_id', '=', user.id), ('concesionario_id.partner_id', 'in', [user.partner_id.id, user.partner_id.commercial_partner_id.id])]</field>
+        <field name="groups" eval="[(4, ref('group_pv_concesionario'))]"/>
+    </record>
+
+    <record id="rule_pv_concesionario_contacto_staff" model="ir.rule">
+        <field name="name">Personal histórico: todos (Staff)</field>
+        <field name="model_id" ref="model_pv_concesionario_contacto"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="groups" eval="[(4, ref('group_pv_staff'))]"/>
+    </record>
+
+    <record id="rule_pv_ticket_multimedia_concesionario" model="ir.rule">
+        <field name="name">Multimedia: solo de tickets propios (Concesionario)</field>
+        <field name="model_id" ref="model_pv_ticket_multimedia"/>
+        <field name="domain_force">['|', ('ticket_id.concesionario_id.user_id', '=', user.id), ('ticket_id.concesionario_id.partner_id', 'in', [user.partner_id.id, user.partner_id.commercial_partner_id.id])]</field>
+        <field name="groups" eval="[(4, ref('group_pv_concesionario'))]"/>
+    </record>
+
+    <record id="rule_pv_ticket_multimedia_staff" model="ir.rule">
+        <field name="name">Multimedia: todos (Staff)</field>
+        <field name="model_id" ref="model_pv_ticket_multimedia"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="groups" eval="[(4, ref('group_pv_staff'))]"/>
+    </record>
+
+    <record id="rule_pv_ticket_medida_concesionario" model="ir.rule">
+        <field name="name">Medidas: solo de tickets propios (Concesionario)</field>
+        <field name="model_id" ref="model_pv_ticket_medida"/>
+        <field name="domain_force">['|', ('ticket_id.concesionario_id.user_id', '=', user.id), ('ticket_id.concesionario_id.partner_id', 'in', [user.partner_id.id, user.partner_id.commercial_partner_id.id])]</field>
+        <field name="groups" eval="[(4, ref('group_pv_concesionario'))]"/>
+    </record>
+
+    <record id="rule_pv_ticket_medida_staff" model="ir.rule">
+        <field name="name">Medidas: todos (Staff)</field>
+        <field name="model_id" ref="model_pv_ticket_medida"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="groups" eval="[(4, ref('group_pv_staff'))]"/>
+    </record>
+
+    <record id="rule_pv_ticket_campo_valor_concesionario" model="ir.rule">
+        <field name="name">Campos adicionales: solo de tickets propios (Concesionario)</field>
+        <field name="model_id" ref="model_pv_ticket_campo_valor"/>
+        <field name="domain_force">['|', ('ticket_id.concesionario_id.user_id', '=', user.id), ('ticket_id.concesionario_id.partner_id', 'in', [user.partner_id.id, user.partner_id.commercial_partner_id.id])]</field>
+        <field name="groups" eval="[(4, ref('group_pv_concesionario'))]"/>
+    </record>
+
+    <record id="rule_pv_ticket_campo_valor_staff" model="ir.rule">
+        <field name="name">Campos adicionales: todos (Staff)</field>
+        <field name="model_id" ref="model_pv_ticket_campo_valor"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="groups" eval="[(4, ref('group_pv_staff'))]"/>
+    </record>
+
 </odoo>

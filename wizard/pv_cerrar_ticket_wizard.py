@@ -74,8 +74,6 @@ class PvCerrarTicketWizard(models.TransientModel):
         sin_cobertura_tags = self.garantia_rechazo_tag_ids if not self.garantia_aceptada else self.env['pv.tipo.rechazo']
 
         ticket_vals = {
-            'estado': 'cerrado',
-            'fecha_cierre': fields.Datetime.now(),
             'garantia_aceptada': self.garantia_aceptada,
             'garantia_observaciones': self.garantia_observaciones,
             'garantia_adjunto': self.garantia_adjunto,
@@ -87,7 +85,7 @@ class PvCerrarTicketWizard(models.TransientModel):
         if self.sap_numero_orden:
             ticket_vals['sap_numero_orden'] = self.sap_numero_orden
 
-        ticket.write(ticket_vals)
+        ticket._cerrar(ticket_vals)
 
         attachment_id = False
         adjunto_html = ""

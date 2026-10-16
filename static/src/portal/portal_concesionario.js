@@ -36,6 +36,10 @@ export class PortalConcesionario extends Component {
             certSearchTerm: "",
             certTipoFilter: "",
             certEstadoFilter: "",
+            // Liberation request modal
+            showLiberacionModal: false,
+            liberacionMotivo: "",
+            submittingLiberacion: false,
         });
 
         this.searchTimeout = null;
@@ -292,16 +296,31 @@ export class PortalConcesionario extends Component {
         }
     }
 
-    async liberarMaquina(maquinaId) {
-        if (!confirm(_t("¿Está seguro de LIBERAR esta máquina? Sus certificados vigentes actuales quedarán marcados como 'Archivado Manualmente' y quedará disponible para cargar nuevos certificados desde cero."))) {
+    openLiberacionModal() {
+        this.state.liberacionMotivo = "";
+        this.state.showLiberacionModal = true;
+    }
+
+    closeLiberacionModal() {
+        this.state.showLiberacionModal = false;
+    }
+
+    async submitLiberacionModal() {
+        const motivo = (this.state.liberacionMotivo || "").trim();
+        if (!motivo) {
+            this.notification.add(_t("Indique el motivo de la solicitud de liberación."), { type: "warning" });
             return;
         }
+        this.state.submittingLiberacion = true;
         try {
-            await this.orm.call("pv.maquina", "action_liberar_maquina", [maquinaId]);
-            this.notification.add(_t("La máquina ha sido liberada exitosamente."), { type: "info" });
-            await this.loadMaquinaDetail(maquinaId);
+            await this.orm.call("pv.maquina", "action_solicitar_liberacion", [this.state.selectedMaquinaId, motivo]);
+            this.notification.add(_t("Solicitud de liberación enviada. El Administrador de Posventa debe aprobarla."), { type: "success" });
+            this.closeLiberacionModal();
+            await this.loadMaquinaDetail(this.state.selectedMaquinaId);
         } catch (e) {
-            this.notification.add(e.data?.message || _t("Error al liberar máquina."), { type: "danger" });
+            this.notification.add(e.data?.message || e.message || _t("Error al solicitar la liberación."), { type: "danger" });
+        } finally {
+            this.state.submittingLiberacion = false;
         }
     }
 

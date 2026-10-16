@@ -1,6 +1,6 @@
 # Part of Crucianelli Posventa Module
 from odoo import api, fields, models, _
-from odoo.exceptions import UserError
+from odoo.exceptions import AccessError, UserError
 
 
 TIPO_MAQUINA = [
@@ -18,6 +18,9 @@ ESTADO_MAQUINA = [
     ('vendida', 'VENDIDA'),
     ('cpm_vencido', 'CPM VENCIDO'),
 ]
+
+# Estados desde los que el admin puede liberar la máquina (canje / reset)
+ESTADOS_LIBERABLES = ('stock', 'vendida', 'cpm_vencido')
 
 
 class PvMaquina(models.Model):
@@ -124,6 +127,30 @@ class PvMaquina(models.Model):
         store=True,
     )
 
+    # --- Solicitud de liberación (la pide el concesionario, la aprueba el admin) ---
+    liberacion_solicitada = fields.Boolean(
+        string='Liberación Solicitada',
+        readonly=True,
+        copy=False,
+        tracking=True,
+    )
+    liberacion_motivo = fields.Text(
+        string='Motivo de Liberación',
+        readonly=True,
+        copy=False,
+    )
+    liberacion_solicitante_id = fields.Many2one(
+        'res.users',
+        string='Liberación Solicitada por',
+        readonly=True,
+        copy=False,
+    )
+    liberacion_fecha_solicitud = fields.Datetime(
+        string='Fecha de Solicitud de Liberación',
+        readonly=True,
+        copy=False,
+    )
+
     active = fields.Boolean(default=True)
 
     _sql_constraints = [
@@ -203,27 +230,41 @@ class PvMaquina(models.Model):
             },
         }
 
-    def action_transferir_concesionario(self):
-        """Transfer machine to another dealer. Only current dealer or admin."""
+    # --- Chequeos de permisos ---
+    def _is_pv_admin_user(self):
+        return self.env.su or self.env.user.has_group('posventa.group_pv_admin')
+
+    def _check_pv_admin(self):
+        if not self._is_pv_admin_user():
+            raise AccessError(_('Únicamente el Administrador de Posventa puede realizar esta acción.'))
+
+    def _check_es_del_concesionario(self, concesionario, mensaje):
+        """Permite la acción al admin o a un usuario que pertenezca al concesionario indicado."""
+        if self._is_pv_admin_user():
+            return
+        if not concesionario or not concesionario._is_member():
+            raise AccessError(mensaje)
+
+    def _get_estado_sin_transferencia(self):
+        """Estado que corresponde a la máquina según sus certificados (al cancelar/rechazar un traslado)."""
         self.ensure_one()
-        return {
-            'type': 'ir.actions.act_window',
-            'name': _('Transferir Máquina'),
-            'res_model': 'pv.maquina',
-            'view_mode': 'form',
-            'res_id': self.id,
-            'target': 'new',
-            'context': {'form_view_ref': 'posventa.pv_maquina_transfer_form'},
-        }
-        
+        if self.tiene_cpm:
+            return 'vendida'
+        if self.tiene_fru:
+            return 'stock'
+        return 'liberada'
+
     def action_abrir_wizard_transferencia(self):
+        self.ensure_one()
+        self._check_es_del_concesionario(
+            self.concesionario_id, _('Solo el concesionario dueño de la máquina puede trasladarla.'))
         return {
-            'name': 'Trasladar Máquina a otro Concesionario',
+            'name': _('Trasladar Máquina a otro Concesionario'),
             'type': 'ir.actions.act_window',
             'res_model': 'pv.transferir.maquina.wizard',
             'view_mode': 'form',
-            'target': 'new', # Abre el formato Pop-up
-            'context': {'default_maquina_id': self.id}
+            'target': 'new',
+            'context': {'default_maquina_id': self.id},
         }
 
     @api.model
@@ -398,11 +439,15 @@ class PvMaquina(models.Model):
             })
         tiene_cert_vigente = any(c.active and c.estado_certificado == 'vigente' for c in self.certificado_ids)
         puede_crear_ticket = self.estado not in ('liberada', 'pendiente', 'cpm_vencido') and tiene_cert_vigente
-        puede_crear_certificado = not self.tiene_cpm
-        puede_transferir = self.estado not in ('liberada', 'pendiente', 'vendida', 'cpm_vencido')
-        puede_liberar_maquina = self.estado in ('stock', 'vendida', 'cpm_vencido')
+        mi_concesionario = self.env['pv.concesionario']._get_concesionario_for_user()
+        es_concesionario_origen = bool(mi_concesionario) and self.concesionario_id == mi_concesionario
         es_concesionario_destino = self.es_concesionario_destino
-        es_concesionario_origen = self.concesionario_id.user_id == self.env.user if self.concesionario_id else False
+        puede_operar = es_concesionario_origen or self._is_pv_admin_user()
+        puede_crear_certificado = not self.tiene_cpm and puede_operar
+        puede_transferir = self.estado == 'stock' and not self.liberacion_solicitada and puede_operar
+        puede_solicitar_liberacion = (
+            self.estado in ESTADOS_LIBERABLES and not self.liberacion_solicitada and puede_operar
+        )
 
         return {
             'id': self.id,
@@ -425,19 +470,107 @@ class PvMaquina(models.Model):
             'puede_crear_ticket': puede_crear_ticket,
             'puede_crear_certificado': puede_crear_certificado,
             'puede_transferir': puede_transferir,
-            'puede_liberar_maquina': puede_liberar_maquina,
+            'puede_solicitar_liberacion': puede_solicitar_liberacion,
+            'liberacion_solicitada': self.liberacion_solicitada,
+            'liberacion_motivo': self.liberacion_motivo or '',
             'es_pendiente_transferencia': self.estado == 'pendiente',
             'es_concesionario_destino': es_concesionario_destino,
             'es_concesionario_origen': es_concesionario_origen,
             'concesionario_destino_name': self.concesionario_destino_id.name if self.concesionario_destino_id else '',
         }
 
-    def action_liberar_maquina(self):
-        """Retorna la máquina a estado LIBERADA y marca los certificados anteriores como 'archivado_manual'."""
+    # --- Liberación ---
+    def action_solicitar_liberacion(self, motivo):
+        """El concesionario dueño solicita liberar la máquina; la liberación la aprueba el admin."""
+        self.ensure_one()
+        self._check_es_del_concesionario(
+            self.concesionario_id, _('Solo el concesionario dueño de la máquina puede solicitar su liberación.'))
+        motivo = (motivo or '').strip()
+        if not motivo:
+            raise UserError(_('Debe indicar el motivo de la solicitud de liberación.'))
+        if self.estado not in ESTADOS_LIBERABLES:
+            raise UserError(_('La máquina no se puede liberar en su estado actual.'))
+        if self.liberacion_solicitada:
+            raise UserError(_('Ya existe una solicitud de liberación pendiente para esta máquina.'))
+
+        maquina_sudo = self.sudo()
+        maquina_sudo.write({
+            'liberacion_solicitada': True,
+            'liberacion_motivo': motivo,
+            'liberacion_solicitante_id': self.env.user.id,
+            'liberacion_fecha_solicitud': fields.Datetime.now(),
+        })
+        admin_group = self.env.ref('posventa.group_pv_admin', raise_if_not_found=False)
+        admin_partners = admin_group.sudo().all_user_ids.filtered(lambda u: not u.share).partner_id if admin_group else False
+        maquina_sudo.message_post(
+            body=_('%(user)s solicitó la LIBERACIÓN de la máquina. Motivo: %(motivo)s',
+                   user=self.env.user.name, motivo=motivo),
+            message_type='comment',
+            subtype_xmlid='mail.mt_comment',
+            partner_ids=admin_partners.ids if admin_partners else [],
+        )
+        return True
+
+    def action_aprobar_liberacion(self):
+        self._check_pv_admin()
+        for rec in self:
+            if not rec.liberacion_solicitada:
+                raise UserError(_('La máquina %s no tiene una solicitud de liberación pendiente.', rec.name))
+            rec._liberar(rec.liberacion_motivo)
+        return True
+
+    def action_rechazar_liberacion(self):
+        self._check_pv_admin()
+        for rec in self:
+            if not rec.liberacion_solicitada:
+                raise UserError(_('La máquina %s no tiene una solicitud de liberación pendiente.', rec.name))
+            rec.sudo()._limpiar_solicitud_liberacion()
+            rec.sudo().message_post(
+                body=_('Solicitud de liberación RECHAZADA por %s.', self.env.user.name),
+                message_type='notification',
+                subtype_xmlid='mail.mt_note',
+            )
+        return True
+
+    def action_liberar_maquina(self, motivo):
+        """Liberación directa por el admin (canje / reset), con motivo obligatorio."""
+        self._check_pv_admin()
+        motivo = (motivo or '').strip()
+        if not motivo:
+            raise UserError(_('Debe indicar el motivo de la liberación.'))
+        for rec in self:
+            rec._liberar(motivo)
+        return True
+
+    def action_abrir_wizard_liberacion(self):
+        self.ensure_one()
+        self._check_pv_admin()
+        return {
+            'name': _('Liberar Máquina'),
+            'type': 'ir.actions.act_window',
+            'res_model': 'pv.liberar.maquina.wizard',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {
+                'default_maquina_id': self.id,
+                'default_motivo': self.liberacion_motivo or '',
+            },
+        }
+
+    def _limpiar_solicitud_liberacion(self):
+        self.write({
+            'liberacion_solicitada': False,
+            'liberacion_motivo': False,
+            'liberacion_solicitante_id': False,
+            'liberacion_fecha_solicitud': False,
+        })
+
+    def _liberar(self, motivo):
+        """Retorna la máquina a LIBERADA y archiva sus certificados vigentes/vencidos."""
         self.ensure_one()
         maquina_sudo = self.sudo()
-        if maquina_sudo.estado in ('liberada', 'pendiente'):
-            raise UserError(_("La máquina ya se encuentra en estado Liberada o Pendiente de transferencia."))
+        if maquina_sudo.estado not in ESTADOS_LIBERABLES:
+            raise UserError(_('La máquina no se puede liberar en su estado actual.'))
 
         certificados_a_archivar = maquina_sudo.certificado_ids.filtered(
             lambda c: c.estado_certificado in ('vigente', 'vencido')
@@ -449,31 +582,26 @@ class PvMaquina(models.Model):
             'estado': 'liberada',
             'fecha_liberacion': fields.Date.today(),
         })
-        maquina_sudo._compute_tiene_certificados()
+        maquina_sudo._limpiar_solicitud_liberacion()
         maquina_sudo.message_post(
-            body=_("La máquina ha sido LIBERADA por %s. Sus certificados anteriores fueron marcados como 'Archivado Manualmente'. Se puede iniciar una nueva carga de certificados."),
+            body=_("La máquina fue LIBERADA por %(user)s. Motivo: %(motivo)s. Sus certificados anteriores fueron "
+                   "marcados como 'Archivado Manualmente' y se puede iniciar una nueva carga de certificados.",
+                   user=self.env.user.name, motivo=motivo),
             message_type='notification',
             subtype_xmlid='mail.mt_note'
         )
-        return True
 
-    def action_volver_a_stock(self):
-        return self.action_liberar_maquina()
-
+    # --- Transferencias ---
     def action_cancelar_transferencia(self):
         """El concesionario de origen (o admin) cancela una propuesta de traslado pendiente."""
         self.ensure_one()
+        self._check_es_del_concesionario(
+            self.concesionario_id, _('Solo el concesionario de origen puede cancelar el traslado.'))
         maquina_sudo = self.sudo()
         if maquina_sudo.estado != 'pendiente':
             raise UserError(_("Solo se pueden cancelar traslados en estado Pendiente."))
 
-        # Restablecemos estado previo (stock si tenía FRU, vendida si CPM, o liberada)
-        prev_estado = 'liberada'
-        if maquina_sudo.tiene_cpm:
-            prev_estado = 'vendida'
-        elif maquina_sudo.tiene_fru:
-            prev_estado = 'stock'
-
+        prev_estado = maquina_sudo._get_estado_sin_transferencia()
         maquina_sudo.write({
             'estado': prev_estado,
             'concesionario_destino_id': False,
@@ -503,18 +631,39 @@ class PvMaquina(models.Model):
     def action_iniciar_transferencia_portal(self, concesionario_destino_id, provincia_destino_id, ciudad_destino):
         """Initiate transfer from portal."""
         self.ensure_one()
-        if self.concesionario_id.id == concesionario_destino_id:
+        return self._iniciar_transferencia(
+            self.env['pv.concesionario'].browse(int(concesionario_destino_id or 0)),
+            self.env['res.country.state'].browse(int(provincia_destino_id or 0)),
+            ciudad_destino,
+        )
+
+    def _iniciar_transferencia(self, concesionario_destino, provincia_destino, ciudad_destino):
+        """Propone el traslado de la máquina a otro concesionario (queda Pendiente de aceptación)."""
+        self.ensure_one()
+        self._check_es_del_concesionario(
+            self.concesionario_id, _('Solo el concesionario dueño de la máquina puede trasladarla.'))
+        if self.estado != 'stock':
+            raise UserError(_("Solo se pueden trasladar máquinas en estado STOCK."))
+        if self.liberacion_solicitada:
+            raise UserError(_("La máquina tiene una solicitud de liberación pendiente."))
+        concesionario_destino = concesionario_destino.sudo().exists()
+        if not concesionario_destino or not concesionario_destino.active:
+            raise UserError(_("Debe seleccionar un concesionario destino válido."))
+        if concesionario_destino == self.concesionario_id:
             raise UserError(_("La máquina ya pertenece a este concesionario."))
+        ciudad_destino = (ciudad_destino or '').strip()
+        if not provincia_destino.exists() or not ciudad_destino:
+            raise UserError(_("Debe indicar la provincia y ciudad de destino."))
 
         self.sudo().write({
-            'concesionario_destino_id': concesionario_destino_id,
-            'provincia_destino_id': provincia_destino_id,
+            'concesionario_destino_id': concesionario_destino.id,
+            'provincia_destino_id': provincia_destino.id,
             'ciudad_destino': ciudad_destino,
             'estado': 'pendiente',
         })
         self.sudo().message_post(
-            body=_('Solicitud de traslado/transferencia iniciada desde el portal hacia el concesionario %s (Pendiente de aceptación)',
-                   self.env['pv.concesionario'].browse(concesionario_destino_id).name),
+            body=_('Solicitud de traslado enviada a %s por %s (Pendiente de aceptación).',
+                   concesionario_destino.name, self.env.user.name),
             message_type='notification',
             subtype_xmlid='mail.mt_note',
         )

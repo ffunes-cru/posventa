@@ -17,7 +17,8 @@ class PvConcesionario(models.Model):
     partner_id = fields.Many2one(
         'res.partner',
         string='Empresa Concesionario',
-        help='Empresa (partner) vinculada en Odoo',
+        required=True,
+        help='Empresa (partner) vinculada en Odoo. Sus contactos acceden a los datos del concesionario.',
         tracking=True,
     )
     user_id = fields.Many2one(
@@ -65,25 +66,29 @@ class PvConcesionario(models.Model):
 
     @api.model
     def _get_concesionario_for_user(self, user=None):
-        """Devuelve el registro pv.concesionario correspondiente al usuario (o env.user)."""
+        """Devuelve el pv.concesionario al que pertenece el usuario (o env.user).
+
+        Un usuario pertenece a un concesionario si es su usuario principal, si su
+        partner es el partner del concesionario o si es un contacto de esa empresa
+        (commercial_partner_id). Debe coincidir con el dominio de las ir.rule.
+        """
         if user is None:
             user = self.env.user
         partner = user.partner_id
         if not partner:
             return self.browse()
 
-        company_partner = partner.parent_id or partner
-
-        concesionario = self.search([
-            '|',
-            ('partner_id', '=', company_partner.id),
-            ('partner_id', '=', partner.id),
+        concesionario = self.sudo().search([
+            ('partner_id', 'in', [partner.id, partner.commercial_partner_id.id]),
         ], limit=1)
+        if not concesionario:
+            concesionario = self.sudo().search([('user_id', '=', user.id)], limit=1)
+        return concesionario.with_env(self.env)
 
-        if not concesionario and user.id:
-            concesionario = self.search([('user_id', '=', user.id)], limit=1)
-
-        return concesionario
+    def _is_member(self, user=None):
+        """True si el usuario (o env.user) pertenece a este concesionario."""
+        self.ensure_one()
+        return self._get_concesionario_for_user(user) == self
 
     maquina_ids = fields.One2many(
         'pv.maquina',

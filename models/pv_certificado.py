@@ -511,8 +511,8 @@ class PvCertificado(models.Model):
 
         records = self.search(domain, order='fecha desc, id desc')
         res = []
-        is_internal = self.env.user.has_group('posventa.group_pv_staff') or self.env.user.has_group('posventa.group_pv_admin')
-        my_uid = self.env.uid
+        is_internal = self.env.user.has_group('posventa.group_pv_staff')
+        mi_concesionario = self.env['pv.concesionario']._get_concesionario_for_user()
         for c in records:
             retraso = c.dias_retraso_carga or 0
             if c.estado_certificado == 'vigente':
@@ -537,9 +537,9 @@ class PvCertificado(models.Model):
 
             m = c.maquina_id.sudo() if c.maquina_id else None
             puede_ver_maquina = bool(
-                is_internal or 
-                (m and m.concesionario_id.user_id.id == my_uid) or 
-                (m and m.concesionario_destino_id.user_id.id == my_uid and m.estado == 'pendiente')
+                is_internal or
+                (m and mi_concesionario and m.concesionario_id == mi_concesionario) or
+                (m and mi_concesionario and m.concesionario_destino_id == mi_concesionario and m.estado == 'pendiente')
             )
 
             res.append({

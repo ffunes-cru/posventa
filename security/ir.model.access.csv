@@ -54,4 +54,4 @@ access_pv_tipo_desvio_user,pv.tipo.desvio concesionario,model_pv_tipo_desvio,gro
 access_pv_tipo_rechazo_admin,pv.tipo.rechazo admin,model_pv_tipo_rechazo,group_pv_admin,1,1,1,1
 access_pv_tipo_rechazo_staff,pv.tipo.rechazo staff,model_pv_tipo_rechazo,group_pv_staff,1,0,0,0
 access_pv_tipo_rechazo_user,pv.tipo.rechazo concesionario,model_pv_tipo_rechazo,group_pv_concesionario,1,0,0,0
-
+access_pv_liberar_maquina_wizard_admin,pv.liberar.maquina.wizard admin,model_pv_liberar_maquina_wizard,group_pv_admin,1,1,1,1

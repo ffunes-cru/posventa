@@ -474,12 +474,19 @@
                                         <i class="fa fa-exchange me-1"/> Trasladar Máquina
                                     </button>
                                 </t>
-                                <t t-if="state.maquinaDetail.puede_liberar_maquina">
-                                    <button class="pv-btn pv-btn-secondary text-dark" t-on-click="() => this.liberarMaquina(state.maquinaDetail.id)">
-                                        <i class="fa fa-undo me-1"/> Liberar Máquina (Canje / Reset)
+                                <t t-if="state.maquinaDetail.puede_solicitar_liberacion">
+                                    <button class="pv-btn pv-btn-secondary text-dark" t-on-click="() => this.openLiberacionModal()">
+                                        <i class="fa fa-undo me-1"/> Solicitar Liberación (Canje / Reset)
                                     </button>
                                 </t>
                             </div>
+
+                            <t t-if="state.maquinaDetail.liberacion_solicitada">
+                                <div class="alert alert-info mt-3 mb-0 rounded-3 border-info shadow-sm" role="status">
+                                    <strong class="fs-6 text-dark"><i class="fa fa-clock-o me-1 text-info"/> Liberación Solicitada:</strong>
+                                    pendiente de aprobación del Administrador de Posventa. Motivo: <t t-esc="state.maquinaDetail.liberacion_motivo"/>
+                                </div>
+                            </t>
 
                             <!-- Transfer Alerts -->
                             <t t-if="state.maquinaDetail.es_pendiente_transferencia">
@@ -791,6 +798,36 @@
                 </t>
 
             </div>
+
+            <!-- Solicitud de Liberación Modal -->
+            <t t-if="state.showLiberacionModal">
+                <div class="pv-modal-backdrop" t-on-click.self="() => this.closeLiberacionModal()">
+                    <div class="pv-modal-dialog">
+                        <div class="pv-modal-header">
+                            <h4><i class="fa fa-undo me-2"/> Solicitar Liberación de la Máquina</h4>
+                            <button class="btn-close btn-close-white" t-on-click="() => this.closeLiberacionModal()"/>
+                        </div>
+                        <div class="pv-modal-body">
+                            <p class="text-muted small">
+                                Si el Administrador de Posventa aprueba la solicitud, la máquina vuelve a estado <strong>LIBERADA</strong>:
+                                sus certificados actuales se archivan y debe cargarlos nuevamente desde cero.
+                            </p>
+                            <div class="pv-form-group">
+                                <label>Motivo <span class="required">*</span></label>
+                                <textarea class="pv-form-textarea" placeholder="Ej: canje de unidad, error en la carga de certificados..." t-model="state.liberacionMotivo"/>
+                            </div>
+                        </div>
+                        <div class="pv-modal-footer">
+                            <button class="pv-btn pv-btn-secondary" t-on-click="() => this.closeLiberacionModal()">
+                                Cancelar
+                            </button>
+                            <button class="pv-btn pv-btn-warning" t-att-disabled="state.submittingLiberacion" t-on-click="() => this.submitLiberacionModal()">
+                                <i class="fa fa-paper-plane me-1"/> Enviar Solicitud
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </t>
 
             <!-- Transfer Machine Modal -->
             <t t-if="state.showTransferModal">

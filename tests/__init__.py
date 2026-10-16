@@ -5,3 +5,4 @@ from . import test_transferencia
 from . import test_ticket_workflow
 from . import test_security_access
 from . import test_multimedia_upload
+from . import test_security_hardening

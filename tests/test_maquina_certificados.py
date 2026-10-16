@@ -1,6 +1,6 @@
 # Part of Crucianelli Posventa Module
 from .common import TestPosventaCommon, DUMMY_PDF_BASE64
-from odoo.exceptions import ValidationError, UserError
+from odoo.exceptions import AccessError, ValidationError, UserError
 from odoo import fields
 from datetime import timedelta
 
@@ -123,8 +123,14 @@ class TestMaquinaCertificados(TestPosventaCommon):
         })
         self.assertEqual(maquina.estado, 'vendida')
 
-        # Concesionario performs action_liberar_maquina
-        maquina.with_user(self.user_concesionario_a).action_liberar_maquina()
+        # Concesionario requests liberation; only the admin can approve it
+        maquina.with_user(self.user_concesionario_a).action_solicitar_liberacion('Canje de unidad')
+        self.assertTrue(maquina.liberacion_solicitada)
+        self.assertEqual(maquina.estado, 'vendida')
+        with self.assertRaises(AccessError):
+            maquina.with_user(self.user_concesionario_a).action_aprobar_liberacion()
+        maquina.with_user(self.user_admin).action_aprobar_liberacion()
+        self.assertFalse(maquina.liberacion_solicitada)
 
         self.assertEqual(maquina.estado, 'liberada')
         self.assertFalse(maquina.tiene_fru)

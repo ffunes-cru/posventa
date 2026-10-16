@@ -7,7 +7,7 @@ import logging
 import mimetypes
 from markupsafe import Markup, escape
 from odoo import api, fields, models, _
-from odoo.exceptions import UserError, ValidationError
+from odoo.exceptions import AccessError, UserError, ValidationError
 from .pv_maquina import ESTADO_MAQUINA
 
 _logger = logging.getLogger(__name__)
@@ -26,6 +26,45 @@ TIPO_TICKET = [
     ('pre_pm', 'Pre Puesta en Marcha'),
     ('post_pm', 'Post Puesta en Marcha'),
 ]
+
+# Estados de máquina en los que no se pueden crear ni enviar tickets
+ESTADOS_MAQUINA_SIN_TICKETS = ('liberada', 'pendiente', 'cpm_vencido')
+
+# Datos que carga el concesionario: no se modifican una vez enviado el ticket (salvo admin)
+CAMPOS_CARGA_CONCESIONARIO = {
+    'maquina_id', 'certificado_id', 'operador_id', 'desvio_tipo_id', 'desvio_tipo',
+    'sistema_id', 'subsistema_id', 'problema_id', 'campo_extra_ids',
+    'descripcion', 'acciones_realizadas', 'ubicacion_actual', 'hectareas',
+}
+
+# Lo único que el concesionario puede modificar una vez enviado: adjuntos y chatter
+CAMPOS_POST_ENVIO_CONCESIONARIO = {
+    'message_main_attachment_id', 'activity_ids', 'message_ids', 'message_follower_ids',
+    'multimedia_ids', 'multimedia_url', 'drive_folder_url',
+}
+
+# Datos que solo carga el Staff (resolución, garantía, SAP, KPIs)
+CAMPOS_SOLO_STAFF = {
+    'responsable_id', 'rechazo_tag_ids', 'tipo_garantia', 'prioridad',
+    'garantia_aceptada', 'garantia_rechazo_tag_ids', 'garantia_observaciones',
+    'garantia_adjunto', 'garantia_adjunto_name', 'solucion_aplicada',
+    'sap_numero_aviso', 'sap_numero_orden', 'sap_numero_pedido', 'sap_centro', 'sap_material', 'sap_notas',
+    'fecha_creacion', 'fecha_primera_atencion', 'fecha_solucion', 'fecha_cierre',
+}
+
+
+
+def _campos_cargados(vals, campos):
+    """Campos de `campos` presentes en vals con un valor no vacío (ignora False, '' y comandos x2many vacíos)."""
+    def cargado(value):
+        if isinstance(value, (list, tuple)):
+            return any(
+                not (isinstance(cmd, (list, tuple)) and cmd and (cmd[0] == 5 or (cmd[0] == 6 and not cmd[2])))
+                for cmd in value
+            )
+        return bool(value)
+    return {k for k in campos.intersection(vals) if cargado(vals[k])}
+
 
 PRIORIDAD = [
     ('baja', 'Baja'),
@@ -489,13 +528,14 @@ class PvTicket(models.Model):
                 }
             }
 
-    @api.constrains('maquina_id', 'estado')
+    @api.constrains('maquina_id')
     def _check_maquina_estado_valido(self):
+        # Solo al asignar la máquina: un traslado o liberación posterior no debe trabar tickets en curso
         for rec in self:
-            if rec.maquina_id and rec.maquina_id.estado in ('liberada', 'pendiente', 'cpm_vencido'):
+            if rec.maquina_id and rec.maquina_id.estado in ESTADOS_MAQUINA_SIN_TICKETS:
                 estado_label = dict(ESTADO_MAQUINA).get(rec.maquina_id.estado, rec.maquina_id.estado)
                 raise ValidationError(_(
-                    'No se puede crear ni tramitar un ticket para la máquina %s '
+                    'No se puede crear un ticket para la máquina %s '
                     'porque se encuentra en estado "%s".', rec.maquina_id.name or rec.maquina_id.of, estado_label
                 ))
 
@@ -507,7 +547,12 @@ class PvTicket(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
+        es_staff = self.env.su or self.env.user.has_group('posventa.group_pv_staff')
         for vals in vals_list:
+            if not self.env.su and vals.get('estado', 'borrador') != 'borrador':
+                raise UserError(_('Los tickets se crean en estado Borrador.'))
+            if not es_staff and _campos_cargados(vals, CAMPOS_SOLO_STAFF):
+                raise UserError(_('Acción denegada: hay datos del ticket que solo puede cargar el Staff de Posventa.'))
             if vals.get('maquina_id'):
                 maquina = self.env['pv.maquina'].browse(vals['maquina_id'])
                 if maquina.exists() and maquina.estado in ('liberada', 'pendiente', 'cpm_vencido'):
@@ -565,15 +610,49 @@ class PvTicket(models.Model):
             if not has_multimedia:
                 raise UserError(_('Es obligatorio adjuntar al menos una imagen o video donde se observe la problemática antes de enviar el ticket a revisión.'))
 
+    # --- Permisos y transiciones de estado ---
+    def _check_pv_group(self, group_xmlid, mensaje):
+        if not self.env.su and not self.env.user.has_group(group_xmlid):
+            raise AccessError(mensaje)
+
+    def _check_staff(self):
+        self._check_pv_group('posventa.group_pv_staff', _('Solo el Staff de Posventa puede realizar esta acción.'))
+
+    def _check_admin(self):
+        self._check_pv_group('posventa.group_pv_admin', _('Solo el Administrador de Posventa puede realizar esta acción.'))
+
+    def _write_estado(self, vals):
+        """Único camino para cambiar el estado: write() rechaza 'estado' sin este contexto."""
+        return self.with_context(pv_transicion_estado=True).write(vals)
+
+    def _check_listo_para_enviar(self):
+        """Validaciones de negocio al enviar el ticket (BORRADOR -> ABIERTO)."""
+        for rec in self:
+            rec._check_mandatory_attachments()
+            if rec.maquina_id.estado in ESTADOS_MAQUINA_SIN_TICKETS:
+                estado_label = dict(ESTADO_MAQUINA).get(rec.maquina_id.estado, rec.maquina_id.estado)
+                raise UserError(_(
+                    'No se puede enviar el ticket porque la máquina %s se encuentra en estado "%s".',
+                    rec.maquina_id.name or rec.maquina_id.of, estado_label
+                ))
+            cert = rec.certificado_id
+            if not cert.active or cert.estado_certificado != 'vigente' or (
+                    cert.fecha_limite_vigencia and cert.fecha_limite_vigencia < fields.Date.today()):
+                raise UserError(_(
+                    'No se puede enviar el ticket porque el certificado %s ya no está vigente para reclamos.', cert.name
+                ))
+
     def action_enviar_ticket(self):
         """ El concesionario envía el ticket al Staff (BORRADOR -> ABIERTO) """
+        es_admin = self.env.su or self.env.user.has_group('posventa.group_pv_admin')
         for rec in self:
+            if not es_admin and not rec.concesionario_id._is_member():
+                raise AccessError(_('Solo el concesionario dueño del ticket puede enviarlo.'))
             if rec.estado != 'borrador':
                 raise UserError(_('Solo se pueden enviar tickets en estado Borrador.'))
-            rec._check_mandatory_attachments()
-            
-            # Al intentar enviar, Odoo ejecutará el @api.constrains automáticamente
-            rec.write({'estado': 'abierto'})
+            rec._check_listo_para_enviar()
+
+            rec._write_estado({'estado': 'abierto'})
             rec.sudo().message_post(
                 body=_('Ticket enviado a revisión técnica por el concesionario.'),
                 message_type='notification',
@@ -581,17 +660,19 @@ class PvTicket(models.Model):
             )
             rec._send_notification_to_staff()
 
-    # --- State transitions ---
     def action_tomar_ticket(self):
         """Staff takes the ticket (ABIERTO -> EN_PROCESO)."""
+        self._check_staff()
         for rec in self:
             if rec.estado != 'abierto':
                 raise UserError(_('Solo se pueden tomar tickets en estado ABIERTO.'))
-            rec.write({
+            vals = {
                 'estado': 'en_proceso',
                 'responsable_id': self.env.user.id,
-                'fecha_primera_atencion': fields.Datetime.now(),
-            })
+            }
+            if not rec.fecha_primera_atencion:
+                vals['fecha_primera_atencion'] = fields.Datetime.now()
+            rec._write_estado(vals)
             rec.message_post(
                 body=_('Ticket tomado por %s', self.env.user.name),
                 message_type='notification',
@@ -599,11 +680,12 @@ class PvTicket(models.Model):
             )
 
     def action_aceptar_ticket(self):
-        """Acepta el reclamo directamente sin abrir popup (el registro de garantía se traslada al Cierre si hay Orden SAP)."""
+        """Acepta el reclamo (EN_PROCESO -> ACEPTADO): es válido y queda en evaluación de garantía."""
+        self._check_staff()
         for rec in self:
             if rec.estado != 'en_proceso':
                 raise UserError(_('Solo se pueden aceptar tickets EN PROCESO.'))
-            rec.write({
+            rec._write_estado({
                 'estado': 'aceptado',
                 'fecha_solucion': fields.Datetime.now(),
             })
@@ -617,14 +699,15 @@ class PvTicket(models.Model):
                 template.send_mail(rec.id, force_send=True)
 
     def action_rechazar_ticket(self):
-        """Reject the claim and open the email wizard like standard Sales does."""
+        """Rechaza el reclamo por error de carga (EN_PROCESO -> RECHAZADO) y abre el correo al concesionario."""
         self.ensure_one()
+        self._check_staff()
         if self.estado != 'en_proceso':
             raise UserError(_('Solo se pueden rechazar tickets EN PROCESO.'))
         if not self.rechazo_tag_ids:
             raise UserError(_('Debe indicar al menos un motivo de rechazo del reclamo.'))
 
-        self.write({
+        self._write_estado({
             'estado': 'rechazado',
             'fecha_cierre': fields.Datetime.now(),
         })
@@ -635,22 +718,14 @@ class PvTicket(models.Model):
         )
 
         template = self.env.ref('posventa.mail_template_ticket_rechazado', raise_if_not_found=False)
-        
-        # Buscamos el res.partner real del concesionario
-        partner = self.concesionario_id.partner_id or (self.concesionario_id.user_id.partner_id if self.concesionario_id.user_id else False)
-        partner_id = partner.id if partner else False
-
         ctx = {
             'default_model': 'pv.ticket',
             'default_res_ids': self.ids,
             'default_composition_mode': 'comment',
             'default_template_id': template.id if template else False,
+            'default_partner_ids': self.concesionario_id.partner_id.ids,
             'force_email': True,
         }
-        
-        if partner_id:
-            ctx['default_partner_ids'] = [partner_id]
-
         return {
             'name': _('Enviar correo'),
             'type': 'ir.actions.act_window',
@@ -661,13 +736,14 @@ class PvTicket(models.Model):
             'target': 'new',
             'context': ctx,
         }
-        
+
     def action_cerrar_ticket(self):
         """Close the ticket (ACEPTADO -> CERRADO).
-        Siempre abre el asistente de cierre para clasificar la garantía (Técnica o Comercial),
-        asociar motivos de rechazo si corresponde y registrar comprobante u orden SAP.
+        Siempre abre el asistente de cierre para registrar la solución aplicada, si la garantía
+        cubre la pieza (con sus motivos si no la cubre) y el comprobante u orden SAP.
         """
         self.ensure_one()
+        self._check_staff()
         if self.estado != 'aceptado':
             raise UserError(_('Solo se pueden cerrar tickets ACEPTADOS.'))
 
@@ -684,43 +760,48 @@ class PvTicket(models.Model):
             }
         }
 
-    # --- rollback actions for administrator ---
-    def action_back_to_borrador(self):
+    def _cerrar(self, vals):
+        """Usado por el asistente de cierre (ACEPTADO -> CERRADO)."""
+        self._check_staff()
         for rec in self:
-            rec.write({'estado': 'borrador'})
+            if rec.estado != 'aceptado':
+                raise UserError(_("Solo se pueden cerrar tickets en estado 'Aceptado'."))
+        return self._write_estado(dict(vals, estado='cerrado', fecha_cierre=fields.Datetime.now()))
+
+    # --- Retrocesos de estado ---
+    def _retroceder(self, desde, vals, mensaje):
+        for rec in self:
+            if rec.estado not in desde:
+                raise UserError(_('El ticket %s no se puede devolver desde su estado actual.', rec.name))
+            rec._write_estado(vals)
             rec.message_post(
-                body=_('Ticket devuelto a Borrador por el Administrador.'),
+                body=mensaje % self.env.user.name,
                 message_type='notification',
                 subtype_xmlid='mail.mt_note',
             )
+
+    def action_back_to_borrador(self):
+        self._check_admin()
+        self._retroceder(('abierto',), {'estado': 'borrador'}, _('Ticket devuelto a Borrador por %s.'))
 
     def action_back_to_abierto(self):
-        for rec in self:
-            rec.sudo().write({'responsable_id': False})
-            rec.sudo().write({'estado': 'abierto'})
-            rec.message_post(
-                body=_('Ticket devuelto a Abierto por el Administrador.'),
-                message_type='notification',
-                subtype_xmlid='mail.mt_note',
-            )
+        self._check_staff()
+        self._retroceder(('en_proceso',), {'estado': 'abierto', 'responsable_id': False},
+                         _('Ticket devuelto a Abierto por %s.'))
 
     def action_back_to_en_proceso(self):
+        self._check_staff()
         for rec in self:
-            rec.write({'estado': 'en_proceso'})
-            rec.message_post(
-                body=_('Ticket devuelto a En Proceso por el Administrador.'),
-                message_type='notification',
-                subtype_xmlid='mail.mt_note',
-            )
+            rec._retroceder(('aceptado', 'rechazado'), {
+                'estado': 'en_proceso',
+                'fecha_solucion': False,
+                'fecha_cierre': False,
+            }, _('Ticket devuelto a En Proceso por %s.'))
 
     def action_back_to_aceptado(self):
-        for rec in self:
-            rec.write({'estado': 'aceptado'})
-            rec.message_post(
-                body=_('Ticket devuelto a Aceptado por el Administrador.'),
-                message_type='notification',
-                subtype_xmlid='mail.mt_note',
-            )
+        self._check_admin()
+        self._retroceder(('cerrado',), {'estado': 'aceptado', 'fecha_cierre': False},
+                         _('Ticket devuelto a Aceptado por %s.'))
 
     def _send_notification_to_staff(self):
         self.ensure_one()
@@ -762,72 +843,38 @@ class PvTicket(models.Model):
         return res
 
     def write(self, vals):
-        # 0. Restricción general para acciones_realizadas: Solo modificable en borrador por el concesionario
-        if 'acciones_realizadas' in vals and not self.env.su:
-            for rec in self:
-                if rec.estado != 'borrador':
-                    raise UserError(_("El campo 'Acciones realizadas' solo puede ser completado en estado Borrador."))
+        if not self.env.su:
+            if 'estado' in vals and not self.env.context.get('pv_transicion_estado'):
+                raise UserError(_("El estado del ticket solo puede cambiarse mediante los botones de acción."))
 
-        # 1. EVALUACIÓN DINÁMICA: ¿El usuario que está ejecutando esto es Admin o el Sistema (su)?
-        # Si es Admin o Sistema, lo dejamos pasar sin restricciones, asegurando trazabilidad si cambia responsable.
-        if self.env.su or self.env.user.has_group('posventa.group_pv_admin'):
-            if 'responsable_id' in vals:
+            user = self.env.user
+            if not user.has_group('posventa.group_pv_admin'):
+                es_staff = user.has_group('posventa.group_pv_staff')
+                if not es_staff and _campos_cargados(vals, CAMPOS_SOLO_STAFF):
+                    raise UserError(_("Acción denegada: hay datos del ticket que solo puede cargar el Staff de Posventa."))
                 for rec in self:
-                    new_resp_id = vals.get('responsable_id')
-                    if rec.responsable_id.id != new_resp_id:
-                        old_name = rec.responsable_id.name or _('Sin asignar')
-                        new_name = self.env['res.users'].browse(new_resp_id).name if new_resp_id else _('Sin asignar')
-                        rec.message_post(
-                            body=_('Responsable del ticket cambiado de "%s" a "%s" por %s.') % (old_name, new_name, self.env.user.name),
-                            message_type='notification',
-                            subtype_xmlid='mail.mt_note',
-                        )
-            return super(PvTicket, self).write(vals)
+                    if rec.estado == 'borrador':
+                        continue
+                    if es_staff:
+                        if CAMPOS_CARGA_CONCESIONARIO.intersection(vals):
+                            raise UserError(_("Los datos cargados por el concesionario no se pueden modificar una vez enviado el ticket."))
+                    elif set(vals) - CAMPOS_POST_ENVIO_CONCESIONARIO:
+                        raise UserError(_("Acción denegada: No tienes permisos para modificar este documento una vez creado y enviado."))
 
-        # 2. Staff: Cada staff puede ver y colaborar en todos los tickets.
-        # Trazabilidad verbosa si se asigna o reasigna el responsable:
+        # Trazabilidad verbosa si se asigna o reasigna el responsable
         if 'responsable_id' in vals:
+            new_resp = self.env['res.users'].browse(vals['responsable_id'])
             for rec in self:
-                new_resp_id = vals.get('responsable_id')
-                if rec.responsable_id.id != new_resp_id:
-                    old_name = rec.responsable_id.name or _('Sin asignar')
-                    new_name = self.env['res.users'].browse(new_resp_id).name if new_resp_id else _('Sin asignar')
+                if rec.responsable_id != new_resp:
                     rec.message_post(
-                        body=_('Responsable del ticket reasignado de "%s" a "%s" por %s.') % (old_name, new_name, self.env.user.name),
+                        body=_('Responsable del ticket cambiado de "%(old)s" a "%(new)s" por %(user)s.',
+                               old=rec.responsable_id.name or _('Sin asignar'),
+                               new=new_resp.name or _('Sin asignar'),
+                               user=self.env.user.name),
                         message_type='notification',
                         subtype_xmlid='mail.mt_note',
                     )
-
-        # 3. Restricciones para Concesionarios (y otros no-staff, no-admin)
-        is_concesionario = self.env.user.has_group('posventa.group_pv_concesionario') and not self.env.user.has_group('posventa.group_pv_staff')
-        if is_concesionario:
-            if 'responsable_id' in vals:
-                raise UserError(_("Los concesionarios no tienen permitido modificar el responsable de los tickets."))
-
-            # Si intentan cambiar el estado, restringir a que solo puedan pasarlo de borrador a abierto
-            if 'estado' in vals:
-                for rec in self:
-                    if not (rec.estado == 'borrador' and vals['estado'] == 'abierto'):
-                        raise UserError(_("Los concesionarios únicamente pueden enviar el ticket para cambiar su estado a Abierto."))
-
-            # Campos permitidos una vez que el ticket NO está en borrador
-            campos_permitidos_concesionario = [
-                'message_main_attachment_id', 
-                'activity_ids', 
-                'message_ids', 
-                'message_follower_ids',
-                'estado',
-                'multimedia_ids',
-                'multimedia_url',
-                'drive_folder_url',
-            ]
-            for rec in self:
-                if rec.estado != 'borrador':
-                    intento_modificar_negocio = any(key not in campos_permitidos_concesionario for key in vals.keys())
-                    if intento_modificar_negocio:
-                        raise UserError(_("Acción denegada: No tienes permisos para modificar este documento una vez creado y enviado."))
-
-        return super(PvTicket, self).write(vals)
+        return super().write(vals)
 
     @api.model
     def get_wizard_catalog_data(self, sistema_id=None, subsistema_id=None):

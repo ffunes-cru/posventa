@@ -27,29 +27,25 @@
         <field name="arch" type="xml">
             <form string="Máquina Posventa">
                 <header>
-                    <button name="action_abrir_wizard_transferencia" string="Trasladar Máquina" type="object" class="btn-secondary" invisible="estado in ('liberada', 'pendiente', 'vendida', 'cpm_vencido')"/>
-                    <button name="action_aceptar_transferencia" 
-                        string="Aceptar Transferencia" 
-                        type="object" 
-                        class="oe_highlight" 
-                        invisible="estado != 'pendiente' or not es_concesionario_destino"/>
-            
-                    <button name="action_rechazar_transferencia" 
-                        string="Rechazar Transferencia" 
-                        type="object" 
-                        class="btn-secondary" 
-                        invisible="estado != 'pendiente'"/>
+                    <button name="action_abrir_wizard_transferencia" string="Trasladar Máquina" type="object" class="btn-secondary" invisible="estado != 'stock' or liberacion_solicitada" groups="posventa.group_pv_admin"/>
+                    <button name="action_aceptar_transferencia" string="Aceptar Transferencia" type="object" class="oe_highlight" invisible="estado != 'pendiente' or not (es_concesionario_destino or is_pv_admin)"/>
+                    <button name="action_rechazar_transferencia" string="Rechazar Transferencia" type="object" class="btn-secondary" invisible="estado != 'pendiente' or not (es_concesionario_destino or is_pv_admin)"/>
+                    <button name="action_cancelar_transferencia" string="Cancelar Traslado" type="object" class="btn-secondary" invisible="estado != 'pendiente'" groups="posventa.group_pv_admin"/>
 
-                    <button name="action_liberar_maquina" 
-                        string="Liberar Máquina (Canje)" 
-                        type="object" 
-                        class="btn-secondary" 
-                        invisible="estado not in ('stock', 'vendida', 'cpm_vencido')"/>
+                    <button name="action_aprobar_liberacion" string="Aprobar Liberación" type="object" class="oe_highlight" invisible="not liberacion_solicitada" groups="posventa.group_pv_admin" confirm="La máquina vuelve a LIBERADA y se archivan sus certificados. ¿Continuar?"/>
+                    <button name="action_rechazar_liberacion" string="Rechazar Liberación" type="object" class="btn-secondary" invisible="not liberacion_solicitada" groups="posventa.group_pv_admin"/>
+                    <button name="action_abrir_wizard_liberacion" string="Liberar Máquina (Canje)" type="object" class="btn-secondary" invisible="liberacion_solicitada or estado not in ('stock', 'vendida', 'cpm_vencido')" groups="posventa.group_pv_admin"/>
 
                     <field name="estado" widget="statusbar" statusbar_visible="liberada,stock,vendida,cpm_vencido"/>
                 </header>
                 <sheet>
                     <field name="es_concesionario_destino" invisible="1"/>
+                    <field name="is_pv_admin" invisible="1"/>
+                    <div class="alert alert-warning mb-3" role="alert" invisible="not liberacion_solicitada">
+                        <strong>Liberación solicitada</strong> por <field name="liberacion_solicitante_id" class="d-inline" readonly="1"/>
+                        el <field name="liberacion_fecha_solicitud" class="d-inline" readonly="1"/>.
+                        Motivo: <field name="liberacion_motivo" class="d-inline" readonly="1"/>
+                    </div>
                     <div class="oe_button_box" name="button_box">
                         <button name="action_view_certificados" type="object" class="oe_stat_button" icon="fa-file-text-o">
                             <field name="certificado_count" widget="statinfo" string="Certificados"/>

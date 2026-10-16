@@ -1,5 +1,6 @@
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError
+from .pv_maquina import ESTADO_MAQUINA
 
 class PvMaquina(models.Model):
     _inherit = 'pv.maquina'
@@ -15,18 +16,19 @@ class PvMaquina(models.Model):
     )
 
     def _compute_es_concesionario_destino(self):
-        # Evaluamos si el usuario actual es el dueño del concesionario destino
-        actual_user = self.env.user
+        mi_concesionario = self.env['pv.concesionario']._get_concesionario_for_user()
         for record in self:
-            record.es_concesionario_destino = record.concesionario_destino_id.user_id == actual_user
+            record.es_concesionario_destino = bool(mi_concesionario) and record.concesionario_destino_id == mi_concesionario
 
     def action_aceptar_transferencia(self):
         self.ensure_one()
-        # Validación de seguridad: Solo el concesionario destino (o un admin) puede aceptar
-        if self.concesionario_destino_id.user_id != self.env.user and not self.env.is_admin():
-            raise UserError("Solo el concesionario destino puede aceptar esta transferencia.")
+        self._check_es_del_concesionario(
+            self.concesionario_destino_id, _("Solo el concesionario destino puede aceptar esta transferencia."))
+        if self.estado != 'pendiente':
+            raise UserError(_("La máquina no tiene una transferencia pendiente."))
 
         maquina_sudo = self.sudo()
+        destino = maquina_sudo.concesionario_destino_id
 
         # Los certificados anteriores (vigentes o vencidos) pasan a 'archivado_traslado'
         certificados_anteriores = maquina_sudo.certificado_ids.filtered(
@@ -37,9 +39,9 @@ class PvMaquina(models.Model):
 
         # Hacemos efectiva la transferencia pasando la máquina a LIBERADA para que el nuevo dueño cargue sus certificados
         maquina_sudo.write({
-            'concesionario_id': self.concesionario_destino_id.id,
-            'provincia_id': self.provincia_destino_id.id,
-            'ciudad': self.ciudad_destino,
+            'concesionario_id': destino.id,
+            'provincia_id': maquina_sudo.provincia_destino_id.id,
+            'ciudad': maquina_sudo.ciudad_destino,
             'estado': 'liberada',
             'fecha_liberacion': fields.Date.today(),
             # Limpiamos los campos temporales
@@ -47,26 +49,25 @@ class PvMaquina(models.Model):
             'provincia_destino_id': False,
             'ciudad_destino': False,
         })
-        maquina_sudo._compute_tiene_certificados()
         maquina_sudo.message_post(
-            body=_("Transferencia ACEPTADA. Nuevo dueño: %s. Los certificados anteriores fueron marcados como 'Archivado por Traslado'. El nuevo concesionario debe iniciar la carga de certificados.") % self.concesionario_destino_id.name
+            body=_("Transferencia ACEPTADA por %s. Nuevo dueño: %s. Los certificados anteriores fueron marcados como "
+                   "'Archivado por Traslado'. El nuevo concesionario debe iniciar la carga de certificados.",
+                   self.env.user.name, destino.name),
+            message_type='notification',
+            subtype_xmlid='mail.mt_note',
         )
+        return True
 
     def action_rechazar_transferencia(self):
         self.ensure_one()
-        if self.concesionario_destino_id.user_id != self.env.user and not self.env.is_admin():
-            raise UserError("Solo el concesionario destino puede rechazar esta transferencia.")
-
-        concesionario_que_rechazo = self.concesionario_destino_id.name
+        self._check_es_del_concesionario(
+            self.concesionario_destino_id, _("Solo el concesionario destino puede rechazar esta transferencia."))
+        if self.estado != 'pendiente':
+            raise UserError(_("La máquina no tiene una transferencia pendiente."))
 
         maquina_sudo = self.sudo()
-
-        # Restablecemos estado previo (stock si tenía FRU, vendida si CPM, o liberada)
-        prev_estado = 'liberada'
-        if maquina_sudo.tiene_cpm:
-            prev_estado = 'vendida'
-        elif maquina_sudo.tiene_fru:
-            prev_estado = 'stock'
+        concesionario_que_rechazo = maquina_sudo.concesionario_destino_id.name
+        prev_estado = maquina_sudo._get_estado_sin_transferencia()
 
         # Cancelamos todo y vuelve a su estado normal con su dueño original
         maquina_sudo.write({
@@ -75,4 +76,10 @@ class PvMaquina(models.Model):
             'provincia_destino_id': False,
             'ciudad_destino': False,
         })
-        maquina_sudo.message_post(body=_("Transferencia RECHAZADA por el concesionario %s. La máquina vuelve a estado %s con su dueño original.") % (concesionario_que_rechazo, prev_estado))
+        maquina_sudo.message_post(
+            body=_("Transferencia RECHAZADA por el concesionario %s. La máquina vuelve a estado %s con su dueño original.",
+                   concesionario_que_rechazo, dict(ESTADO_MAQUINA).get(prev_estado, prev_estado)),
+            message_type='notification',
+            subtype_xmlid='mail.mt_note',
+        )
+        return True
