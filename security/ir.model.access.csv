@@ -51,4 +51,10 @@ access_pv_ticket_multimedia_user,pv.ticket.multimedia concesionario,model_pv_tic
 access_pv_ticket_multimedia_wizard_admin,pv.ticket.multimedia.wizard admin,model_pv_ticket_multimedia_wizard,group_pv_admin,1,1,1,1
 access_pv_ticket_multimedia_wizard_staff,pv.ticket.multimedia.wizard staff,model_pv_ticket_multimedia_wizard,group_pv_staff,1,1,1,1
 access_pv_ticket_multimedia_wizard_user,pv.ticket.multimedia.wizard concesionario,model_pv_ticket_multimedia_wizard,group_pv_concesionario,1,1,1,1
+access_pv_tipo_desvio_admin,pv.tipo.desvio admin,model_pv_tipo_desvio,group_pv_admin,1,1,1,1
+access_pv_tipo_desvio_staff,pv.tipo.desvio staff,model_pv_tipo_desvio,group_pv_staff,1,0,0,0
+access_pv_tipo_desvio_user,pv.tipo.desvio concesionario,model_pv_tipo_desvio,group_pv_concesionario,1,0,0,0
+access_pv_tipo_rechazo_admin,pv.tipo.rechazo admin,model_pv_tipo_rechazo,group_pv_admin,1,1,1,1
+access_pv_tipo_rechazo_staff,pv.tipo.rechazo staff,model_pv_tipo_rechazo,group_pv_staff,1,0,0,0
+access_pv_tipo_rechazo_user,pv.tipo.rechazo concesionario,model_pv_tipo_rechazo,group_pv_concesionario,1,0,0,0
 

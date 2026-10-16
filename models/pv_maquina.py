@@ -118,6 +118,11 @@ class PvMaquina(models.Model):
         compute='_compute_tiene_certificados',
         store=True,
     )
+    tiene_feu_vigente = fields.Boolean(
+        string='Tiene FEU Vigente',
+        compute='_compute_tiene_certificados',
+        store=True,
+    )
 
     active = fields.Boolean(default=True)
 
@@ -148,6 +153,7 @@ class PvMaquina(models.Model):
             rec.tiene_cpm = 'cpm' in tipos_vigentes
             rec.tiene_fru = 'fru' in tipos_cargados
             rec.tiene_feu = 'feu' in tipos_cargados
+            rec.tiene_feu_vigente = 'feu' in tipos_vigentes
 
     @api.depends('certificado_ids', 'certificado_ids.estado_certificado', 'certificado_ids.active')
     def _compute_certificado_count(self):
@@ -223,7 +229,7 @@ class PvMaquina(models.Model):
     @api.model
     def get_portal_list_data(self, search_term='', estado_filter=''):
         """Return machine list data for the concesionario portal."""
-        concesionario = self.env['pv.concesionario'].search([('user_id', '=', self.env.uid)], limit=1)
+        concesionario = self.env['pv.concesionario']._get_concesionario_for_user(self.env.user)
         if not concesionario:
             return []
 
@@ -257,6 +263,7 @@ class PvMaquina(models.Model):
                 'cliente': m.cliente_id.name or '',
                 'tiene_fru': m.tiene_fru,
                 'tiene_feu': m.tiene_feu,
+                'tiene_feu_vigente': m.tiene_feu_vigente,
                 'tiene_cpm': m.tiene_cpm,
                 'es_pendiente_transferencia': m.estado == 'pendiente',
                 'proximo_certificado': m._get_proximo_certificado_info(),
@@ -311,6 +318,14 @@ class PvMaquina(models.Model):
                 'fecha_limite': str(fecha_limite),
                 'dias_restantes': dias_restantes,
                 'estado': estado,
+            }
+        elif not self.tiene_feu_vigente:
+            return {
+                'tipo': 'feu',
+                'tipo_label': 'FEU — Formulario de Entrega de Unidad (Renovación Requerida)',
+                'fecha_limite': False,
+                'dias_restantes': 0,
+                'estado': 'vencido',
             }
         elif not self.tiene_cpm:
             return {
@@ -402,6 +417,7 @@ class PvMaquina(models.Model):
             'provincia': self.provincia_id.name if self.provincia_id else '',
             'tiene_fru': self.tiene_fru,
             'tiene_feu': self.tiene_feu,
+            'tiene_feu_vigente': self.tiene_feu_vigente,
             'tiene_cpm': self.tiene_cpm,
             'proximo_certificado': self._get_proximo_certificado_info(),
             'certificados': certificados,

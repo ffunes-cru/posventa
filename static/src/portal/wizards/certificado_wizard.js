@@ -19,10 +19,13 @@ export class CertificadoWizard extends Component {
 
         // Determine default recommended tipo
         const certs = maquina.certificados || [];
+        const hasFeuVigente = certs.some(c => c.active !== false && c.tipo === "feu" && c.estado_certificado === "vigente");
         let defaultTipo = "fru";
         if (maquina.tiene_fru && !maquina.tiene_feu) {
             defaultTipo = "feu";
-        } else if (maquina.tiene_feu && !maquina.tiene_cpm) {
+        } else if (maquina.tiene_feu && !hasFeuVigente) {
+            defaultTipo = "feu";
+        } else if (maquina.tiene_feu && hasFeuVigente && !maquina.tiene_cpm) {
             defaultTipo = "cpm";
         }
 
@@ -64,6 +67,8 @@ export class CertificadoWizard extends Component {
         const hasCurrentCycleFeu = certs.some(
             c => c.active !== false && c.tipo === "feu" && ["vigente", "vencido"].includes(c.estado_certificado)
         );
+        const hasFeuVigente = activeTypes.includes("feu");
+        const hasFeuVencido = hasCurrentCycleFeu && !hasFeuVigente;
 
         return [
             {
@@ -85,8 +90,12 @@ export class CertificadoWizard extends Component {
             {
                 value: "cpm",
                 label: _t("CPM — Certificado de Puesta en Marcha"),
-                disabled: activeTypes.includes("cpm") || !m.tiene_feu,
-                reason: activeTypes.includes("cpm") ? _t("La máquina ya está completa (CPM activo)") : (!m.tiene_feu ? _t("Requiere cargar primero el FEU") : ""),
+                disabled: activeTypes.includes("cpm") || !m.tiene_feu || hasFeuVencido,
+                reason: activeTypes.includes("cpm")
+                    ? _t("La máquina ya está completa (CPM activo)")
+                    : (!m.tiene_feu
+                        ? _t("Requiere cargar primero el FEU")
+                        : (hasFeuVencido ? _t("El Formulario de Entrega (FEU) está vencido. Debe renovarlo antes de cargar el CPM.") : "")),
             },
             {
                 value: "informe_servicio",

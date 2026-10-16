@@ -58,4 +58,10 @@ class ResConfigSettings(models.TransientModel):
         default=1024,
         help='Límite máximo permitido en MB para archivos multimedia pesados (por defecto 1024 MB = 1 GB).'
     )
+    pv_storage_mode = fields.Selection([
+        ('drive', 'Google Drive (rclone - Streaming Pesado)'),
+        ('odoo', 'Almacenamiento Estándar de Odoo (Archivos Locales / Adjuntos)'),
+    ], string='Modo de Carga de Archivos', config_parameter='posventa.storage_mode', default='drive',
+       help='Permite alternar entre Google Drive y la subida estándar de Odoo en caso de contingencia.')
+
 

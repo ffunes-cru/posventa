@@ -62,7 +62,7 @@ class PosventaMultimediaController(http.Controller):
 
             # Verificar pertenencia para concesionarios
             if request.env.user.has_group('posventa.group_pv_concesionario') and not request.env.user.has_group('posventa.group_pv_staff'):
-                concesionario = request.env['pv.concesionario'].search([('user_id', '=', request.env.uid)], limit=1)
+                concesionario = request.env['pv.concesionario']._get_concesionario_for_user(request.env.user)
                 if not concesionario or ticket.concesionario_id.id != concesionario.id:
                     return request.make_json_response({'error': 'Acceso denegado a este reclamo.'}, status=403)
 

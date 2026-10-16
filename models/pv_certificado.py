@@ -54,15 +54,23 @@ class PvCertificado(models.Model):
     )
     dias_retraso_carga = fields.Integer(
         string='Días de Retraso en Carga',
-        default=0,
+        compute='_compute_fechas_y_vencimiento',
+        store=True,
+        readonly=False,
         help='Días que se excedió el concesionario respecto al plazo nominal de carga al subir el certificado.',
     )
     fecha_limite_carga = fields.Date(
         string='Plazo Nominal de Carga',
+        compute='_compute_fechas_y_vencimiento',
+        store=True,
+        readonly=False,
         help='Fecha límite nominal que tenía la máquina para la carga de este certificado.',
     )
     fecha_vencimiento = fields.Date(
         string='Fecha Vencimiento (Gracia / Reclamos)',
+        compute='_compute_fechas_y_vencimiento',
+        store=True,
+        readonly=False,
         tracking=True,
         help='Fecha de vencimiento efectiva de la vigencia/gracia para reclamos.',
     )
@@ -103,6 +111,27 @@ class PvCertificado(models.Model):
         default=True,
         tracking=True,
     )
+
+    @api.depends('tipo', 'fecha', 'maquina_id', 'maquina_id.fecha_liberacion')
+    def _compute_fechas_y_vencimiento(self):
+        for rec in self:
+            if not rec.maquina_id or not rec.tipo:
+                rec.fecha_limite_carga = rec.fecha_limite_carga or False
+                rec.dias_retraso_carga = 0
+                rec.fecha_vencimiento = rec.fecha_vencimiento or False
+                continue
+
+            fecha_emision = fields.Date.to_date(rec.fecha) or fields.Date.today()
+            plazo_nominal = rec._get_plazo_nominal_carga(rec.tipo, rec.maquina_id)
+            rec.fecha_limite_carga = plazo_nominal
+
+            if plazo_nominal and fecha_emision > plazo_nominal:
+                rec.dias_retraso_carga = (fecha_emision - plazo_nominal).days
+            else:
+                rec.dias_retraso_carga = 0
+
+            calc_venc = rec._get_calculated_vencimiento(rec.tipo, fecha_emision, rec.maquina_id)
+            rec.fecha_vencimiento = calc_venc
 
     @api.depends('fecha_vencimiento')
     def _compute_fecha_limite_vigencia(self):
@@ -180,7 +209,7 @@ class PvCertificado(models.Model):
 
             # Si es concesionario, validar que la máquina pertenezca a su concesionario
             if self.env.user.has_group('posventa.group_pv_concesionario') and not self.env.user.has_group('posventa.group_pv_staff'):
-                concesionario = self.env['pv.concesionario'].search([('user_id', '=', self.env.uid)], limit=1)
+                concesionario = self.env['pv.concesionario']._get_concesionario_for_user(self.env.user)
                 if not concesionario or rec.maquina_id.concesionario_id.id != concesionario.id:
                     raise ValidationError(_('No puede cargar certificados para una máquina que no pertenece a su concesionario actual.'))
 
@@ -205,17 +234,34 @@ class PvCertificado(models.Model):
                     ('active', '=', True),
                     ('id', '!=', rec.id),
                 ])
-                feu_exists = self.search_count([
+                feu_vigente = self.search_count([
                     ('maquina_id', '=', rec.maquina_id.id),
                     ('tipo', '=', 'feu'),
-                    ('estado_certificado', 'in', ('vigente', 'vencido')),
+                    ('estado_certificado', '=', 'vigente'),
                     ('active', '=', True),
                     ('id', '!=', rec.id),
                 ])
-                if not fru_exists or not feu_exists:
+                feu_vencido = self.search_count([
+                    ('maquina_id', '=', rec.maquina_id.id),
+                    ('tipo', '=', 'feu'),
+                    ('estado_certificado', '=', 'vencido'),
+                    ('active', '=', True),
+                    ('id', '!=', rec.id),
+                ])
+                if not fru_exists:
                     raise ValidationError(_(
                         'No se puede cargar un Certificado de Puesta en Marcha (CPM) sin antes haber cargado '
-                        'tanto el Formulario de Recepción (FRU) como el Formulario de Entrega (FEU) para la máquina %s.', rec.maquina_id.name
+                        'el Formulario de Recepción (FRU) para la máquina %s.', rec.maquina_id.name
+                    ))
+                if feu_vencido and not feu_vigente:
+                    raise ValidationError(_(
+                        'El Formulario de Entrega de Unidad (FEU) de la máquina %s se encuentra vencido. '
+                        'Debe renovarlo antes de poder cargar el Certificado de Puesta en Marcha (CPM).', rec.maquina_id.name
+                    ))
+                if not feu_vigente:
+                    raise ValidationError(_(
+                        'No se puede cargar un Certificado de Puesta en Marcha (CPM) sin antes haber cargado '
+                        'un Formulario de Entrega de Unidad (FEU) vigente para la máquina %s.', rec.maquina_id.name
                     ))
 
     def _get_calculated_vencimiento(self, tipo, fecha, maquina):
@@ -267,24 +313,27 @@ class PvCertificado(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
+        hoy = fields.Date.today()
         for vals in vals_list:
             maquina = self.env['pv.maquina'].sudo().browse(vals.get('maquina_id'))
             if not vals.get('concesionario_id'):
-                concesionario = self.env['pv.concesionario'].search([('user_id', '=', self.env.uid)], limit=1)
+                concesionario = self.env['pv.concesionario']._get_concesionario_for_user(self.env.user)
                 if concesionario:
                     vals['concesionario_id'] = concesionario.id
                 elif maquina.exists() and maquina.concesionario_id:
                     vals['concesionario_id'] = maquina.concesionario_id.id
             if maquina.exists():
                 tipo = vals.get('tipo')
-                fecha_emision = fields.Date.to_date(vals.get('fecha')) if vals.get('fecha') else fields.Date.today()
-                vals['fecha_vencimiento'] = self._get_calculated_vencimiento(tipo, fecha_emision, maquina)
+                fecha_emision = fields.Date.to_date(vals.get('fecha')) if vals.get('fecha') else hoy
+                venc = self._get_calculated_vencimiento(tipo, fecha_emision, maquina)
+                vals['fecha_vencimiento'] = venc
                 plazo_nominal = self._get_plazo_nominal_carga(tipo, maquina)
                 vals['fecha_limite_carga'] = plazo_nominal
                 if plazo_nominal and fecha_emision > plazo_nominal:
                     vals['dias_retraso_carga'] = (fecha_emision - plazo_nominal).days
                 else:
                     vals['dias_retraso_carga'] = 0
+
         records = super().create(vals_list)
         for rec in records:
             rec.maquina_id.modified(['certificado_ids'])
@@ -306,19 +355,14 @@ class PvCertificado(models.Model):
         return records
 
     def write(self, vals):
-        user_fields = {'tipo', 'maquina_id', 'fecha', 'fecha_vencimiento', 'archivo', 'archivo_nombre', 'notas'}
-        if user_fields.intersection(vals.keys()):
-            for rec in self:
-                if rec.id:
-                    raise UserError(_('No se puede modificar un certificado una vez guardado. Si necesita realizar cambios, desactívelo o archívelo.'))
+        # Bloquear modificación de campos inmutables solo para usuarios no-administradores
+        if self.env.user.has_group('posventa.group_pv_concesionario') and not self.env.su:
+            user_fields = {'tipo', 'maquina_id', 'archivo', 'archivo_nombre'}
+            if user_fields.intersection(vals.keys()):
+                for rec in self:
+                    if rec.id:
+                        raise UserError(_('No se puede modificar un certificado una vez guardado. Si necesita realizar cambios, desactívelo o archívelo.'))
 
-        if 'tipo' in vals or 'fecha' in vals or 'maquina_id' in vals:
-            for rec in self:
-                maquina = self.env['pv.maquina'].browse(vals.get('maquina_id', rec.maquina_id.id))
-                tipo = vals.get('tipo', rec.tipo)
-                fecha = vals.get('fecha', rec.fecha)
-                vals['fecha_vencimiento'] = self._get_calculated_vencimiento(tipo, fecha, maquina)
-        
         res = super().write(vals)
 
         if 'active' in vals or 'estado_certificado' in vals or 'maquina_id' in vals:

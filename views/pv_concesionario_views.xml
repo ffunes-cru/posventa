@@ -53,7 +53,18 @@
                         </group>
                     </group>
                     <notebook>
-                        <page string="Personal Autorizado" name="personal">
+                        <page string="Contactos / Personal de la Empresa" name="contactos">
+                            <field name="contacto_partner_ids" mode="list" context="{'default_parent_id': partner_id, 'default_is_company': False}">
+                                <list editable="bottom">
+                                    <field name="name"/>
+                                    <field name="function" string="Puesto / Cargo"/>
+                                    <field name="phone"/>
+                                    <field name="email"/>
+                                    <field name="user_ids" widget="many2many_tags" string="Usuarios"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Personal Histórico" name="personal_legacy" invisible="not contacto_ids">
                             <field name="contacto_ids" mode="list">
                                 <list editable="bottom">
                                     <field name="name"/>

@@ -56,9 +56,17 @@ class PvTicket(models.Model):
         store=True,
         tracking=True,
     )
+    desvio_tipo_id = fields.Many2one(
+        'pv.tipo.desvio',
+        string='Tipo de Desvío',
+        tracking=True,
+    )
     desvio_tipo = fields.Selection(
         [('rotura', 'Rotura'), ('faltante', 'Faltante'), ('otro', 'Otro')],
         string='Tipo de desvío',
+        compute='_compute_desvio_tipo',
+        inverse='_inverse_desvio_tipo',
+        store=True,
         tracking=True,
     )
 
@@ -101,13 +109,50 @@ class PvTicket(models.Model):
         help='Certificado vigente asociado al momento de la creación del ticket.'
     )
 
-    # --- Operador ---
+    # --- Operador (Contacto de Concesionario) ---
     operador_id = fields.Many2one(
-        'pv.concesionario.contacto',
+        'res.partner',
         string='Cargado por',
-        domain="[('concesionario_id', '=', concesionario_id)]",
+        default=lambda self: self.env.user.partner_id,
         tracking=True,
     )
+    storage_mode = fields.Selection(
+        [('drive', 'Google Drive'), ('odoo', 'Odoo')],
+        string='Modo de Almacenamiento',
+        compute='_compute_storage_mode',
+    )
+
+    def _compute_storage_mode(self):
+        mode = self.env['ir.config_parameter'].sudo().get_param('posventa.storage_mode', 'drive')
+        for rec in self:
+            rec.storage_mode = mode
+
+    @api.depends('desvio_tipo_id', 'desvio_tipo_id.codigo', 'desvio_tipo_id.name')
+    def _compute_desvio_tipo(self):
+        for rec in self:
+            if rec.desvio_tipo_id:
+                code = (rec.desvio_tipo_id.codigo or rec.desvio_tipo_id.name or '').lower().strip()
+                if 'rotura' in code:
+                    rec.desvio_tipo = 'rotura'
+                elif 'faltan' in code:
+                    rec.desvio_tipo = 'faltante'
+                else:
+                    rec.desvio_tipo = 'otro'
+            elif not rec.desvio_tipo:
+                rec.desvio_tipo = False
+
+    def _inverse_desvio_tipo(self):
+        for rec in self:
+            if rec.desvio_tipo and not rec.desvio_tipo_id:
+                tipo_rec = self.env['pv.tipo.desvio'].search([
+                    '|', ('codigo', '=', rec.desvio_tipo), ('name', '=ilike', rec.desvio_tipo)
+                ], limit=1)
+                if not tipo_rec:
+                    tipo_rec = self.env['pv.tipo.desvio'].create({
+                        'name': rec.desvio_tipo.capitalize(),
+                        'codigo': rec.desvio_tipo,
+                    })
+                rec.desvio_tipo_id = tipo_rec.id
 
     # --- Clasificación del desvío ---
     sistema_id = fields.Many2one(
@@ -186,10 +231,20 @@ class PvTicket(models.Model):
         string='Motivo de rechazo',
         tracking=True,
     )
+    rechazo_tag_ids = fields.Many2many(
+        'pv.tipo.rechazo',
+        string='Motivos de Rechazo',
+        tracking=True,
+    )
+    tipo_garantia = fields.Selection(
+        [('tecnica', 'Técnica'), ('comercial', 'Comercial')],
+        string='Tipo de Garantía',
+        tracking=True,
+    )
     prioridad = fields.Selection(
         PRIORIDAD,
         string='Prioridad',
-        default='media',
+        default='alta',
         tracking=True,
     )
 
@@ -487,11 +542,25 @@ class PvTicket(models.Model):
         else:
             self.campo_extra_ids = [(5, 0, 0)]
 
+    def _check_mandatory_attachments(self):
+        for rec in self:
+            has_multimedia = bool(rec.multimedia_ids or rec.multimedia_url)
+            if not has_multimedia:
+                attachments = self.env['ir.attachment'].sudo().search([
+                    ('res_model', '=', 'pv.ticket'),
+                    ('res_id', '=', rec.id),
+                ])
+                if attachments:
+                    has_multimedia = True
+            if not has_multimedia:
+                raise UserError(_('Es obligatorio adjuntar al menos una imagen o video donde se observe la problemática antes de enviar el ticket a revisión.'))
+
     def action_enviar_ticket(self):
         """ Envía el ticket (BORRADOR -> ABIERTO). Si la IA está activada abre el chat asistente; si no, lo envía directamente sin popup. """
         self.ensure_one()
         if self.estado != 'borrador':
             raise UserError(_('Solo se pueden enviar tickets en estado Borrador.'))
+        self._check_mandatory_attachments()
 
         param = self.env['ir.config_parameter'].sudo().get_param('posventa.enable_ai_integration', 'False')
         ai_enabled = str(param).strip().lower() in ('true', '1')
@@ -520,6 +589,7 @@ class PvTicket(models.Model):
         for rec in self:
             if rec.estado != 'borrador':
                 raise UserError(_('Solo se pueden enviar tickets en estado Borrador.'))
+            rec._check_mandatory_attachments()
             
             # Al intentar enviar, Odoo ejecutará el @api.constrains automáticamente
             rec.write({'estado': 'abierto'})
@@ -631,8 +701,10 @@ class PvTicket(models.Model):
         self.ensure_one()
         if self.estado != 'en_proceso':
             raise UserError(_('Solo se pueden rechazar tickets EN PROCESO.'))
-        if not self.motivo_rechazo:
-            raise UserError(_('Debe indicar el motivo de rechazo.'))
+        if not self.motivo_rechazo and not self.rechazo_tag_ids:
+            raise UserError(_('Debe indicar el motivo o tags de rechazo.'))
+        if not self.motivo_rechazo and self.rechazo_tag_ids:
+            self.motivo_rechazo = ", ".join(self.rechazo_tag_ids.mapped('name'))
             
         self.write({
             'estado': 'rechazado',
@@ -674,35 +746,25 @@ class PvTicket(models.Model):
         
     def action_cerrar_ticket(self):
         """Close the ticket (ACEPTADO -> CERRADO).
-        Si el ticket cuenta con un número de Orden de SAP cargado (indica orden de devolución de pieza),
-        abre el asistente para registrar la garantía y el adjunto correspondiente.
-        Si no cuenta con Nro. de Orden SAP, se cierra directamente.
+        Siempre abre el asistente de cierre para clasificar la garantía (Técnica o Comercial),
+        asociar motivos de rechazo si corresponde y registrar comprobante u orden SAP.
         """
         self.ensure_one()
         if self.estado != 'aceptado':
             raise UserError(_('Solo se pueden cerrar tickets ACEPTADOS.'))
 
-        if self.sap_numero_orden:
-            return {
-                'name': _('Cierre de Reclamo / Garantía y Devolución'),
-                'type': 'ir.actions.act_window',
-                'res_model': 'pv.cerrar.ticket.wizard',
-                'view_mode': 'form',
-                'target': 'new',
-                'context': {
-                    'default_ticket_id': self.id,
-                }
+        return {
+            'name': _('Cierre de Reclamo / Garantía y Devolución'),
+            'type': 'ir.actions.act_window',
+            'res_model': 'pv.cerrar.ticket.wizard',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {
+                'default_ticket_id': self.id,
+                'default_sap_numero_orden': self.sap_numero_orden or '',
+                'default_tipo_garantia': self.tipo_garantia or 'tecnica',
             }
-
-        self.write({
-            'estado': 'cerrado',
-            'fecha_cierre': fields.Datetime.now(),
-        })
-        self.message_post(
-            body=_('Ticket cerrado. Expediente completo.'),
-            message_type='notification',
-            subtype_xmlid='mail.mt_note',
-        )
+        }
 
     # --- rollback actions for administrator ---
     def action_back_to_borrador(self):
@@ -789,30 +851,41 @@ class PvTicket(models.Model):
                     raise UserError(_("El campo 'Acciones realizadas' solo puede ser completado en estado Borrador."))
 
         # 1. EVALUACIÓN DINÁMICA: ¿El usuario que está ejecutando esto es Admin o el Sistema (su)?
-        # Si es Admin o Sistema, lo dejamos pasar sin restricciones.
+        # Si es Admin o Sistema, lo dejamos pasar sin restricciones, asegurando trazabilidad si cambia responsable.
         if self.env.su or self.env.user.has_group('posventa.group_pv_admin'):
+            if 'responsable_id' in vals:
+                for rec in self:
+                    new_resp_id = vals.get('responsable_id')
+                    if rec.responsable_id.id != new_resp_id:
+                        old_name = rec.responsable_id.name or _('Sin asignar')
+                        new_name = self.env['res.users'].browse(new_resp_id).name if new_resp_id else _('Sin asignar')
+                        rec.message_post(
+                            body=_('Responsable del ticket cambiado de "%s" a "%s" por %s.') % (old_name, new_name, self.env.user.name),
+                            message_type='notification',
+                            subtype_xmlid='mail.mt_note',
+                        )
             return super(PvTicket, self).write(vals)
 
-        # 2. Restricción para Call Center (Staff): No interactuar con tickets de otros en proceso
-        if self.env.user.has_group('posventa.group_pv_staff'):
-            for rec in self:
-                if rec.estado == 'en_proceso' and rec.responsable_id and rec.responsable_id.id != self.env.user.id:
-                    raise UserError(_("No puede interactuar con un ticket que ya está en proceso por otro usuario."))
-
-        # 3. Restricción sobre responsable_id (aplica a todos los no-admin)
+        # 2. Staff: Cada staff puede ver y colaborar en todos los tickets.
+        # Trazabilidad verbosa si se asigna o reasigna el responsable:
         if 'responsable_id' in vals:
             for rec in self:
-                # Permitir solo si se está tomando el ticket a sí mismo y pasa a/está en 'en_proceso'
-                is_taking = (
-                    vals.get('responsable_id') == self.env.user.id and 
-                    (vals.get('estado') == 'en_proceso' or rec.estado == 'en_proceso')
-                )
-                if not is_taking:
-                    raise UserError(_("Solo el Administrador de Posventa puede asignar o modificar el responsable de un ticket."))
+                new_resp_id = vals.get('responsable_id')
+                if rec.responsable_id.id != new_resp_id:
+                    old_name = rec.responsable_id.name or _('Sin asignar')
+                    new_name = self.env['res.users'].browse(new_resp_id).name if new_resp_id else _('Sin asignar')
+                    rec.message_post(
+                        body=_('Responsable del ticket reasignado de "%s" a "%s" por %s.') % (old_name, new_name, self.env.user.name),
+                        message_type='notification',
+                        subtype_xmlid='mail.mt_note',
+                    )
 
-        # 4. Restricciones para Concesionarios (y otros no-staff, no-admin)
-        is_concesionario = self.env.user.has_group('posventa.group_pv_concesionario') or not self.env.user.has_group('posventa.group_pv_staff')
+        # 3. Restricciones para Concesionarios (y otros no-staff, no-admin)
+        is_concesionario = self.env.user.has_group('posventa.group_pv_concesionario') and not self.env.user.has_group('posventa.group_pv_staff')
         if is_concesionario:
+            if 'responsable_id' in vals:
+                raise UserError(_("Los concesionarios no tienen permitido modificar el responsable de los tickets."))
+
             # Si intentan cambiar el estado, restringir a que solo puedan pasarlo de borrador a abierto
             if 'estado' in vals:
                 for rec in self:
@@ -870,12 +943,16 @@ class PvTicket(models.Model):
         chunk_size_kb = int(self.env['ir.config_parameter'].sudo().get_param('posventa.chunk_size_kb', 768))
         max_file_size_mb = int(self.env['ir.config_parameter'].sudo().get_param('posventa.max_file_size_mb', 1024))
         is_configured, rclone_msg = self._is_rclone_configured()
+        tipos_desvio = self.env['pv.tipo.desvio'].search_read([('active', '=', True)], ['id', 'name', 'codigo'])
+        storage_mode = self.env['ir.config_parameter'].sudo().get_param('posventa.pv_storage_mode', 'drive')
 
         return {
             'sistemas': sistemas,
             'subsistemas': subsistemas,
             'problemas': problemas,
             'campos_extras': campos_extras,
+            'tipos_desvio': tipos_desvio,
+            'storage_mode': storage_mode,
             'chunk_size_bytes': chunk_size_kb * 1024,
             'max_file_size_bytes': max_file_size_mb * 1024 * 1024,
             'rclone_configured': is_configured,
@@ -936,12 +1013,12 @@ class PvTicket(models.Model):
 
     @api.model
     def _cron_sync_pending_multimedia(self):
-        """Cron periódico para sincronizar archivos multimedia pendientes o estancados."""
+        """Cron periódico para sincronizar archivos multimedia pendientes, estancados o con error recuperable."""
         import os
         from datetime import datetime, timedelta
         threshold = datetime.now() - timedelta(minutes=2)
         pending_records = self.env['pv.ticket.multimedia'].search([
-            ('estado_sync', 'in', ['procesando', 'subiendo']),
+            ('estado_sync', 'in', ['procesando', 'subiendo', 'error']),
             ('create_date', '<', threshold),
         ])
         for m in pending_records:
@@ -952,12 +1029,11 @@ class PvTicket(models.Model):
                 if os.path.exists(candidate):
                     target_path = candidate
 
-            if target_path and os.path.exists(target_path):
-                _logger.info("Cron sincronizando archivo pendiente: %s (ticket %s)", m.name, m.ticket_id.id)
-                try:
-                    m.ticket_id._run_rclone_sync(m, temp_filepath=target_path)
-                except Exception as e:
-                    _logger.exception("Error en cron sync para multimedia %s: %s", m.id, e)
+            _logger.info("Cron evaluando sincronización para multimedia: %s (ticket %s)", m.name, m.ticket_id.id)
+            try:
+                m.ticket_id._run_rclone_sync(m, temp_filepath=target_path)
+            except Exception as e:
+                _logger.exception("Error en cron sync para multimedia %s: %s", m.id, e)
 
     def _trigger_drive_sync(self, multimedia_rec, temp_filepath=None):
         """Inicia la sincronización con Google Drive mediante rclone en segundo plano."""
@@ -969,21 +1045,24 @@ class PvTicket(models.Model):
         def worker():
             import time
             # Espera breve para asegurar que la transacción HTTP principal haya hecho commit
-            time.sleep(1.5)
+            time.sleep(1.0)
             max_attempts = 3
             for attempt in range(max_attempts):
                 try:
                     from odoo.modules.registry import Registry
                     from odoo import SUPERUSER_ID, api
                     registry = Registry(db_name)
+                    success = False
                     with registry.cursor() as cr:
                         env = api.Environment(cr, SUPERUSER_ID, {})
                         ticket = env['pv.ticket'].browse(ticket_id)
                         multimedia = env['pv.ticket.multimedia'].browse(multimedia_id)
-                        if ticket.exists() and multimedia.exists():
-                            ticket._run_rclone_sync(multimedia, temp_filepath)
+                        if not ticket.exists() or not multimedia.exists():
+                            return
+                        success = ticket._run_rclone_sync(multimedia, temp_filepath)
                         cr.commit()
-                    break
+                    if success:
+                        break
                 except Exception as e:
                     _logger.warning("Intento %s/%s de sincronización Drive falló para ticket %s: %s", attempt + 1, max_attempts, ticket_id, e)
                     if attempt < max_attempts - 1:
@@ -997,7 +1076,7 @@ class PvTicket(models.Model):
                         with registry.cursor() as cr:
                             env = api.Environment(cr, SUPERUSER_ID, {})
                             multimedia = env['pv.ticket.multimedia'].browse(multimedia_id)
-                            if multimedia.exists():
+                            if multimedia.exists() and multimedia.estado_sync != 'disponible':
                                 multimedia.write({
                                     'estado_sync': 'error',
                                     'error_message': f"Error interno en worker: {str(e)[:400]}",
@@ -1010,11 +1089,13 @@ class PvTicket(models.Model):
         thread.start()
 
     def _run_rclone_sync(self, multimedia, temp_filepath=None):
-        """Ejecuta la sincronización con rclone de forma directa (utilizable sincrónicamente o en thread)."""
+        """Ejecuta la sincronización con rclone de forma directa y resiliente."""
         self.ensure_one()
         import subprocess
         import shutil
         import os
+        import mimetypes
+        from markupsafe import Markup, escape
 
         # 1. Verificar si rclone y el remoto están configurados
         is_configured, config_msg = self._is_rclone_configured()
@@ -1040,6 +1121,8 @@ class PvTicket(models.Model):
             possible_file = os.path.join(staging_dir, str(multimedia.id), multimedia.name)
             if os.path.exists(possible_file):
                 temp_filepath = possible_file
+            elif multimedia.staging_path and os.path.exists(multimedia.staging_path):
+                temp_filepath = multimedia.staging_path
 
         rclone_bin = shutil.which('rclone') or os.path.expanduser('~/.local/bin/rclone')
         remote = self.env['ir.config_parameter'].sudo().get_param('posventa.rclone_remote', 'crucianelli_drive')
@@ -1048,45 +1131,57 @@ class PvTicket(models.Model):
         ticket_str = (self.name or f"TICKET_{self.id}").replace(' ', '_').replace('/', '_')
         folder_name = f"{of_str}_{ticket_str}"
         dest_dir = f"{remote}:{drive_base}/{folder_name}"
+        dest_file_path = f"{dest_dir}/{multimedia.name}"
 
-        if not temp_filepath or not os.path.exists(temp_filepath):
-            multimedia.write({
-                'estado_sync': 'error',
-                'error_message': _("Archivo temporal no encontrado para sincronización."),
-            })
-            return False
+        # Verificar si el archivo ya fue subido exitosamente a Google Drive previamente
+        file_already_in_drive = False
+        try:
+            check_cmd = [rclone_bin, "lsf", dest_dir, "--include", multimedia.name]
+            check_res = subprocess.run(check_cmd, capture_output=True, text=True, timeout=30)
+            if check_res.returncode == 0 and multimedia.name in check_res.stdout:
+                file_already_in_drive = True
+        except Exception as check_err:
+            _logger.warning("Error verificando archivo en Drive: %s", check_err)
+
+        if not file_already_in_drive:
+            if not temp_filepath or not os.path.exists(temp_filepath):
+                multimedia.write({
+                    'estado_sync': 'error',
+                    'error_message': _("Archivo temporal no encontrado para sincronización."),
+                })
+                return False
 
         multimedia.write({'estado_sync': 'procesando', 'error_message': False})
 
+        mime = (multimedia.mimetype or '').lower()
+        if multimedia.name.lower().endswith('.webm') and ('audio' in mime or not mime):
+            mime = 'video/webm'
+        elif not mime:
+            mime, _enc = mimetypes.guess_type(multimedia.name)
+        mime = mime or 'application/octet-stream'
+
         try:
-            dest_file_path = f"{dest_dir}/{multimedia.name}"
-            # Asegurar mimetype correcto para video/webm u otros formatos para que Google Drive reproduzca como video
-            mime = (multimedia.mimetype or '').lower()
-            if multimedia.name.lower().endswith('.webm') and ('audio' in mime or not mime):
-                mime = 'video/webm'
-            elif not mime:
-                mime, _enc = mimetypes.guess_type(multimedia.name)
-            mime = mime or 'application/octet-stream'
+            if not file_already_in_drive:
+                # Usar rclone copy para no eliminar el archivo local antes de asegurar la transacción
+                cmd = [rclone_bin, "copy", temp_filepath, dest_dir, "-M", "--metadata-set", f"content-type={mime}"]
+                res = subprocess.run(cmd, capture_output=True, text=True, timeout=1200)
 
-            cmd = [rclone_bin, "move", temp_filepath, dest_dir, "-M", "--metadata-set", f"content-type={mime}"]
-            res = subprocess.run(cmd, capture_output=True, text=True, timeout=1200)
-
-            if res.returncode != 0:
-                err_text = (res.stderr or res.stdout or _("Error al ejecutar rclone move."))[:500]
-                multimedia.write({
-                    'estado_sync': 'error',
-                    'error_message': err_text,
-                    'staging_path': temp_filepath,
-                })
-                self.message_post(
-                    body=Markup(_(
-                        "⚠️ <b>Error al transferir a Google Drive:</b> %s<br/>"
-                        "Archivo: <i>%s</i>"
-                    )) % (escape(err_text), escape(multimedia.name or '')),
-                    message_type='comment',
-                    subtype_xmlid='mail.mt_note',
-                )
-                return False
+                if res.returncode != 0:
+                    err_text = (res.stderr or res.stdout or _("Error al ejecutar rclone copy."))[:500]
+                    multimedia.write({
+                        'estado_sync': 'error',
+                        'error_message': err_text,
+                        'staging_path': temp_filepath,
+                    })
+                    self.message_post(
+                        body=Markup(_(
+                            "⚠️ <b>Error al transferir a Google Drive:</b> %s<br/>"
+                            "Archivo: <i>%s</i>"
+                        )) % (escape(err_text), escape(multimedia.name or '')),
+                        message_type='comment',
+                        subtype_xmlid='mail.mt_note',
+                    )
+                    return False
 
             # Obtener enlace público/compartido del archivo
             link_cmd = [rclone_bin, "link", dest_file_path]
@@ -1118,16 +1213,22 @@ class PvTicket(models.Model):
                 self.write(ticket_vals)
 
             # Crear ir.attachment tipo URL en Odoo para que aparezca en el chatter
-            att_vals = {
-                'name': multimedia.name,
-                'type': 'url',
-                'url': drive_url,
-                'res_model': 'pv.ticket',
-                'res_id': self.id,
-                'mimetype': mime,
-            }
-            att = self.env['ir.attachment'].sudo().create(att_vals)
-            multimedia.ir_attachment_id = att.id
+            existing_att = self.env['ir.attachment'].sudo().search([
+                ('res_model', '=', 'pv.ticket'),
+                ('res_id', '=', self.id),
+                ('name', '=', multimedia.name),
+            ], limit=1)
+            if not existing_att:
+                att_vals = {
+                    'name': multimedia.name,
+                    'type': 'url',
+                    'url': drive_url,
+                    'res_model': 'pv.ticket',
+                    'res_id': self.id,
+                    'mimetype': mime,
+                }
+                att = self.env['ir.attachment'].sudo().create(att_vals)
+                multimedia.ir_attachment_id = att.id
 
             # Mensaje en chatter
             self.message_post(
@@ -1140,12 +1241,14 @@ class PvTicket(models.Model):
             )
 
             # Limpieza del directorio staging local
-            parent_dir = os.path.dirname(temp_filepath)
-            if os.path.exists(parent_dir) and not os.listdir(parent_dir):
+            if temp_filepath and os.path.exists(temp_filepath):
                 try:
-                    os.rmdir(parent_dir)
-                except Exception:
-                    pass
+                    os.remove(temp_filepath)
+                    parent_dir = os.path.dirname(temp_filepath)
+                    if os.path.exists(parent_dir) and not os.listdir(parent_dir):
+                        os.rmdir(parent_dir)
+                except Exception as clean_err:
+                    _logger.warning("No se pudo limpiar archivo staging %s: %s", temp_filepath, clean_err)
 
             return True
 

@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Tree View -->
+    <record id="pv_tipo_desvio_view_tree" model="ir.ui.view">
+        <field name="name">pv.tipo.desvio.view.tree</field>
+        <field name="model">pv.tipo.desvio</field>
+        <field name="arch" type="xml">
+            <list string="Tipos de Desvío" editable="bottom">
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+                <field name="codigo"/>
+                <field name="active"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Form View -->
+    <record id="pv_tipo_desvio_view_form" model="ir.ui.view">
+        <field name="name">pv.tipo.desvio.view.form</field>
+        <field name="model">pv.tipo.desvio</field>
+        <field name="arch" type="xml">
+            <form string="Tipo de Desvío">
+                <sheet>
+                    <div class="oe_title">
+                        <label for="name" string="Nombre del Desvío"/>
+                        <h1><field name="name" placeholder="Ej. Rotura, Faltante, Calibración..."/></h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="codigo"/>
+                            <field name="sequence"/>
+                        </group>
+                        <group>
+                            <field name="active" widget="boolean_toggle"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Action -->
+    <record id="action_pv_tipo_desvio" model="ir.actions.act_window">
+        <field name="name">Tipos de Desvío</field>
+        <field name="res_model">pv.tipo.desvio</field>
+        <field name="view_mode">list,form</field>
+    </record>
+</odoo>

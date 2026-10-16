@@ -57,11 +57,56 @@
                         font-size: 2.5rem;
                         line-height: 1.1;
                     }
+                    /* Dark Mode Theme Support for Dashboard */
+                    body.o_web_client_dark_mode .o_dashboard_form .o_form_sheet_bg,
+                    body.o-dark-mode .o_dashboard_form .o_form_sheet_bg,
+                    [data-color-mode="dark"] .o_dashboard_form .o_form_sheet_bg,
+                    [data-bs-theme="dark"] .o_dashboard_form .o_form_sheet_bg {
+                        background: #212534 !important;
+                    }
+                    body.o_web_client_dark_mode .o_dashboard_form .pv-dashboard-banner,
+                    body.o-dark-mode .o_dashboard_form .pv-dashboard-banner,
+                    [data-color-mode="dark"] .o_dashboard_form .pv-dashboard-banner,
+                    [data-bs-theme="dark"] .o_dashboard_form .pv-dashboard-banner {
+                        background: #2b3044 !important;
+                        border-color: #3d435e !important;
+                    }
+                    body.o_web_client_dark_mode .o_dashboard_form .pv-dashboard-banner h3,
+                    body.o-dark-mode .o_dashboard_form .pv-dashboard-banner h3,
+                    [data-color-mode="dark"] .o_dashboard_form .pv-dashboard-banner h3,
+                    [data-bs-theme="dark"] .o_dashboard_form .pv-dashboard-banner h3 {
+                        color: #f87171 !important;
+                    }
+                    body.o_web_client_dark_mode .o_dashboard_form .pv-dashboard-banner p,
+                    body.o-dark-mode .o_dashboard_form .pv-dashboard-banner p,
+                    [data-color-mode="dark"] .o_dashboard_form .pv-dashboard-banner p,
+                    [data-bs-theme="dark"] .o_dashboard_form .pv-dashboard-banner p {
+                        color: #a0aec0 !important;
+                    }
+                    body.o_web_client_dark_mode .o_dashboard_form .card.bg-white,
+                    body.o-dark-mode .o_dashboard_form .card.bg-white,
+                    [data-color-mode="dark"] .o_dashboard_form .card.bg-white,
+                    [data-bs-theme="dark"] .o_dashboard_form .card.bg-white {
+                        background: #2b3044 !important;
+                        border-color: #3d435e !important;
+                    }
+                    body.o_web_client_dark_mode .o_dashboard_form .card.bg-white .text-muted,
+                    body.o-dark-mode .o_dashboard_form .card.bg-white .text-muted,
+                    [data-color-mode="dark"] .o_dashboard_form .card.bg-white .text-muted,
+                    [data-bs-theme="dark"] .o_dashboard_form .card.bg-white .text-muted {
+                        color: #a0aec0 !important;
+                    }
+                    body.o_web_client_dark_mode .o_dashboard_form .card.bg-white .text-dark,
+                    body.o-dark-mode .o_dashboard_form .card.bg-white .text-dark,
+                    [data-color-mode="dark"] .o_dashboard_form .card.bg-white .text-dark,
+                    [data-bs-theme="dark"] .o_dashboard_form .card.bg-white .text-dark {
+                        color: #f8fafc !important;
+                    }
                 </style>
                 <sheet>
                     <div class="container-fluid p-0">
                         <!-- Banner Header -->
-                        <div class="row bg-white p-4 mb-4 shadow-sm align-items-center" style="border-radius: 8px; border: 1px solid #e3e6f0;">
+                        <div class="row bg-white p-4 mb-4 shadow-sm align-items-center pv-dashboard-banner" style="border-radius: 8px; border: 1px solid #e3e6f0;">
                             <div class="col-md-8 col-12 mb-3 mb-md-0">
                                 <h3 class="mb-1 font-weight-bold text-primary" style="font-size: 24px;">Tablero de Control Operativo</h3>
                                 <p class="text-muted mb-0" style="font-size: 14px;">Resumen en tiempo real del estado de los reclamos y KPIs de posventa.</p>

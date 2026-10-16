@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Tree View -->
+    <record id="pv_tipo_rechazo_view_tree" model="ir.ui.view">
+        <field name="name">pv.tipo.rechazo.view.tree</field>
+        <field name="model">pv.tipo.rechazo</field>
+        <field name="arch" type="xml">
+            <list string="Motivos de Rechazo" editable="bottom">
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+                <field name="color" widget="color_picker"/>
+                <field name="descripcion"/>
+                <field name="active"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Form View -->
+    <record id="pv_tipo_rechazo_view_form" model="ir.ui.view">
+        <field name="name">pv.tipo.rechazo.view.form</field>
+        <field name="model">pv.tipo.rechazo</field>
+        <field name="arch" type="xml">
+            <form string="Motivo de Rechazo">
+                <sheet>
+                    <div class="oe_title">
+                        <label for="name" string="Motivo / Etiqueta"/>
+                        <h1><field name="name" placeholder="Ej. Fuera de Término, Mal uso..."/></h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="color" widget="color_picker"/>
+                            <field name="sequence"/>
+                            <field name="active" widget="boolean_toggle"/>
+                        </group>
+                        <group>
+                            <field name="descripcion" placeholder="Detalle o criterio para aplicar este rechazo..."/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Action -->
+    <record id="action_pv_tipo_rechazo" model="ir.actions.act_window">
+        <field name="name">Motivos de Rechazo</field>
+        <field name="res_model">pv.tipo.rechazo</field>
+        <field name="view_mode">list,form</field>
+    </record>
+</odoo>

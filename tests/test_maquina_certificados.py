@@ -392,17 +392,18 @@ class TestMaquinaCertificados(TestPosventaCommon):
 
     def test_08_upload_certificate_with_string_dates(self):
         """Test creating certificates where fecha is passed as string, exactly as sent from JS frontend."""
+        today_str = str(fields.Date.today())
         maquina = self.env['pv.maquina'].create({
             'tipo': 'plantor',
             'of': 'OF-TEST-STR-DATE-001',
             'concesionario_id': self.concesionario_a.id,
-            'fecha_liberacion': '2026-09-01',
+            'fecha_liberacion': today_str,
         })
-        # Pass fecha as string '2026-09-02' (from frontend wizard)
+        # Pass fecha as string (from frontend wizard)
         fru = self.env['pv.certificado'].create({
             'maquina_id': maquina.id,
             'tipo': 'fru',
-            'fecha': '2026-09-02',
+            'fecha': today_str,
             'archivo': DUMMY_PDF_BASE64,
             'archivo_nombre': 'fru_str_date.pdf',
         })
@@ -482,3 +483,77 @@ class TestMaquinaCertificados(TestPosventaCommon):
                 'archivo': DUMMY_PDF_BASE64,
                 'archivo_nombre': 'fru_cross_dealer.pdf',
             })
+
+    def test_10_cpm_rejected_when_feu_vencido(self):
+        """If FEU is expired (vencido), dealer cannot upload CPM until FEU is renewed."""
+        today = fields.Date.today()
+        maquina = self.env['pv.maquina'].create({
+            'tipo': 'plantor',
+            'of': 'OF-TEST-FEU-VENCIDO',
+            'concesionario_id': self.concesionario_a.id,
+            'fecha_liberacion': today - timedelta(days=90),
+        })
+
+        # Create FRU
+        self.env['pv.certificado'].create({
+            'maquina_id': maquina.id,
+            'tipo': 'fru',
+            'fecha': today - timedelta(days=90),
+            'archivo': DUMMY_PDF_BASE64,
+            'archivo_nombre': 'fru.pdf',
+        })
+
+        # Create FEU that expired
+        feu = self.env['pv.certificado'].create({
+            'maquina_id': maquina.id,
+            'tipo': 'feu',
+            'fecha': today - timedelta(days=90),
+            'archivo': DUMMY_PDF_BASE64,
+            'archivo_nombre': 'feu_vencido.pdf',
+        })
+        # Simulate cron expiration
+        feu.write({'estado_certificado': 'vencido'})
+        maquina._compute_tiene_certificados()
+
+        self.assertTrue(maquina.tiene_feu)
+        self.assertFalse(maquina.tiene_feu_vigente)
+
+        # Proximo certificado should recommend FEU renewal, not CPM
+        prox = maquina._get_proximo_certificado_info()
+        self.assertEqual(prox['tipo'], 'feu')
+        self.assertEqual(prox['estado'], 'vencido')
+
+        # Uploading CPM must raise ValidationError
+        with self.assertRaises(ValidationError) as cm:
+            self.env['pv.certificado'].create({
+                'maquina_id': maquina.id,
+                'tipo': 'cpm',
+                'fecha': today,
+                'archivo': DUMMY_PDF_BASE64,
+                'archivo_nombre': 'cpm_blocked.pdf',
+            })
+        self.assertIn("vencido", str(cm.exception))
+
+        # Renew FEU
+        feu_renovado = self.env['pv.certificado'].create({
+            'maquina_id': maquina.id,
+            'tipo': 'feu',
+            'fecha': today,
+            'archivo': DUMMY_PDF_BASE64,
+            'archivo_nombre': 'feu_renovado.pdf',
+        })
+        self.assertEqual(feu_renovado.estado_certificado, 'vigente')
+        maquina._compute_tiene_certificados()
+        self.assertTrue(maquina.tiene_feu_vigente)
+
+        # Now CPM upload should succeed
+        cpm = self.env['pv.certificado'].create({
+            'maquina_id': maquina.id,
+            'tipo': 'cpm',
+            'fecha': today,
+            'archivo': DUMMY_PDF_BASE64,
+            'archivo_nombre': 'cpm_success.pdf',
+        })
+        self.assertEqual(cpm.estado_certificado, 'vigente')
+        self.assertEqual(maquina.estado, 'vendida')
+

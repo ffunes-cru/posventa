@@ -32,6 +32,9 @@ export class TicketWizard extends Component {
             subsistemaId: false,
             problemaId: false,
             desvioTipo: "rotura",
+            desvioTipoId: false,
+            tiposDesvio: [],
+            storageMode: "drive",
             ubicacionActual: "",
             hectareas: 0,
             // Catalogs
@@ -87,6 +90,13 @@ export class TicketWizard extends Component {
             this.state.subsistemas = data.subsistemas || [];
             this.state.problemas = data.problemas || [];
             this.state.camposExtras = data.campos_extras || [];
+            this.state.tiposDesvio = data.tipos_desvio || [];
+            this.state.storageMode = data.storage_mode || "drive";
+            if (this.state.tiposDesvio.length > 0 && !this.state.desvioTipoId) {
+                const match = this.state.tiposDesvio.find(t => t.codigo === this.state.desvioTipo) || this.state.tiposDesvio[0];
+                this.state.desvioTipoId = match.id;
+                this.state.desvioTipo = match.codigo || "rotura";
+            }
             if (data.chunk_size_bytes) {
                 this.chunkSizeBytes = data.chunk_size_bytes;
             }
@@ -100,6 +110,13 @@ export class TicketWizard extends Component {
         } catch (e) {
             console.error("Error loading wizard catalogs", e);
         }
+    }
+
+    onDesvioTipoChange(ev) {
+        const selectedCode = ev.target.value;
+        this.state.desvioTipo = selectedCode;
+        const found = this.state.tiposDesvio.find(t => t.codigo === selectedCode);
+        this.state.desvioTipoId = found ? found.id : false;
     }
 
     async onSistemaChange(ev) {
@@ -357,6 +374,16 @@ export class TicketWizard extends Component {
                 this.notification.add(_t("La descripción del reclamo es obligatoria."), { type: "warning" });
                 return false;
             }
+            const hasAttachments = (this.state.attachments && this.state.attachments.length > 0) ||
+                                  (this.state.heavyFiles && this.state.heavyFiles.length > 0) ||
+                                  (this.state.multimediaUrl && this.state.multimediaUrl.trim().length > 0);
+            if (!hasAttachments) {
+                this.notification.add(
+                    _t("Es obligatorio adjuntar al menos una imagen o video donde se observe la problemática antes de continuar."),
+                    { type: "warning" }
+                );
+                return false;
+            }
             return true;
         }
 
@@ -394,6 +421,10 @@ export class TicketWizard extends Component {
     }
 
     get desvioTipoLabel() {
+        if (this.state.tiposDesvio && this.state.tiposDesvio.length > 0) {
+            const found = this.state.tiposDesvio.find(t => t.codigo === this.state.desvioTipo || t.id === this.state.desvioTipoId);
+            if (found) return found.name;
+        }
         const map = {
             rotura: _t("Rotura en transporte / recepción"),
             faltante: _t("Faltante de piezas o componentes"),
@@ -443,6 +474,9 @@ export class TicketWizard extends Component {
                         ticketVals.campo_extra_ids = extraLines;
                     }
                 } else {
+                    if (this.state.desvioTipoId) {
+                        ticketVals.desvio_tipo_id = parseInt(this.state.desvioTipoId);
+                    }
                     ticketVals.desvio_tipo = this.state.desvioTipo;
                 }
 

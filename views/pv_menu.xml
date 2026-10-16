@@ -30,6 +30,8 @@
     <menuitem id="menu_pv_config_settings" name="Ajustes" parent="menu_pv_config" action="action_pv_config_settings" sequence="1"/>
     <menuitem id="menu_pv_concesionario" name="Concesionarios" parent="menu_pv_config" action="action_pv_concesionario" sequence="10"/>
     <menuitem id="menu_pv_import_maquinas" name="Importar Máquinas (Excel)" parent="menu_pv_config" action="action_pv_import_maquinas" sequence="20"/>
+    <menuitem id="menu_pv_tipo_desvio" name="Tipos de Desvío" parent="menu_pv_config" action="action_pv_tipo_desvio" sequence="25"/>
+    <menuitem id="menu_pv_tipo_rechazo" name="Motivos de Rechazo" parent="menu_pv_config" action="action_pv_tipo_rechazo" sequence="28"/>
     <menuitem id="menu_pv_sistema" name="Sistemas" parent="menu_pv_config" action="action_pv_sistema" sequence="30"/>
     <menuitem id="menu_pv_subsistema" name="Subsistemas" parent="menu_pv_config" action="action_pv_subsistema" sequence="40"/>
     <menuitem id="menu_pv_problema" name="Problemas Catalogados" parent="menu_pv_config" action="action_pv_problema" sequence="50"/>

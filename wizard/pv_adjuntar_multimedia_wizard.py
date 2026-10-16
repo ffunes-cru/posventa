@@ -161,7 +161,13 @@ class PvTicketMultimediaWizard(models.TransientModel):
 
             if multimedia_rec and multimedia_rec.exists():
                 if self.name and self.name.strip():
-                    multimedia_rec.name = self.name.strip()
+                    clean_name = self.name.strip()
+                    _base, orig_ext = os.path.splitext(multimedia_rec.name or '')
+                    _new_base, new_ext = os.path.splitext(clean_name)
+                    if not new_ext and orig_ext:
+                        clean_name = f"{clean_name}{orig_ext}"
+                    if clean_name != multimedia_rec.name:
+                        multimedia_rec.name = clean_name
                 return {'type': 'ir.actions.client', 'tag': 'reload'}
 
             raise UserError(_("Por favor seleccione un archivo y aguarde a que finalice la subida antes de confirmar."))

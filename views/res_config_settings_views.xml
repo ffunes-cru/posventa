@@ -32,7 +32,10 @@
                         </setting>
                     </block>
                     <block title="Almacenamiento Multimedia y Google Drive (rclone)" id="pv_multimedia_setting_block">
-                        <setting id="pv_rclone_remote_setting" string="Remoto de rclone" help="Nombre del remoto de Google Drive configurado en rclone en el servidor">
+                        <setting id="pv_storage_mode_setting" string="Modo de Carga de Archivos" help="Selecciona el método de carga: Google Drive (rclone con streaming para archivos pesados) o Almacenamiento Estándar de Odoo (adjuntos locales de contingencia)">
+                            <field name="pv_storage_mode" widget="radio"/>
+                        </setting>
+                        <setting id="pv_rclone_remote_setting" string="Remoto de rclone" help="Nombre del remoto de Google Drive configurado en rclone en el servidor" invisible="pv_storage_mode != 'drive'">
                             <field name="pv_rclone_remote"/>
                         </setting>
                         <setting id="pv_rclone_drive_folder_setting" string="Carpeta Base en Google Drive" help="Ruta de la carpeta donde se guardarán los archivos multimedia de los tickets">

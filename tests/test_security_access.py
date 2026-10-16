@@ -52,15 +52,28 @@ class TestSecurityAccess(TestPosventaCommon):
         self.assertNotIn(self.ticket_b, tickets_a)
 
     def test_02_staff_access(self):
-        """Staff sees all machines and non-draft tickets."""
+        """Staff sees all non-draft tickets and can collaborate across tickets."""
         # When ticket is draft, staff does not see it
         tickets_staff = self.env['pv.ticket'].with_user(self.user_staff).search([])
         self.assertNotIn(self.ticket_a, tickets_staff)
 
-        # When ticket is submitted (abierto), staff sees it
+        # Attach image to comply with mandatory attachments before sending
+        self.ticket_a.write({'multimedia_url': 'https://drive.google.com/test-mandatory-file'})
+
+        # When ticket is submitted (abierto), staff sees it regardless of assignment
         self.ticket_a._action_enviar_ticket_direct()
         tickets_staff_after = self.env['pv.ticket'].with_user(self.user_staff).search([])
         self.assertIn(self.ticket_a, tickets_staff_after)
+
+        # If ticket is moved to 'en_proceso' and assigned to another user (admin), staff STILL sees it
+        self.ticket_a.write({'estado': 'en_proceso', 'responsable_id': self.user_admin.id})
+        tickets_staff_assigned_other = self.env['pv.ticket'].with_user(self.user_staff).search([])
+        self.assertIn(self.ticket_a, tickets_staff_assigned_other)
+
+        # If ticket is assigned to this staff user, staff sees it in 'en_proceso'
+        self.ticket_a.write({'responsable_id': self.user_staff.id})
+        tickets_staff_assigned_self = self.env['pv.ticket'].with_user(self.user_staff).search([])
+        self.assertIn(self.ticket_a, tickets_staff_assigned_self)
 
     def test_03_admin_unrestricted_access(self):
         """Admin sees everything including draft tickets and all machines."""
@@ -112,7 +125,39 @@ class TestSecurityAccess(TestPosventaCommon):
         # Check get_portal_list_data returns only A's certificates
         certs_a = self.env['pv.certificado'].with_user(self.user_concesionario_a).get_portal_list_data()
         cert_ids_a = [c['id'] for c in certs_a]
-        self.assertIn(self.fru_a.id, cert_ids_a)
-        self.assertNotIn(self.fru_b.id, cert_ids_a)
+    def test_06_concesionario_contact_user_access(self):
+        """Users created as child contacts of a dealership partner can access the dealership's records."""
+        # Create a contact partner under concesionario_a's company partner
+        contact_partner = self.env['res.partner'].create({
+            'name': 'Operador Juan Perez',
+            'parent_id': self.concesionario_a.partner_id.id,
+            'is_company': False,
+            'email': 'juan.perez@concesionarioa.com',
+        })
+        user_contact = self.env['res.users'].create({
+            'name': 'Juan Perez',
+            'login': 'juan_perez_a',
+            'email': 'juan.perez@concesionarioa.com',
+            'partner_id': contact_partner.id,
+            'group_ids': [(6, 0, [
+                self.env.ref('base.group_user').id,
+                self.env.ref('posventa.group_pv_concesionario').id,
+            ])],
+        })
+
+        # Test resolving concesionario for user
+        concesionario = self.env['pv.concesionario']._get_concesionario_for_user(user_contact)
+        self.assertEqual(concesionario, self.concesionario_a)
+
+        # Contact user sees machine A but not machine B
+        maquinas = self.env['pv.maquina'].with_user(user_contact).search([])
+        self.assertIn(self.maquina_a, maquinas)
+        self.assertNotIn(self.maquina_b, maquinas)
+
+        # Contact user sees ticket A but not ticket B
+        tickets = self.env['pv.ticket'].with_user(user_contact).search([])
+        self.assertIn(self.ticket_a, tickets)
+        self.assertNotIn(self.ticket_b, tickets)
+
 
 

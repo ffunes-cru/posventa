@@ -120,6 +120,8 @@ class PvTicketMultimedia(models.Model):
     def action_reintentar_sync(self):
         """Permite reintentar la sincronización si quedó en estado de error o pendiente."""
         import os
+        import shutil
+        import subprocess
         for rec in self:
             if rec.estado_sync == 'disponible':
                 raise UserError(_("Este archivo ya se encuentra sincronizado y disponible en Google Drive."))
@@ -132,16 +134,33 @@ class PvTicketMultimedia(models.Model):
                 if os.path.exists(candidate):
                     target_path = candidate
 
+            # Verificar si el archivo ya fue subido exitosamente a Google Drive
+            already_in_drive = False
+            rclone_bin = shutil.which('rclone') or os.path.expanduser('~/.local/bin/rclone')
+            remote = self.env['ir.config_parameter'].sudo().get_param('posventa.rclone_remote', 'crucianelli_drive')
+            drive_base = self.env['ir.config_parameter'].sudo().get_param('posventa.rclone_drive_folder', 'Crucianelli_Posventa/Reclamos')
+            of_str = (rec.ticket_id.maquina_id.of or 'MAQ').replace(' ', '_').replace('/', '_')
+            ticket_str = (rec.ticket_id.name or f"TICKET_{rec.ticket_id.id}").replace(' ', '_').replace('/', '_')
+            dest_dir = f"{remote}:{drive_base}/{of_str}_{ticket_str}"
+            try:
+                check_cmd = [rclone_bin, "lsf", dest_dir, "--include", rec.name]
+                check_res = subprocess.run(check_cmd, capture_output=True, text=True, timeout=30)
+                if check_res.returncode == 0 and rec.name in check_res.stdout:
+                    already_in_drive = True
+            except Exception:
+                pass
+
             if not target_path or not os.path.exists(target_path):
-                raise UserError(_(
-                    "No se encontró el archivo temporal en el servidor para reintentar la sincronización. "
-                    "Puede adjuntarlo nuevamente mediante el botón 'Adjuntar Video / Multimedia'."
-                ))
+                if not already_in_drive:
+                    raise UserError(_(
+                        "No se encontró el archivo temporal en el servidor para reintentar la sincronización. "
+                        "Puede adjuntarlo nuevamente mediante el botón 'Adjuntar Video / Multimedia'."
+                    ))
 
             rec.write({
                 'estado_sync': 'procesando',
                 'error_message': False,
-                'staging_path': target_path,
+                'staging_path': target_path or False,
             })
             rec.ticket_id._trigger_drive_sync(rec, temp_filepath=target_path)
         return True

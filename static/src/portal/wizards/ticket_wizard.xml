@@ -170,10 +170,19 @@
                         <!-- Pre PM -->
                         <div class="pv-form-group">
                             <label>Tipo de Desvío <span class="required">*</span></label>
-                            <select class="pv-form-select" t-model="state.desvioTipo">
-                                <option value="rotura">Rotura en transporte / recepción</option>
-                                <option value="faltante">Faltante de piezas o componentes</option>
-                                <option value="otro">Otro desvío</option>
+                            <select class="pv-form-select" t-on-change="onDesvioTipoChange">
+                                <t t-if="state.tiposDesvio and state.tiposDesvio.length &gt; 0">
+                                    <t t-foreach="state.tiposDesvio" t-as="td" t-key="td.id">
+                                        <option t-att-value="td.codigo" t-att-selected="state.desvioTipo === td.codigo">
+                                            <t t-esc="td.name"/>
+                                        </option>
+                                    </t>
+                                </t>
+                                <t t-else="">
+                                    <option value="rotura" t-att-selected="state.desvioTipo === 'rotura'">Rotura en transporte / recepción</option>
+                                    <option value="faltante" t-att-selected="state.desvioTipo === 'faltante'">Faltante de piezas o componentes</option>
+                                    <option value="otro" t-att-selected="state.desvioTipo === 'otro'">Otro desvío</option>
+                                </t>
                             </select>
                         </div>
                     </t>
@@ -250,62 +259,66 @@
                         <textarea class="pv-form-textarea" placeholder="Indique qué acciones preliminares o pruebas ha realizado en la máquina..." t-model="state.accionesRealizadas"/>
                     </div>
 
-                    <!-- Direct File Attachments -->
-                    <div class="pv-form-group border rounded-3 p-3 bg-light">
-                        <label class="fw-bold mb-1"><i class="fa fa-paperclip me-1 text-primary"/> Adjuntar Archivos / Fotos (Estándar Odoo)</label>
-                        <p class="text-muted small mb-2">Suba fotos o documentos de respaldo que quedarán guardados directamente en el reclamo:</p>
-                        
-                        <input type="file" multiple="multiple" class="form-control mb-2" t-on-change="onFilesChange" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"/>
+                    <!-- Direct File Attachments (Odoo Standard Storage Mode) -->
+                    <t t-if="state.storageMode === 'odoo'">
+                        <div class="pv-form-group border rounded-3 p-3 bg-light">
+                            <label class="fw-bold mb-1"><i class="fa fa-paperclip me-1 text-primary"/> Adjuntar Archivos / Fotos de la Problemática <span class="required">*</span></label>
+                            <p class="text-muted small mb-2">Suba imágenes o videos donde se aprecie claramente la problemática técnica observada (Requerido para enviar):</p>
+                            
+                            <input type="file" multiple="multiple" class="form-control mb-2" t-on-change="onFilesChange" accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx"/>
 
-                        <t t-if="state.attachments.length &gt; 0">
-                            <div class="d-flex flex-wrap gap-2 mt-2">
-                                <t t-foreach="state.attachments" t-as="att" t-key="att_index">
-                                    <div class="badge bg-white text-dark border p-2 d-flex align-items-center">
-                                        <i class="fa fa-file me-2 text-secondary"/>
-                                        <span class="me-2 text-truncate" style="max-width: 180px;" t-esc="att.name"/>
-                                        <span class="text-muted small me-2">(<t t-esc="formatFileSize(att.size)"/>)</span>
-                                        <button type="button" class="btn-close btn-close-sm" t-on-click="() => this.removeAttachment(att_index)" style="font-size: 8px;"/>
-                                    </div>
-                                </t>
-                            </div>
-                        </t>
-                    </div>
-
-                    <!-- Heavy Files / Diagnostic Videos (Up to 1 GB via Google Drive) -->
-                    <div class="pv-form-group border border-primary border-opacity-25 rounded-3 p-3 bg-white shadow-sm">
-                        <div class="d-flex justify-content-between align-items-center mb-1">
-                            <label class="fw-bold mb-0 text-primary">
-                                <i class="fa fa-cloud-upload me-1"/> Videos de Diagnóstico y Multimedia Pesada (Hasta 1 GB)
-                            </label>
-                            <span class="badge bg-primary text-white small">
-                                <i class="fa fa-google me-1"/> Google Drive
-                            </span>
-                        </div>
-                        <p class="text-muted small mb-2">
-                            Adjunte videos del funcionamiento en campo, audios o registros pesados de hasta 1 GB. Se sincronizarán automáticamente con Google Drive:
-                        </p>
-                        
-                        <input type="file" multiple="multiple" class="form-control mb-2" t-on-change="onHeavyFilesChange" accept="video/*,.mp4,.mov,.avi,.mkv,.zip,.rar,.tar,.gz"/>
-
-                        <t t-if="state.heavyFiles.length &gt; 0">
-                            <div class="d-flex flex-column gap-2 mt-2">
-                                <t t-foreach="state.heavyFiles" t-as="hf" t-key="hf_index">
-                                    <div class="border rounded p-2 bg-light d-flex justify-content-between align-items-center">
-                                        <div class="d-flex align-items-center text-truncate me-2">
-                                            <i class="fa fa-video-camera me-2 text-primary fs-5"/>
-                                            <div>
-                                                <strong class="d-block text-truncate" style="max-width: 250px;" t-esc="hf.name"/>
-                                                <small class="text-muted"><t t-esc="formatFileSize(hf.size)"/> • Preparado para Google Drive</small>
-                                            </div>
+                            <t t-if="state.attachments.length &gt; 0">
+                                <div class="d-flex flex-wrap gap-2 mt-2">
+                                    <t t-foreach="state.attachments" t-as="att" t-key="att_index">
+                                        <div class="badge bg-white text-dark border p-2 d-flex align-items-center">
+                                            <i class="fa fa-file me-2 text-secondary"/>
+                                            <span class="me-2 text-truncate" style="max-width: 180px;" t-esc="att.name"/>
+                                            <span class="text-muted small me-2">(<t t-esc="formatFileSize(att.size)"/>)</span>
+                                            <button type="button" class="btn-close btn-close-sm" t-on-click="() => this.removeAttachment(att_index)" style="font-size: 8px;"/>
                                         </div>
-                                        <button type="button" class="btn btn-sm btn-outline-danger" t-on-click="() => this.removeHeavyFile(hf_index)" title="Quitar archivo">
-                                            <i class="fa fa-trash"/>
-                                        </button>
-                                    </div>
-                                </t>
+                                    </t>
+                                </div>
+                            </t>
+                        </div>
+                    </t>
+
+                    <!-- Heavy Files / Diagnostic Videos (Google Drive Storage Mode) -->
+                    <t t-else="">
+                        <div class="pv-form-group border border-primary border-opacity-25 rounded-3 p-3 bg-white shadow-sm">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label class="fw-bold mb-0 text-primary">
+                                    <i class="fa fa-cloud-upload me-1"/> Videos de Diagnóstico y Fotos de la Problemática (Google Drive) <span class="required">*</span>
+                                </label>
+                                <span class="badge bg-primary text-white small">
+                                    <i class="fa fa-google me-1"/> Google Drive
+                                </span>
                             </div>
-                        </t>
-                    </div>
+                            <p class="text-muted small mb-2">
+                                Adjunte videos de diagnóstico, imágenes o registros donde se observe la falla técnica (Requerido para enviar). Se sincronizarán automáticamente con Google Drive:
+                            </p>
+                            
+                            <input type="file" multiple="multiple" class="form-control mb-2" t-on-change="onHeavyFilesChange" accept="video/*,image/*,.mp4,.mov,.avi,.mkv,.zip,.rar,.tar,.gz"/>
+
+                            <t t-if="state.heavyFiles.length &gt; 0">
+                                <div class="d-flex flex-column gap-2 mt-2">
+                                    <t t-foreach="state.heavyFiles" t-as="hf" t-key="hf_index">
+                                        <div class="border rounded p-2 bg-light d-flex justify-content-between align-items-center">
+                                            <div class="d-flex align-items-center text-truncate me-2">
+                                                <i class="fa fa-video-camera me-2 text-primary fs-5"/>
+                                                <div>
+                                                    <strong class="d-block text-truncate" style="max-width: 250px;" t-esc="hf.name"/>
+                                                    <small class="text-muted"><t t-esc="formatFileSize(hf.size)"/> • Preparado para Google Drive</small>
+                                                </div>
+                                            </div>
+                                            <button type="button" class="btn btn-sm btn-outline-danger" t-on-click="() => this.removeHeavyFile(hf_index)" title="Quitar archivo">
+                                                <i class="fa fa-trash"/>
+                                            </button>
+                                        </div>
+                                    </t>
+                                </div>
+                            </t>
+                        </div>
+                    </t>
 
                     <div class="pv-form-group">
                         <label>Enlace Multimedia Adicional (Google Drive / Fotos / Videos)</label>

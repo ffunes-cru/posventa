@@ -16,15 +16,21 @@ class PvConcesionario(models.Model):
     )
     partner_id = fields.Many2one(
         'res.partner',
-        string='Contacto',
-        help='Contacto vinculado en Odoo',
+        string='Empresa Concesionario',
+        help='Empresa (partner) vinculada en Odoo',
         tracking=True,
     )
     user_id = fields.Many2one(
         'res.users',
-        string='Usuario de acceso',
+        string='Usuario de acceso principal',
         help='Usuario con rol concesionario para acceder al sistema',
         tracking=True,
+    )
+    contacto_partner_ids = fields.One2many(
+        'res.partner',
+        related='partner_id.child_ids',
+        string='Contactos / Personal de la Empresa',
+        readonly=False,
     )
     email = fields.Char(
         string='Email',
@@ -54,8 +60,31 @@ class PvConcesionario(models.Model):
     contacto_ids = fields.One2many(
         'pv.concesionario.contacto',
         'concesionario_id',
-        string='Personal',
+        string='Personal Histórico',
     )
+
+    @api.model
+    def _get_concesionario_for_user(self, user=None):
+        """Devuelve el registro pv.concesionario correspondiente al usuario (o env.user)."""
+        if user is None:
+            user = self.env.user
+        partner = user.partner_id
+        if not partner:
+            return self.browse()
+
+        company_partner = partner.parent_id or partner
+
+        concesionario = self.search([
+            '|',
+            ('partner_id', '=', company_partner.id),
+            ('partner_id', '=', partner.id),
+        ], limit=1)
+
+        if not concesionario and user.id:
+            concesionario = self.search([('user_id', '=', user.id)], limit=1)
+
+        return concesionario
+
     maquina_ids = fields.One2many(
         'pv.maquina',
         'concesionario_id',

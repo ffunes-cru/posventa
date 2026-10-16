@@ -93,9 +93,17 @@ class TestTicketWorkflow(TestPosventaCommon):
         self.assertEqual(ticket.estado, 'aceptado')
         self.assertTrue(ticket.fecha_solucion)
 
-        # 6. Staff closes ticket
-        ticket.with_user(self.user_staff).action_cerrar_ticket()
+        # 6. Staff closes ticket via wizard
+        res_wizard = ticket.with_user(self.user_staff).action_cerrar_ticket()
+        self.assertEqual(res_wizard.get('res_model'), 'pv.cerrar.ticket.wizard')
+        wizard = self.env['pv.cerrar.ticket.wizard'].with_user(self.user_staff).create({
+            'ticket_id': ticket.id,
+            'tipo_garantia': 'tecnica',
+            'garantia_aceptada': True,
+        })
+        wizard.action_confirmar()
         self.assertEqual(ticket.estado, 'cerrado')
+        self.assertEqual(ticket.tipo_garantia, 'tecnica')
         self.assertTrue(ticket.fecha_cierre)
 
     def test_02_post_pm_ticket_reject(self):
@@ -109,6 +117,7 @@ class TestTicketWorkflow(TestPosventaCommon):
             'descripcion': 'Pérdida en acople rápido',
             'ubicacion_actual': 'Lote 14',
             'hectareas': 150.0,
+            'multimedia_url': 'https://drive.google.com/test-mandatory-file',
         })
         self.assertEqual(ticket.certificado_id, self.cpm)
 
@@ -121,13 +130,14 @@ class TestTicketWorkflow(TestPosventaCommon):
         self.assertIn('mal uso', ticket.motivo_rechazo)
 
     def test_03_accept_and_close_with_sap_order_wizard(self):
-        """Test accepting directly without popup, and closing with wizard when SAP order exists."""
+        """Test accepting directly without popup, and closing with wizard (always opens popup, SAP optional)."""
         from .common import DUMMY_PDF_BASE64
         ticket = self.env['pv.ticket'].with_user(self.user_concesionario_a).create({
             'maquina_id': self.maquina_stock.id,
             'tipo_ticket': 'pre_pm',
             'desvio_tipo': 'faltante',
             'descripcion': 'Falta manual y bulón',
+            'multimedia_url': 'https://drive.google.com/test-mandatory-file-1',
         })
         ticket.with_user(self.user_concesionario_a).action_enviar_ticket_direct()
         ticket.with_user(self.user_staff).action_tomar_ticket()
@@ -137,19 +147,29 @@ class TestTicketWorkflow(TestPosventaCommon):
         self.assertEqual(ticket.estado, 'aceptado')
         self.assertTrue(ticket.fecha_solucion)
 
-        # 2. Case A: Close without SAP order -> closes directly
+        # 2. Case A: Close without SAP order -> opens wizard and classifies as 'comercial'
         ticket_no_sap = self.env['pv.ticket'].with_user(self.user_concesionario_a).create({
             'maquina_id': self.maquina_stock.id,
             'tipo_ticket': 'pre_pm',
             'desvio_tipo': 'faltante',
             'descripcion': 'Falta calco lateral',
+            'multimedia_url': 'https://drive.google.com/test-mandatory-file-2',
         })
         ticket_no_sap.with_user(self.user_concesionario_a).action_enviar_ticket_direct()
         ticket_no_sap.with_user(self.user_staff).action_tomar_ticket()
         ticket_no_sap.with_user(self.user_staff).action_aceptar_ticket()
         res_no_sap = ticket_no_sap.with_user(self.user_staff).action_cerrar_ticket()
-        self.assertIsNone(res_no_sap)
+        self.assertIsInstance(res_no_sap, dict)
+        self.assertEqual(res_no_sap.get('res_model'), 'pv.cerrar.ticket.wizard')
+
+        wizard_no_sap = self.env['pv.cerrar.ticket.wizard'].with_user(self.user_staff).create({
+            'ticket_id': ticket_no_sap.id,
+            'tipo_garantia': 'comercial',
+            'garantia_aceptada': True,
+        })
+        wizard_no_sap.action_confirmar()
         self.assertEqual(ticket_no_sap.estado, 'cerrado')
+        self.assertEqual(ticket_no_sap.tipo_garantia, 'comercial')
         self.assertTrue(ticket_no_sap.fecha_cierre)
 
         # 3. Case B: Close with SAP order and Pedido SAP -> triggers pv.cerrar.ticket.wizard
@@ -165,6 +185,7 @@ class TestTicketWorkflow(TestPosventaCommon):
 
         wizard = self.env['pv.cerrar.ticket.wizard'].with_user(self.user_staff).create({
             'ticket_id': ticket.id,
+            'tipo_garantia': 'tecnica',
             'garantia_aceptada': True,
             'garantia_observaciones': 'Pieza defectuosa devuelta a planta y validada.',
             'garantia_adjunto': DUMMY_PDF_BASE64,
@@ -173,10 +194,42 @@ class TestTicketWorkflow(TestPosventaCommon):
         wizard.action_confirmar()
 
         self.assertEqual(ticket.estado, 'cerrado')
+        self.assertEqual(ticket.tipo_garantia, 'tecnica')
         self.assertTrue(ticket.fecha_cierre)
         self.assertTrue(ticket.garantia_aceptada)
         self.assertEqual(ticket.garantia_observaciones, 'Pieza defectuosa devuelta a planta y validada.')
         # Attachment created
         att = self.env['ir.attachment'].search([('res_model', '=', 'pv.ticket'), ('res_id', '=', ticket.id)])
         self.assertTrue(att.exists())
+
+    def test_04_tipo_desvio_and_rechazo_tags(self):
+        """Test pv.tipo.desvio and pv.tipo.rechazo integration with ticket."""
+        desvio = self.env['pv.tipo.desvio'].create({
+            'name': 'Faltante de Manual Técnico',
+            'codigo': 'faltante_manual',
+        })
+        rechazo = self.env['pv.tipo.rechazo'].create({
+            'name': 'Desgaste por uso normal',
+        })
+
+        ticket = self.env['pv.ticket'].create({
+            'maquina_id': self.maquina_stock.id,
+            'tipo_ticket': 'pre_pm',
+            'desvio_tipo_id': desvio.id,
+            'descripcion': 'Falta documentación de cabina',
+            'multimedia_url': 'https://drive.google.com/test-doc',
+        })
+        self.assertEqual(ticket.desvio_tipo, 'faltante')
+        self.assertEqual(ticket.desvio_tipo_id, desvio)
+
+        # Rejection tag integration
+        ticket.with_user(self.user_concesionario_a).action_enviar_ticket_direct()
+        ticket.with_user(self.user_staff).action_tomar_ticket()
+        ticket.with_user(self.user_staff).write({
+            'rechazo_tag_ids': [(6, 0, [rechazo.id])],
+        })
+        ticket.with_user(self.user_staff).action_rechazar_ticket()
+        self.assertEqual(ticket.estado, 'rechazado')
+        self.assertIn('Desgaste por uso normal', ticket.motivo_rechazo)
+
 

@@ -109,7 +109,7 @@ class PvDashboard(models.TransientModel):
     @api.model
     def get_concesionario_portal_data(self):
         """Return all data needed by the concesionario OWL portal in a single RPC call."""
-        concesionario = self.env['pv.concesionario'].search([('user_id', '=', self.env.uid)], limit=1)
+        concesionario = self.env['pv.concesionario']._get_concesionario_for_user(self.env.user)
         if not concesionario:
             return {'error': 'No se encontró un concesionario vinculado a este usuario.'}
 

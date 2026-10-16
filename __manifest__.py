@@ -32,6 +32,8 @@ Módulo para la gestión integral de reclamos de posventa:
         # Data
         'data/ir_sequence_data.xml',
         'data/pv_sistema_data.xml',
+        'data/pv_tipo_desvio_data.xml',
+        'data/pv_tipo_rechazo_data.xml',
         'data/ir_cron_data.xml',
         'data/mail_template_data.xml',
         'data/ir_config_parameter_data.xml',
@@ -44,6 +46,8 @@ Módulo para la gestión integral de reclamos de posventa:
         # Views
         'views/res_config_settings_views.xml',
         'views/pv_concesionario_views.xml',
+        'views/pv_tipo_desvio_views.xml',
+        'views/pv_tipo_rechazo_views.xml',
         'views/pv_maquina_views.xml',
         'views/pv_certificado_views.xml',
         'views/pv_ticket_views.xml',

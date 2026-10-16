@@ -8,7 +8,8 @@
             <list string="Tickets de Reclamo">
                 <field name="name" decoration-bf="1"/>
                 <field name="maquina_id"/>
-                <field name="prioridad" widget="badge" decoration-danger="prioridad == 'critica'" decoration-warning="prioridad == 'alta'" decoration-info="prioridad == 'media'"/>
+                <field name="cliente_id" optional="show"/>
+                <field name="tipo_garantia" optional="hide"/>
                 <field name="estado" widget="badge" decoration-info="estado == 'abierto'" decoration-warning="estado == 'en_proceso'" decoration-success="estado == 'aceptado'" decoration-danger="estado == 'rechazado'" decoration-muted="estado == 'cerrado'"/>
                 <field name="fecha_creacion" optional="show"/>
                 <field name="of" optional="show"/>
@@ -33,18 +34,22 @@
             <kanban class="o_kanban_mobile" sample="1" quick_create="false" records_draggable="false">
                 <field name="name"/>
                 <field name="maquina_id"/>
+                <field name="cliente_id"/>
                 <field name="of"/>
                 <field name="tipo_ticket"/>
-                <field name="prioridad"/>
+                <field name="tipo_garantia"/>
                 <field name="responsable_id"/>
                 <field name="estado"/>
                 <field name="fecha_creacion"/>
                 <field name="color"/>
                 <templates>
                     <t t-name="card">
-                        <div class="d-flex align-items-baseline mb-2">
+                        <div class="d-flex align-items-baseline mb-1">
                             <field name="maquina_id" class="fw-bolder fs-5 me-2"/>
-                            <field name="prioridad" widget="label_selection" options="{'classes': {'baja': 'info', 'media': 'warning', 'alta': 'danger', 'critica': 'danger'}}" class="ms-auto flex-shrink-0"/>
+                            <field name="estado" widget="label_selection" options="{'classes': {'borrador': 'secondary', 'abierto': 'info', 'en_proceso': 'warning', 'aceptado': 'success', 'rechazado': 'danger', 'cerrado': 'dark'}}" class="ms-auto flex-shrink-0"/>
+                        </div>
+                        <div class="d-flex align-items-center text-muted mb-2 small" t-if="record.cliente_id.raw_value">
+                            <i class="fa fa-user me-1 text-secondary"/> <field name="cliente_id" class="fw-semibold text-dark"/>
                         </div>
                         <footer class="align-items-end">
                             <div class="d-flex flex-wrap gap-1 text-muted text-nowrap align-items-center">
@@ -53,7 +58,7 @@
                                 <span t-if="record.tipo_ticket.raw_value">• <field name="tipo_ticket"/></span>
                                 <span t-if="record.fecha_creacion.raw_value">• <field name="fecha_creacion"/></span>
                             </div>
-                            <field name="estado" widget="label_selection" options="{'classes': {'borrador': 'secondary', 'abierto': 'info', 'en_proceso': 'warning', 'aceptado': 'success', 'rechazado': 'danger', 'cerrado': 'dark'}}" class="ms-auto"/>
+                            <field name="responsable_id" widget="many2one_avatar_user" class="ms-auto" t-if="record.responsable_id.raw_value"/>
                         </footer>
                     </t>
                 </templates>
@@ -84,6 +89,10 @@
                 </header>
                 <sheet>
                     <field name="is_ai_enabled" invisible="1"/>
+                    <field name="storage_mode" invisible="1"/>
+                    <div class="alert alert-warning border-start border-4 border-warning shadow-sm rounded-3 mb-3 p-2" role="alert" invisible="estado != 'borrador'">
+                        <i class="fa fa-info-circle me-1"/> <strong>Requisito para envío:</strong> Es obligatorio adjuntar al menos una imagen o video donde se observe la problemática antes de enviar el ticket a revisión técnica.
+                    </div>
                     <div class="oe_button_box" name="button_box">
                         <button name="action_abrir_carpeta_drive" type="object" class="oe_stat_button" icon="fa-video-camera" invisible="multimedia_count == 0 and not drive_folder_url and not multimedia_url">
                             <field name="multimedia_count" widget="statinfo" string="Videos Drive"/>
@@ -107,10 +116,9 @@
                         </group>
                         <group string="Operador e Información General">
                             <field name="operador_id" readonly="estado != 'borrador'"/>
-                            <field name="prioridad" readonly="1" groups="!posventa.group_pv_staff"/>
-                            <field name="prioridad" readonly="estado not in ('borrador', 'abierto', 'en_proceso')" groups="posventa.group_pv_staff"/>
-                            <field name="responsable_id" readonly="1" groups="!posventa.group_pv_admin"/>
-                            <field name="responsable_id" readonly="estado in ('borrador', 'abierto')" groups="posventa.group_pv_admin"/>
+                            <field name="responsable_id" readonly="1" groups="!posventa.group_pv_staff"/>
+                            <field name="responsable_id" readonly="estado in ('borrador', 'abierto')" groups="posventa.group_pv_staff"/>
+                            <field name="tipo_garantia" widget="badge" invisible="estado not in ('aceptado', 'cerrado')"/>
                             <field name="multimedia_url" widget="url" placeholder="https://drive.google.com/drive/folders/..."/>
                         </group>
                     </group>
@@ -129,10 +137,11 @@
                     
                     <group string="Clasificación Pre-PM" invisible="tipo_ticket == 'post_pm'">
                         <group>
-                            <field name="desvio_tipo" required="tipo_ticket == 'pre_pm'" readonly="estado != 'borrador'"/>
+                            <field name="desvio_tipo_id" required="tipo_ticket == 'pre_pm'" readonly="estado != 'borrador'" options="{'no_create_edit': False}"/>
+                            <field name="desvio_tipo" invisible="1"/>
                         </group>
                     </group>
-                                     <group string="Información Dinámica del Subsistema" invisible="not campo_extra_ids or tipo_ticket == 'pre_pm'">
+                    <group string="Información Dinámica del Subsistema" invisible="not campo_extra_ids or tipo_ticket == 'pre_pm'">
                         <field name="campo_extra_ids" nolabel="1" readonly="estado != 'borrador'">
                             <list editable="bottom" create="false" delete="false">
                                 <field name="campo_id" readonly="1" force_save="1"/>
@@ -145,13 +154,16 @@
                         <field name="placeholder_descripcion" invisible="not subsistema_id or not placeholder_descripcion"/>
                         <field name="descripcion" required="1" readonly="estado != 'borrador'" placeholder="Describa brevemente el problema..."/>
                         <field name="acciones_realizadas" readonly="estado != 'borrador'" placeholder="Indique qué acciones..."/>
+                        <field name="rechazo_tag_ids" widget="many2many_tags" options="{'color_field': 'color', 'no_create_edit': False}" invisible="estado not in ('en_proceso', 'rechazado')" readonly="estado != 'en_proceso'"/>
                         <field name="motivo_rechazo" invisible="estado not in ('en_proceso', 'rechazado')" readonly="1" groups="!posventa.group_pv_staff"/>
                         <field name="motivo_rechazo" invisible="estado not in ('en_proceso', 'rechazado')" readonly="estado != 'en_proceso'" groups="posventa.group_pv_staff"/>
                     </group>
                     <notebook>
                         <page string="Análisis de Garantía" name="garantia" invisible="estado not in ('aceptado', 'cerrado')">
                             <group>
+                                <field name="tipo_garantia" readonly="1"/>
                                 <field name="garantia_aceptada" readonly="1"/>
+                                <field name="rechazo_tag_ids" widget="many2many_tags" options="{'color_field': 'color'}" readonly="1" invisible="garantia_aceptada"/>
                                 <field name="garantia_observaciones" readonly="1"/>
                                 <field name="garantia_adjunto" filename="garantia_adjunto_name" readonly="1"/>
                                 <field name="garantia_adjunto_name" invisible="1"/>
@@ -201,13 +213,16 @@
                         </page>
 
                         <page string="Multimedia y Videos (Drive)" name="multimedia">
+                            <div class="alert alert-info py-2 mb-3" role="status" invisible="storage_mode != 'odoo'">
+                                <i class="fa fa-info-circle me-1"/> El modo de almacenamiento seleccionado en los ajustes es <strong>Estándar de Odoo</strong>. Puede arrastrar y adjuntar archivos directamente en el Chatter. Los archivos previamente guardados en Drive se conservan disponibles.
+                            </div>
                             <div class="d-flex justify-content-between align-items-center mb-3">
                                 <div>
                                     <h5 class="mb-1 text-primary"><i class="fa fa-cloud-upload me-2"/> Archivos Multimedia Pesados (Hasta 1 GB)</h5>
                                     <p class="text-muted small mb-0">Videos de diagnóstico en campo y adjuntos de gran tamaño almacenados en Google Drive.</p>
                                 </div>
                                 <div class="d-flex gap-2">
-                                    <button name="action_adjuntar_multimedia" type="object" string="Adjuntar Video / Multimedia" class="btn btn-primary" icon="fa-cloud-upload"/>
+                                    <button name="action_adjuntar_multimedia" type="object" string="Adjuntar Video / Multimedia" class="btn btn-primary" icon="fa-cloud-upload" invisible="storage_mode != 'drive'"/>
                                     <button name="action_abrir_carpeta_drive" type="object" string="Abrir Carpeta en Google Drive" class="btn btn-outline-primary" icon="fa-folder-open" invisible="multimedia_count == 0 and not drive_folder_url and not multimedia_url"/>
                                 </div>
                             </div>
@@ -245,6 +260,7 @@
             <search>
                 <field name="name"/>
                 <field name="maquina_id"/>
+                <field name="cliente_id"/>
                 <field name="certificado_id"/>
                 <field name="concesionario_id"/>
                 <field name="sistema_id"/>
@@ -255,8 +271,11 @@
                 <filter string="Aceptados" name="state_aceptado" domain="[('estado', '=', 'aceptado')]"/>
                 <filter string="Cerrados" name="state_cerrado" domain="[('estado', '=', 'cerrado')]"/>
                 <separator/>
-                <filter string="Prioridad Alta/Crítica" name="priority_high" domain="[('prioridad', 'in', ('alta', 'critica'))]"/>
+                <filter string="Garantía Técnica" name="garantia_tecnica" domain="[('tipo_garantia', '=', 'tecnica')]"/>
+                <filter string="Garantía Comercial" name="garantia_comercial" domain="[('tipo_garantia', '=', 'comercial')]"/>
                 <filter string="Medidas Vencidas" name="medidas_vencidas" domain="[('medidas_vencidas_count', '>', 0)]"/>
+                <separator/>
+                <filter string="Cliente" name="group_cliente" context="{'group_by': 'cliente_id'}"/>
                 <filter string="Concesionario" name="group_concesionario" context="{'group_by': 'concesionario_id'}"/>
                 <filter string="Certificado" name="group_certificado" context="{'group_by': 'certificado_id'}"/>
                 <filter string="Sistema" name="group_sistema" context="{'group_by': 'sistema_id'}"/>
