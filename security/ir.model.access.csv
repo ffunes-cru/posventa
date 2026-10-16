@@ -10,7 +10,7 @@ access_pv_maquina_staff,pv.maquina staff,model_pv_maquina,group_pv_staff,1,0,0,0
 access_pv_maquina_user,pv.maquina concesionario,model_pv_maquina,group_pv_concesionario,1,0,0,0
 access_pv_certificado_admin,pv.certificado admin,model_pv_certificado,group_pv_admin,1,1,1,1
 access_pv_certificado_staff,pv.certificado staff,model_pv_certificado,group_pv_staff,1,1,0,0
-access_pv_certificado_user,pv.certificado concesionario,model_pv_certificado,group_pv_concesionario,1,1,1,0
+access_pv_certificado_user,pv.certificado concesionario,model_pv_certificado,group_pv_concesionario,1,0,1,0
 access_pv_sistema_admin,pv.sistema admin,model_pv_sistema,group_pv_admin,1,1,1,1
 access_pv_sistema_staff,pv.sistema staff,model_pv_sistema,group_pv_staff,1,0,0,0
 access_pv_sistema_user,pv.sistema concesionario,model_pv_sistema,group_pv_concesionario,1,0,0,0

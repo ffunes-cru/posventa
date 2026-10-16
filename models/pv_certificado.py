@@ -124,11 +124,7 @@ class PvCertificado(models.Model):
             fecha_emision = fields.Date.to_date(rec.fecha) or fields.Date.today()
             plazo_nominal = rec._get_plazo_nominal_carga(rec.tipo, rec.maquina_id)
             rec.fecha_limite_carga = plazo_nominal
-
-            if plazo_nominal and fecha_emision > plazo_nominal:
-                rec.dias_retraso_carga = (fecha_emision - plazo_nominal).days
-            else:
-                rec.dias_retraso_carga = 0
+            rec.dias_retraso_carga = rec._get_dias_retraso(plazo_nominal, rec._get_fecha_carga())
 
             calc_venc = rec._get_calculated_vencimiento(rec.tipo, fecha_emision, rec.maquina_id)
             rec.fecha_vencimiento = calc_venc
@@ -264,6 +260,24 @@ class PvCertificado(models.Model):
                         'un Formulario de Entrega de Unidad (FEU) vigente para la máquina %s.', rec.maquina_id.name
                     ))
 
+    def _get_fecha_carga(self):
+        """Fecha real en que se subió el certificado (no la fecha que declara el usuario)."""
+        self.ensure_one()
+        return fields.Date.to_date(self.create_date) if self.create_date else fields.Date.today()
+
+    @staticmethod
+    def _get_dias_retraso(plazo_nominal, fecha_carga):
+        if plazo_nominal and fecha_carga > plazo_nominal:
+            return (fecha_carga - plazo_nominal).days
+        return 0
+
+    @api.constrains('fecha')
+    def _check_fecha_no_futura(self):
+        hoy = fields.Date.today()
+        for rec in self:
+            if rec.fecha and rec.fecha > hoy:
+                raise ValidationError(_('La fecha del certificado no puede ser posterior a hoy.'))
+
     def _get_calculated_vencimiento(self, tipo, fecha, maquina):
         """Calcula la fecha de vencimiento real de la vigencia/gracia para reclamos."""
         from datetime import timedelta
@@ -314,25 +328,33 @@ class PvCertificado(models.Model):
     @api.model_create_multi
     def create(self, vals_list):
         hoy = fields.Date.today()
+        es_staff = self.env.su or self.env.user.has_group('posventa.group_pv_staff')
+        concesionario_usuario = self.env['pv.concesionario']._get_concesionario_for_user(self.env.user)
         for vals in vals_list:
             maquina = self.env['pv.maquina'].sudo().browse(vals.get('maquina_id'))
-            if not vals.get('concesionario_id'):
-                concesionario = self.env['pv.concesionario']._get_concesionario_for_user(self.env.user)
-                if concesionario:
-                    vals['concesionario_id'] = concesionario.id
+            fecha_emision = fields.Date.to_date(vals.get('fecha')) if vals.get('fecha') else hoy
+            if not es_staff:
+                # El concesionario solo carga certificados vigentes a su nombre; estado y emisor no son suyos de elegir
+                if not concesionario_usuario:
+                    raise UserError(_('Su usuario no está asociado a ningún concesionario.'))
+                vals['concesionario_id'] = concesionario_usuario.id
+                vals['estado_certificado'] = 'vigente'
+                vals['active'] = True
+                if maquina.exists() and maquina.fecha_liberacion and fecha_emision < maquina.fecha_liberacion:
+                    raise ValidationError(_(
+                        'La fecha del certificado no puede ser anterior a la fecha de liberación de la máquina (%s).',
+                        maquina.fecha_liberacion))
+            elif not vals.get('concesionario_id'):
+                if concesionario_usuario:
+                    vals['concesionario_id'] = concesionario_usuario.id
                 elif maquina.exists() and maquina.concesionario_id:
                     vals['concesionario_id'] = maquina.concesionario_id.id
             if maquina.exists():
                 tipo = vals.get('tipo')
-                fecha_emision = fields.Date.to_date(vals.get('fecha')) if vals.get('fecha') else hoy
-                venc = self._get_calculated_vencimiento(tipo, fecha_emision, maquina)
-                vals['fecha_vencimiento'] = venc
+                vals['fecha_vencimiento'] = self._get_calculated_vencimiento(tipo, fecha_emision, maquina)
                 plazo_nominal = self._get_plazo_nominal_carga(tipo, maquina)
                 vals['fecha_limite_carga'] = plazo_nominal
-                if plazo_nominal and fecha_emision > plazo_nominal:
-                    vals['dias_retraso_carga'] = (fecha_emision - plazo_nominal).days
-                else:
-                    vals['dias_retraso_carga'] = 0
+                vals['dias_retraso_carga'] = self._get_dias_retraso(plazo_nominal, hoy)
 
         records = super().create(vals_list)
         for rec in records:
@@ -355,13 +377,11 @@ class PvCertificado(models.Model):
         return records
 
     def write(self, vals):
-        # Bloquear modificación de campos inmutables solo para usuarios no-administradores
-        if self.env.user.has_group('posventa.group_pv_concesionario') and not self.env.su:
-            user_fields = {'tipo', 'maquina_id', 'archivo', 'archivo_nombre'}
-            if user_fields.intersection(vals.keys()):
-                for rec in self:
-                    if rec.id:
-                        raise UserError(_('No se puede modificar un certificado una vez guardado. Si necesita realizar cambios, desactívelo o archívelo.'))
+        # El documento cargado es inmutable salvo para el Administrador (el concesionario no tiene write por ACL)
+        if not self.env.su and not self.env.user.has_group('posventa.group_pv_admin'):
+            if {'tipo', 'maquina_id', 'archivo', 'archivo_nombre', 'fecha'}.intersection(vals):
+                raise UserError(_('No se puede modificar un certificado una vez guardado. Si necesita cambios, '
+                                  'solicite al Administrador de Posventa que lo archive.'))
 
         res = super().write(vals)
 

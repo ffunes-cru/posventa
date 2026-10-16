@@ -3,6 +3,8 @@ import { Component, useState } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
 import { _t } from "@web/core/l10n/translation";
 
+const { DateTime } = luxon;
+
 export class CertificadoWizard extends Component {
     static template = "posventa.CertificadoWizard";
     static props = {
@@ -33,11 +35,19 @@ export class CertificadoWizard extends Component {
             currentStep: 1,
             submitting: false,
             tipo: defaultTipo,
-            fecha: new Date().toISOString().split("T")[0],
+            fecha: DateTime.local().toISODate(),
             archivo: "",
             archivoNombre: "",
             notas: "",
         });
+    }
+
+    get fechaMax() {
+        return DateTime.local().toISODate();
+    }
+
+    get fechaMin() {
+        return this.props.maquina.fecha_liberacion || "";
     }
 
     get showFeuWarning() {
@@ -148,6 +158,18 @@ export class CertificadoWizard extends Component {
             const selected = this.certificateTypes.find(t => t.value === this.state.tipo);
             if (selected && selected.disabled) {
                 this.notification.add(selected.reason || _t("Este tipo de certificado no se puede seleccionar."), { type: "warning" });
+                return false;
+            }
+            if (!this.state.fecha) {
+                this.notification.add(_t("Indique la fecha del certificado."), { type: "warning" });
+                return false;
+            }
+            if (this.state.fecha > this.fechaMax) {
+                this.notification.add(_t("La fecha del certificado no puede ser posterior a hoy."), { type: "warning" });
+                return false;
+            }
+            if (this.fechaMin && this.state.fecha < this.fechaMin) {
+                this.notification.add(_t("La fecha del certificado no puede ser anterior a la liberación de la máquina (%s).", this.fechaMin), { type: "warning" });
                 return false;
             }
             return true;

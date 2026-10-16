@@ -460,6 +460,7 @@ class PvMaquina(models.Model):
             'cliente': self.cliente_id.name or '',
             'ciudad': self.ciudad or '',
             'provincia': self.provincia_id.name if self.provincia_id else '',
+            'fecha_liberacion': str(self.fecha_liberacion) if self.fecha_liberacion else '',
             'tiene_fru': self.tiene_fru,
             'tiene_feu': self.tiene_feu,
             'tiene_feu_vigente': self.tiene_feu_vigente,

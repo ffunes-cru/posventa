@@ -80,8 +80,8 @@
                     </t>
 
                     <div class="pv-form-group col-md-6">
-                        <label>Fecha de Emisión / Carga</label>
-                        <input type="date" class="pv-form-input" t-model="state.fecha"/>
+                        <label>Fecha del Certificado <span class="required">*</span></label>
+                        <input type="date" class="pv-form-input" t-model="state.fecha" t-att-max="fechaMax" t-att-min="fechaMin"/>
                     </div>
                 </t>
 

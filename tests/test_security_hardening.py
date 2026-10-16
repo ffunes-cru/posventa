@@ -1,7 +1,8 @@
 # Part of Crucianelli Posventa Module
 from .common import TestPosventaCommon, DUMMY_PDF_BASE64
-from odoo.exceptions import AccessError, UserError
+from odoo.exceptions import AccessError, UserError, ValidationError
 from odoo import fields
+from datetime import timedelta
 
 
 class TestSecurityHardening(TestPosventaCommon):
@@ -186,3 +187,57 @@ class TestSecurityHardening(TestPosventaCommon):
         self.assertTrue(self.env['pv.ticket.multimedia'].with_user(self.user_concesionario_a).search([('id', '=', multimedia.id)]))
         with self.assertRaises(AccessError):
             multimedia.with_user(self.user_concesionario_b).drive_url
+
+    # --- Certificados ---
+    def _cert_vals(self, maquina, **vals):
+        values = {
+            'maquina_id': maquina.id, 'tipo': 'fru', 'fecha': fields.Date.today(),
+            'archivo': DUMMY_PDF_BASE64, 'archivo_nombre': 'fru.pdf',
+        }
+        values.update(vals)
+        return values
+
+    def test_11_concesionario_no_modifica_certificados(self):
+        fru = self.maquina_a.certificado_ids
+        for vals in ({'fecha_vencimiento': fields.Date.today() + timedelta(days=365)},
+                     {'estado_certificado': 'vigente'},
+                     {'dias_retraso_carga': 0},
+                     {'active': False}):
+            with self.assertRaises(AccessError):
+                fru.with_user(self.user_concesionario_a).write(vals)
+        # Ni el staff cambia el documento cargado
+        with self.assertRaises(UserError):
+            fru.with_user(self.user_staff).write({'fecha': fields.Date.today() - timedelta(days=1)})
+
+    def test_12_fecha_de_certificado_acotada(self):
+        hoy = fields.Date.today()
+        maquina = self.env['pv.maquina'].create({
+            'tipo': 'gringa', 'of': 'OF-HARD-FECHA', 'concesionario_id': self.concesionario_a.id,
+            'fecha_liberacion': hoy - timedelta(days=5),
+        })
+        Cert = self.env['pv.certificado'].with_user(self.user_concesionario_a)
+        with self.assertRaises(ValidationError):
+            Cert.create(self._cert_vals(maquina, fecha=hoy + timedelta(days=1)))
+        with self.assertRaises(ValidationError):
+            Cert.create(self._cert_vals(maquina, fecha=hoy - timedelta(days=6)))
+
+    def test_13_retraso_se_mide_contra_la_carga_real(self):
+        """Antedatar el certificado no esconde el retraso en la carga."""
+        hoy = fields.Date.today()
+        fru_days = int(self.env['ir.config_parameter'].sudo().get_param('posventa.fru_expiration_days', 10))
+        maquina = self.env['pv.maquina'].create({
+            'tipo': 'gringa', 'of': 'OF-HARD-RETRASO', 'concesionario_id': self.concesionario_a.id,
+            'fecha_liberacion': hoy - timedelta(days=fru_days + 5),
+        })
+        fru = self.env['pv.certificado'].with_user(self.user_concesionario_a).create(
+            self._cert_vals(maquina, fecha=maquina.fecha_liberacion))
+        self.assertEqual(fru.dias_retraso_carga, 5)
+
+    def test_14_concesionario_no_elige_emisor_ni_estado(self):
+        maquina = self.env['pv.maquina'].create({
+            'tipo': 'gringa', 'of': 'OF-HARD-EMISOR', 'concesionario_id': self.concesionario_a.id,
+        })
+        fru = self.env['pv.certificado'].with_user(self.user_concesionario_a).create(
+            self._cert_vals(maquina, concesionario_id=self.concesionario_b.id, estado_certificado='legacy'))
+        self.assertEqual(fru.concesionario_id, self.concesionario_a)
+        self.assertEqual(fru.estado_certificado, 'vigente')
