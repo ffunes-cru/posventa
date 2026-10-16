@@ -117,7 +117,7 @@
                             <field name="responsable_id" readonly="1" groups="!posventa.group_pv_staff"/>
                             <field name="responsable_id" readonly="estado in ('borrador', 'abierto')" groups="posventa.group_pv_staff"/>
                             <field name="tipo_garantia" widget="badge" invisible="estado not in ('aceptado', 'cerrado')"/>
-                            <field name="multimedia_url" widget="url" placeholder="https://drive.google.com/drive/folders/..."/>
+                            <field name="multimedia_url" widget="url" placeholder="https://drive.google.com/drive/folders/..." readonly="estado in ('rechazado', 'cerrado')"/>
                         </group>
                     </group>
                     
@@ -125,11 +125,12 @@
                         <group>
                             <field name="sistema_id" required="tipo_ticket == 'post_pm'" readonly="estado != 'borrador'"/>
                             <field name="subsistema_id" required="tipo_ticket == 'post_pm'" readonly="estado != 'borrador'"/>
-                            <field name="problema_id" readonly="estado != 'borrador'"/>
+                            <field name="problema_id" readonly="estado != 'borrador'" required="tipo_ticket == 'post_pm' and not problema_no_listado" invisible="problema_no_listado"/>
+                            <field name="problema_no_listado" readonly="estado != 'borrador'" widget="boolean_toggle" string="Problema no está en la lista"/>
                         </group>
                         <group>
-                            <field name="ubicacion_actual"/>
-                            <field name="hectareas"/>
+                            <field name="ubicacion_actual" readonly="estado != 'borrador'"/>
+                            <field name="hectareas" readonly="estado != 'borrador'" required="tipo_ticket == 'post_pm'"/>
                         </group>
                     </group>
                     
@@ -152,7 +153,8 @@
                         <field name="placeholder_descripcion" invisible="not subsistema_id or not placeholder_descripcion"/>
                         <field name="descripcion" required="1" readonly="estado != 'borrador'" placeholder="Describa brevemente el problema..."/>
                         <field name="acciones_realizadas" readonly="estado != 'borrador'" placeholder="Indique qué acciones..."/>
-                        <field name="rechazo_tag_ids" widget="many2many_tags" options="{'color_field': 'color', 'no_create': True}" invisible="estado not in ('en_proceso', 'rechazado')" readonly="estado != 'en_proceso'" placeholder="Requerido para rechazar el reclamo..."/>
+                        <field name="rechazo_tag_ids" widget="many2many_tags" options="{'color_field': 'color', 'no_create': True}" invisible="estado not in ('en_proceso', 'rechazado')" readonly="estado != 'en_proceso'" placeholder="Requerido para rechazar el reclamo..." groups="posventa.group_pv_staff"/>
+                        <field name="rechazo_tag_ids" widget="many2many_tags" options="{'color_field': 'color'}" invisible="estado != 'rechazado'" readonly="1" groups="!posventa.group_pv_staff"/>
                     </group>
                     <notebook>
                         <page string="Análisis de Garantía" name="garantia" invisible="estado not in ('aceptado', 'cerrado')">
@@ -198,7 +200,15 @@
                         </page>
 
                         <page string="Medidas y Seguimiento" name="medidas">
-                            <field name="medida_ids" mode="list">
+                            <field name="medida_ids" mode="list" groups="!posventa.group_pv_staff" readonly="1">
+                                <list>
+                                    <field name="name"/>
+                                    <field name="tipo"/>
+                                    <field name="fecha_vencimiento"/>
+                                    <field name="estado" widget="badge"/>
+                                </list>
+                            </field>
+                            <field name="medida_ids" mode="list" groups="posventa.group_pv_staff">
                                 <list editable="bottom">
                                     <field name="name"/>
                                     <field name="tipo"/>

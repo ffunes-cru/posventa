@@ -41,7 +41,7 @@
                                 <h4 style="border-bottom: 2px solid #007A87; padding-bottom: 5px;">Clasificación de Falla</h4>
                                 <strong>Sistema:</strong> <span t-field="o.sistema_id.name"/><br/>
                                 <strong>Subsistema:</strong> <span t-field="o.subsistema_id.name"/><br/>
-                                <strong>Problema Catalogado:</strong> <span t-field="o.problema_id.name"/><br/>
+                                <strong>Problema Catalogado:</strong> <t t-if="o.problema_no_listado">No listado (ver descripción)</t><span t-else="" t-field="o.problema_id.name"/><br/>
                                 <strong>Ubicación Actual:</strong> <span t-field="o.ubicacion_actual"/><br/>
                                 <strong>Hectáreas de Trabajo:</strong> <span t-field="o.hectareas"/>
                             </div>

@@ -3,6 +3,9 @@ import { Component, useState, onWillStart } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
 import { _t } from "@web/core/l10n/translation";
 
+// Valor del selector de problema cuando la falla no figura en el catálogo
+const PROBLEMA_NO_LISTADO = "no_listado";
+
 export class TicketWizard extends Component {
     static template = "posventa.TicketWizard";
     static props = {
@@ -36,7 +39,7 @@ export class TicketWizard extends Component {
             tiposDesvio: [],
             storageMode: "drive",
             ubicacionActual: "",
-            hectareas: 0,
+            hectareas: "",
             // Catalogs
             sistemas: [],
             subsistemas: [],
@@ -64,6 +67,14 @@ export class TicketWizard extends Component {
         onWillStart(async () => {
             await this.loadCatalogs();
         });
+    }
+
+    get problemaNoListadoValue() {
+        return PROBLEMA_NO_LISTADO;
+    }
+
+    get borradoresExistentes() {
+        return ((this.props.maquina && this.props.maquina.tickets) || []).filter(t => t.estado === "borrador");
     }
 
     get availableCertificates() {
@@ -350,6 +361,14 @@ export class TicketWizard extends Component {
                     this.notification.add(_t("Por favor seleccione un Subsistema."), { type: "warning" });
                     return false;
                 }
+                if (!this.state.problemaId) {
+                    this.notification.add(_t("Seleccione el problema o indique que no está en la lista."), { type: "warning" });
+                    return false;
+                }
+                if (!(parseFloat(this.state.hectareas) > 0)) {
+                    this.notification.add(_t("Indique las hectáreas trabajadas por la máquina."), { type: "warning" });
+                    return false;
+                }
             } else {
                 if (!this.state.desvioTipo) {
                     this.notification.add(_t("Por favor seleccione el Tipo de Desvío."), { type: "warning" });
@@ -416,6 +435,9 @@ export class TicketWizard extends Component {
     }
 
     get selectedProblemaName() {
+        if (this.state.problemaId === PROBLEMA_NO_LISTADO) {
+            return _t("No está en la lista (ver descripción)");
+        }
         const p = this.state.problemas.find(x => x.id === parseInt(this.state.problemaId));
         return p ? p.name : "";
     }
@@ -455,7 +477,9 @@ export class TicketWizard extends Component {
                 if (this.state.tipoTicket === "post_pm") {
                     ticketVals.sistema_id = parseInt(this.state.sistemaId);
                     ticketVals.subsistema_id = parseInt(this.state.subsistemaId);
-                    if (this.state.problemaId) {
+                    if (this.state.problemaId === PROBLEMA_NO_LISTADO) {
+                        ticketVals.problema_no_listado = true;
+                    } else {
                         ticketVals.problema_id = parseInt(this.state.problemaId);
                     }
                     ticketVals.ubicacion_actual = this.state.ubicacionActual || "";
@@ -483,20 +507,29 @@ export class TicketWizard extends Component {
                 const resIds = await this.orm.create("pv.ticket", [ticketVals]);
                 ticketId = resIds[0];
                 this.state.createdTicketId = ticketId;
+            }
 
-                // Guardamos adjuntos estándar de Odoo
-                for (const att of this.state.attachments) {
-                    try {
-                        await this.orm.create("ir.attachment", [{
-                            name: att.name,
-                            datas: att.data,
-                            res_model: "pv.ticket",
-                            res_id: ticketId,
-                            mimetype: att.type,
-                        }]);
-                    } catch (attErr) {
-                        console.warn("Error uploading attachment", att.name, attErr);
-                    }
+            // Adjuntos estándar de Odoo: si uno falla se detiene el envío (el ticket queda en Borrador)
+            for (const att of this.state.attachments) {
+                if (att.uploaded || att.skipped) continue;
+                try {
+                    await this.orm.create("ir.attachment", [{
+                        name: att.name,
+                        datas: att.data,
+                        res_model: "pv.ticket",
+                        res_id: ticketId,
+                        mimetype: att.type,
+                    }]);
+                    att.uploaded = true;
+                } catch (attErr) {
+                    console.error("Error al subir adjunto:", att.name, attErr);
+                    this.state.uploadError = {
+                        filename: att.name,
+                        error: attErr.data?.message || attErr.message || _t("Error al subir el archivo."),
+                        fileItem: att,
+                    };
+                    this.state.submitting = false;
+                    return;
                 }
             }
 
@@ -505,7 +538,7 @@ export class TicketWizard extends Component {
                 this.state.isUploadingHeavy = true;
                 for (let i = 0; i < this.state.heavyFiles.length; i++) {
                     const hf = this.state.heavyFiles[i];
-                    if (hf.status === "completed") continue;
+                    if (hf.status === "completed" || hf.skipped) continue;
                     try {
                         await this.uploadHeavyFile(ticketId, hf);
                     } catch (uploadErr) {
@@ -558,18 +591,11 @@ export class TicketWizard extends Component {
     }
 
     async proceedWithoutFailedFile() {
-        if (!this.state.createdTicketId) return;
+        if (!this.state.uploadError || !this.state.createdTicketId) return;
+        // Se omite solo el archivo que falló; el resto se sigue subiendo
+        this.state.uploadError.fileItem.skipped = true;
         this.state.uploadError = null;
-        this.state.submitting = true;
-        try {
-            await this.finalizeTicket(this.state.wantsSendDirect);
-        } catch (e) {
-            console.error("Error finalizing ticket without file", e);
-            const msg = e.data?.message || e.message || _t("Error al enviar el ticket.");
-            this.notification.add(msg, { type: "danger" });
-        } finally {
-            this.state.submitting = false;
-        }
+        await this.submitTicket(this.state.wantsSendDirect);
     }
 
     async keepInDraft() {

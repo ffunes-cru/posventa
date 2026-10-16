@@ -287,3 +287,33 @@ class TestTicketWorkflow(TestPosventaCommon):
         self.assertEqual(ticket.solucion_aplicada, 'Se envió repuesto con cargo.')
 
 
+
+    def test_07_clasificacion_post_pm_obligatoria(self):
+        """Post-PM requires sistema/subsistema, catalogued problem (or 'no listado') and hectares > 0."""
+        base = {
+            'maquina_id': self.maquina_sold.id,
+            'sistema_id': self.sistema.id,
+            'subsistema_id': self.subsistema.id,
+            'descripcion': 'Pérdida de presión',
+            'multimedia_url': 'https://drive.google.com/test-file',
+        }
+        Ticket = self.env['pv.ticket'].with_user(self.user_concesionario_a)
+        with self.assertRaises(ValidationError):
+            Ticket.create(dict(base, problema_id=self.problema.id))  # sin hectáreas
+        with self.assertRaises(ValidationError):
+            Ticket.create(dict(base, hectareas=100))  # sin problema
+        with self.assertRaises(ValidationError):
+            Ticket.create(dict(base, hectareas=100, problema_id=self.problema.id, problema_no_listado=True))
+
+        otro_subsistema = self.env['pv.subsistema'].create({'name': 'Otro', 'sistema_id': self.sistema.id})
+        with self.assertRaises(ValidationError):
+            Ticket.create(dict(base, hectareas=100, subsistema_id=otro_subsistema.id, problema_id=self.problema.id))
+
+        otro_sistema = self.env['pv.sistema'].create({'name': 'Eléctrico'})
+        with self.assertRaises(ValidationError):
+            Ticket.create(dict(base, hectareas=100, sistema_id=otro_sistema.id, problema_id=self.problema.id))
+
+        ticket = Ticket.create(dict(base, hectareas=100, problema_no_listado=True))
+        self.assertEqual(ticket.tipo_ticket, 'post_pm')
+        ticket.action_enviar_ticket()
+        self.assertEqual(ticket.estado, 'abierto')

@@ -30,7 +30,7 @@ TIPO_TICKET = [
 # Datos que carga el concesionario: no se modifican una vez enviado el ticket (salvo admin)
 CAMPOS_CARGA_CONCESIONARIO = {
     'maquina_id', 'certificado_id', 'operador_id', 'desvio_tipo_id', 'desvio_tipo',
-    'sistema_id', 'subsistema_id', 'problema_id', 'campo_extra_ids',
+    'sistema_id', 'subsistema_id', 'problema_id', 'problema_no_listado', 'campo_extra_ids',
     'descripcion', 'acciones_realizadas', 'ubicacion_actual', 'hectareas',
 }
 
@@ -208,6 +208,11 @@ class PvTicket(models.Model):
         domain="[('subsistema_id', '=', subsistema_id)]",
         tracking=True,
     )
+    problema_no_listado = fields.Boolean(
+        string='Problema no listado',
+        tracking=True,
+        help='El problema no figura en el catálogo del subsistema; se detalla en la descripción.',
+    )
     campo_extra_ids = fields.One2many(
         'pv.ticket.campo.valor',
         'ticket_id',
@@ -232,6 +237,7 @@ class PvTicket(models.Model):
     )
     hectareas = fields.Float(
         string='Hectáreas',
+        help='Hectáreas trabajadas por la máquina al momento de la falla (obligatorio en reclamos Post-PM).',
     )
     multimedia_url = fields.Char(
         string='Multimedia (link Google Drive)',
@@ -489,6 +495,26 @@ class PvTicket(models.Model):
             if any(t.aplica_a != 'garantia' for t in rec.garantia_rechazo_tag_ids):
                 raise ValidationError(_('Los motivos sin cobertura solo pueden ser de tipo "Sin Cobertura de Garantía".'))
 
+    @api.constrains('tipo_ticket', 'sistema_id', 'subsistema_id', 'problema_id', 'problema_no_listado', 'hectareas')
+    def _check_clasificacion(self):
+        for rec in self:
+            if rec.hectareas < 0:
+                raise ValidationError(_('Las hectáreas no pueden ser negativas.'))
+            if rec.subsistema_id and rec.subsistema_id.sistema_id != rec.sistema_id:
+                raise ValidationError(_('El subsistema %s no pertenece al sistema seleccionado.', rec.subsistema_id.name))
+            if rec.problema_id and rec.problema_id.subsistema_id != rec.subsistema_id:
+                raise ValidationError(_('El problema %s no pertenece al subsistema seleccionado.', rec.problema_id.name))
+            if rec.problema_id and rec.problema_no_listado:
+                raise ValidationError(_('Seleccione un problema del catálogo o márquelo como no listado, no ambos.'))
+            if rec.tipo_ticket != 'post_pm':
+                continue
+            if not rec.sistema_id or not rec.subsistema_id:
+                raise ValidationError(_('En reclamos Post-PM debe indicar el sistema y subsistema involucrado.'))
+            if not rec.problema_id and not rec.problema_no_listado:
+                raise ValidationError(_('Seleccione el problema catalogado o indique que no está en la lista.'))
+            if rec.hectareas <= 0:
+                raise ValidationError(_('En reclamos Post-PM debe indicar las hectáreas trabajadas.'))
+
     @api.constrains('campo_extra_ids')
     def _check_obligatory_extra_fields(self):
         for rec in self:
@@ -578,10 +604,21 @@ class PvTicket(models.Model):
         self.subsistema_id = False
         self.problema_id = False
 
+    @api.onchange('problema_id')
+    def _onchange_problema_id(self):
+        if self.problema_id:
+            self.problema_no_listado = False
+
+    @api.onchange('problema_no_listado')
+    def _onchange_problema_no_listado(self):
+        if self.problema_no_listado:
+            self.problema_id = False
+
     @api.onchange('subsistema_id')
     def _onchange_subsistema_id(self):
         """Clear problema and regenerate extra fields when subsistema changes."""
         self.problema_id = False
+        self.problema_no_listado = False
         # Regenerate extra field values for new subsistema
         if self.subsistema_id and self.subsistema_id.campo_extra_ids:
             new_campos = []

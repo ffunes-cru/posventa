@@ -38,6 +38,14 @@
                 <!-- STEP: Machine & Certificate -->
                 <t t-if="currentStepKey === 'machine'">
                     <h3><i class="fa fa-cogs text-primary me-2"/> Máquina y Certificado Asociado</h3>
+                    <t t-if="borradoresExistentes.length">
+                        <div class="alert alert-warning" role="alert">
+                            <i class="fa fa-exclamation-triangle me-1"/>
+                            Esta máquina ya tiene <strong t-esc="borradoresExistentes.length"/> ticket(s) en Borrador
+                            (<t t-esc="borradoresExistentes.map(t => t.name).join(', ')"/>). Si es el mismo reclamo,
+                            complételo y envíelo desde el detalle de la máquina en lugar de crear uno nuevo.
+                        </div>
+                    </t>
                     <p class="text-muted">Verifique los datos de la máquina y seleccione el certificado vigente al cual corresponderá este reclamo:</p>
 
                     <div class="pv-detail-grid mb-4">
@@ -140,17 +148,19 @@
                             </div>
                         </t>
 
-                        <t t-if="state.subsistemaId and state.problemas.length &gt; 0">
+                        <t t-if="state.subsistemaId">
                             <div class="pv-form-group">
-                                <label>Problema Catalogado (Opcional)</label>
+                                <label>Problema Catalogado <span class="required">*</span></label>
                                 <select class="pv-form-select" t-model="state.problemaId">
                                     <option value="">-- Seleccione un Problema --</option>
                                     <t t-foreach="state.problemas" t-as="prob" t-key="prob.id">
-                                        <option t-att-value="prob.id" t-att-selected="state.problemaId === prob.id">
-                                            <t t-esc="prob.name"/>
-                                        </option>
+                                        <option t-att-value="prob.id"><t t-esc="prob.name"/></option>
                                     </t>
+                                    <option t-att-value="problemaNoListadoValue">Otro / no está en la lista</option>
                                 </select>
+                                <t t-if="state.problemaId === problemaNoListadoValue">
+                                    <small class="text-muted">Detalle el problema en la descripción del reclamo.</small>
+                                </t>
                             </div>
                         </t>
 
@@ -160,8 +170,8 @@
                                 <input type="text" class="pv-form-input" placeholder="Ciudad / Establecimiento / Campo..." t-model="state.ubicacionActual"/>
                             </div>
                             <div class="col-md-6 pv-form-group">
-                                <label>Hectáreas Trabajadas</label>
-                                <input type="number" class="pv-form-input" placeholder="0" t-model="state.hectareas"/>
+                                <label>Hectáreas Trabajadas <span class="required">*</span></label>
+                                <input type="number" class="pv-form-input" min="0" step="any" placeholder="Ej: 350" t-model="state.hectareas"/>
                             </div>
                         </div>
                     </t>
@@ -478,7 +488,7 @@
                             <i class="fa fa-exclamation-triangle fa-2x text-danger me-3 mt-1"/>
                             <div>
                                 <h5 class="alert-heading text-danger fw-bold mb-1">
-                                    Inconveniente al subir el archivo multimedia
+                                    Inconveniente al subir un archivo
                                 </h5>
                                 <div class="text-dark">
                                     No se pudo transferir: <strong t-esc="state.uploadError.filename"/>
