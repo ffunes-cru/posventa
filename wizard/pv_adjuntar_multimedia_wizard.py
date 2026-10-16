@@ -7,6 +7,7 @@ import time
 from markupsafe import Markup, escape
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError
+from ..models.pv_ticket_multimedia import get_staging_root
 
 
 class PvTicketMultimediaWizard(models.TransientModel):
@@ -111,8 +112,7 @@ class PvTicketMultimediaWizard(models.TransientModel):
                     mimetype = 'video/webm'
 
                 # Guardar en staging
-                staging_root = os.path.expanduser('~/posventa_staging')
-                target_dir = os.path.join(staging_root, f"backend_{ticket.id}_{int(time.time())}")
+                target_dir = os.path.join(get_staging_root(), f"backend_{ticket.id}_{int(time.time())}")
                 os.makedirs(target_dir, exist_ok=True)
                 target_filepath = os.path.join(target_dir, fname)
 

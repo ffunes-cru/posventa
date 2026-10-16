@@ -1,7 +1,27 @@
 # Part of Crucianelli Posventa Module
 import math
+import os
+import shutil
+import time
+from datetime import timedelta
+from markupsafe import Markup, escape
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError
+
+STAGING_DIR_NAME = 'posventa_staging'
+
+# Reintentos automáticos de sincronización a Drive (backoff: 5, 10, 20, 40 min)
+MAX_SYNC_INTENTOS = 5
+SYNC_BACKOFF_MINUTOS = 5
+
+# Horas tras las cuales se borra una carpeta de staging abandonada (subida incompleta)
+STAGING_TTL_HORAS = 24
+
+
+def get_staging_root():
+    path = os.path.expanduser(f"~/{STAGING_DIR_NAME}")
+    os.makedirs(path, exist_ok=True)
+    return path
 
 ESTADO_SYNC = [
     ('subiendo', 'Subiendo fragmentos'),
@@ -82,6 +102,15 @@ class PvTicketMultimedia(models.Model):
     staging_path = fields.Char(
         string='Ruta Temporal Staging',
     )
+    sync_intentos = fields.Integer(
+        string='Intentos de Sincronización',
+        default=0,
+        readonly=True,
+    )
+    sync_proximo_intento = fields.Datetime(
+        string='Próximo Reintento',
+        readonly=True,
+    )
 
     @api.depends('file_size')
     def _compute_file_size_display(self):
@@ -118,49 +147,48 @@ class PvTicketMultimedia(models.Model):
         }
 
     def action_reintentar_sync(self):
-        """Permite reintentar la sincronización si quedó en estado de error o pendiente."""
-        import os
-        import shutil
-        import subprocess
+        """Reencola la sincronización (reinicia el contador de reintentos automáticos)."""
         for rec in self:
             if rec.estado_sync == 'disponible':
                 raise UserError(_("Este archivo ya se encuentra sincronizado y disponible en Google Drive."))
-
-            target_path = rec.staging_path
-            if not target_path or not os.path.exists(target_path):
-                # Búsqueda de respaldo en directorio staging
-                staging_root = os.path.expanduser('~/posventa_staging')
-                candidate = os.path.join(staging_root, str(rec.id), rec.name)
-                if os.path.exists(candidate):
-                    target_path = candidate
-
-            # Verificar si el archivo ya fue subido exitosamente a Google Drive
-            already_in_drive = False
-            rclone_bin = shutil.which('rclone') or os.path.expanduser('~/.local/bin/rclone')
-            remote = self.env['ir.config_parameter'].sudo().get_param('posventa.rclone_remote', 'crucianelli_drive')
-            drive_base = self.env['ir.config_parameter'].sudo().get_param('posventa.rclone_drive_folder', 'Crucianelli_Posventa/Reclamos')
-            of_str = (rec.ticket_id.maquina_id.of or 'MAQ').replace(' ', '_').replace('/', '_')
-            ticket_str = (rec.ticket_id.name or f"TICKET_{rec.ticket_id.id}").replace(' ', '_').replace('/', '_')
-            dest_dir = f"{remote}:{drive_base}/{of_str}_{ticket_str}"
-            try:
-                check_cmd = [rclone_bin, "lsf", dest_dir, "--include", rec.name]
-                check_res = subprocess.run(check_cmd, capture_output=True, text=True, timeout=30)
-                if check_res.returncode == 0 and rec.name in check_res.stdout:
-                    already_in_drive = True
-            except Exception:
-                pass
-
-            if not target_path or not os.path.exists(target_path):
-                if not already_in_drive:
+            if not rec.staging_path or not os.path.exists(rec.staging_path):
+                if not rec.ticket_id._is_file_in_drive(rec):
                     raise UserError(_(
                         "No se encontró el archivo temporal en el servidor para reintentar la sincronización. "
                         "Puede adjuntarlo nuevamente mediante el botón 'Adjuntar Video / Multimedia'."
                     ))
-
-            rec.write({
-                'estado_sync': 'procesando',
-                'error_message': False,
-                'staging_path': target_path or False,
-            })
-            rec.ticket_id._trigger_drive_sync(rec, temp_filepath=target_path)
+            rec.ticket_id._trigger_drive_sync(rec)
         return True
+
+    def _registrar_error_sync(self, mensaje):
+        """Marca el error, programa el próximo reintento y avisa en el chatter solo en el primer y último fallo."""
+        self.ensure_one()
+        agotado = self.sync_intentos >= MAX_SYNC_INTENTOS
+        espera = SYNC_BACKOFF_MINUTOS * 2 ** max(self.sync_intentos - 1, 0)
+        self.write({
+            'estado_sync': 'error',
+            'error_message': mensaje,
+            'sync_proximo_intento': False if agotado else fields.Datetime.now() + timedelta(minutes=espera),
+        })
+        if self.sync_intentos <= 1 or agotado:
+            detalle = (_("Se agotaron los reintentos automáticos; puede reintentar manualmente desde la pestaña Multimedia.")
+                       if agotado else _("Se reintentará automáticamente."))
+            self.ticket_id.message_post(
+                body=Markup(_("⚠️ <b>Fallo en sincronización a Google Drive:</b> %s<br/>Archivo: <i>%s</i>. %s")) % (
+                    escape(mensaje), escape(self.name or ''), escape(detalle)),
+                message_type='comment',
+                subtype_xmlid='mail.mt_note',
+            )
+
+    @api.model
+    def _cleanup_staging(self):
+        """Borra carpetas de staging abandonadas (subidas por chunks que nunca se completaron)."""
+        root = get_staging_root()
+        en_uso = {
+            os.path.dirname(p) for p in self.search([('staging_path', '!=', False)]).mapped('staging_path')
+        }
+        limite = time.time() - STAGING_TTL_HORAS * 3600
+        for nombre in os.listdir(root):
+            path = os.path.join(root, nombre)
+            if os.path.isdir(path) and path not in en_uso and os.path.getmtime(path) < limite:
+                shutil.rmtree(path, ignore_errors=True)

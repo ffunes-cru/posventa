@@ -172,7 +172,8 @@ class TestMultimediaUpload(TestPosventaCommon):
 
         with patch('odoo.addons.posventa.controllers.multimedia.request', mock_request), \
              patch('odoo.addons.posventa.models.pv_ticket.PvTicket._trigger_drive_sync') as mock_trigger, \
-             patch('odoo.addons.posventa.models.pv_ticket.PvTicket._is_rclone_configured', return_value=(True, "OK")):
+             patch('odoo.addons.posventa.models.pv_ticket.PvTicket._is_rclone_configured', return_value=(True, "OK")), \
+             patch('odoo.addons.posventa.models.pv_ticket.PvTicket._get_chunk_size_bytes', return_value=len(chunk_1)):
 
             # Enviar Chunk 0
             storage_1 = FileStorage(stream=io.BytesIO(chunk_1), filename='part_0')
@@ -277,9 +278,50 @@ class TestMultimediaUpload(TestPosventaCommon):
             'estado_sync': 'error',
             'error_message': 'Conexión interrumpida con rclone',
         })
-        with patch.object(type(self.ticket), '_trigger_drive_sync') as mock_retry_sync:
+        multimedia_file.write({'sync_intentos': 5})
+        with patch('odoo.addons.base.models.ir_cron.IrCron._trigger') as mock_cron_trigger:
             multimedia_file.action_reintentar_sync()
             self.assertEqual(multimedia_file.estado_sync, 'procesando')
             self.assertFalse(multimedia_file.error_message)
-            self.assertTrue(mock_retry_sync.called)
+            # El reintento manual reinicia el contador y encola en el cron (sin threads)
+            self.assertEqual(multimedia_file.sync_intentos, 0)
+            self.assertTrue(mock_cron_trigger.called)
 
+
+    def test_06_error_sync_con_backoff_y_aviso_unico(self):
+        """Los errores programan reintentos con backoff y avisan en el chatter solo en el primer y último fallo."""
+        multimedia = self.env['pv.ticket.multimedia'].create({
+            'ticket_id': self.ticket.id, 'name': 'falla.mp4', 'estado_sync': 'procesando',
+        })
+        mensajes_iniciales = len(self.ticket.message_ids)
+        with patch.object(type(self.ticket), '_is_rclone_configured', return_value=(False, "rclone no configurado")):
+            for intento in range(1, 6):
+                multimedia.sync_intentos = intento
+                self.assertFalse(self.ticket._run_rclone_sync(multimedia))
+                self.assertEqual(multimedia.estado_sync, 'error')
+                if intento < 5:
+                    self.assertTrue(multimedia.sync_proximo_intento)
+        self.assertFalse(multimedia.sync_proximo_intento)  # agotado: sin reintento automático
+        self.ticket.invalidate_recordset(['message_ids'])
+        self.assertEqual(len(self.ticket.message_ids) - mensajes_iniciales, 2)
+
+    def test_07_controller_rechaza_archivo_excedido(self):
+        """El tamaño máximo se valida en el servidor."""
+        from odoo.addons.posventa.controllers.multimedia import PosventaMultimediaController
+        import json
+        from odoo.http import Response
+        mock_request = MagicMock()
+        mock_request.env = self.env(user=self.user_concesionario_a)
+
+        def fake_make_json_response(data, status=200):
+            res = Response(json.dumps(data), status=status, content_type='application/json')
+            res.json_data = data
+            return res
+        mock_request.make_json_response = fake_make_json_response
+        with patch('odoo.addons.posventa.controllers.multimedia.request', mock_request), \
+             patch('odoo.addons.posventa.models.pv_ticket.PvTicket._get_max_upload_bytes', return_value=100):
+            resp = PosventaMultimediaController().upload_chunk(
+                ticket_id=self.ticket.id, file_uuid='uuid_grande', filename='grande.mp4',
+                chunk_index=0, total_chunks=1, file_size=101,
+            )
+        self.assertEqual(resp.status_code, 413)
