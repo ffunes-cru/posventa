@@ -137,7 +137,7 @@ registry.category("public_components").add("posventa.portal_ticket_wizard", Port
 registry.category("public_components").add("posventa.portal_certificado_wizard", PortalCertificadoWizard);
 registry.category("public_components").add("posventa.portal_ticket_uploader", PortalTicketUploader);
 
-/** Botones de formulario con confirmación: <button data-pv-confirm="¿Seguro?"> */
+/** Botones de formulario con confirmación: `<button data-pv-confirm="¿Seguro?">` */
 export class PosventaConfirm extends Interaction {
     static selector = ".o_pv_portal [data-pv-confirm]";
     dynamicContent = {

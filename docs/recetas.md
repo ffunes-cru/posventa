@@ -31,7 +31,7 @@ Hacer el cambio en el XML y actualizar el módulo.
 3. **Backend:** agregarlo al formulario en `views/pv_ticket_views.xml`.
 4. **Portal, si lo carga el concesionario:** campo en el paso que corresponda de
    `static/src/frontend/wizards/ticket_wizard.xml`, valor inicial en `state` y envío en `ticketVals()` de
-   `ticket_wizard.js`. Si es obligatorio, validarlo en `stepError()` **y** en una [`@api.constrains`](odoo.md#decoradores-de-métodos) del modelo
+   `ticket_wizard.js`. Si es obligatorio, validarlo en `stepError()` **y** en un `@api.constrains` del modelo ([decoradores](odoo.md#decoradores-de-métodos))
    (el JS solo ayuda al usuario; la regla real es la del modelo).
 5. **Portal, si solo se muestra:** agregarlo a `portal_posventa_ticket` en `views/portal_templates.xml`. Si es
    un dato de otro modelo (un contacto, un usuario), usar un campo *related* (ver

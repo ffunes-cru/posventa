@@ -1,0 +1,55 @@
+# Configuración de Doxygen: genera un sitio HTML navegable con los documentos de docs/, el código Python y JS,
+# y grafos de quién llama a quién. Ver docs/operacion.md#sitio-de-documentación-doxygen.
+#
+#   doxygen            (desde esta carpeta; requiere doxygen y graphviz, probado con doxygen 1.18)
+#   → abrir docs/_doxygen/html/index.html
+#
+# Solo figuran las opciones que cambian el valor por defecto; `doxygen -x Doxyfile` las lista y
+# `doxygen -g ejemplo` genera un archivo con todas, comentadas.
+
+# --- Proyecto ---
+PROJECT_NAME           = "Posventa Crucianelli"
+PROJECT_BRIEF          = "Módulo de Odoo 19: máquinas, certificados y reclamos de garantía"
+OUTPUT_DIRECTORY       = docs/_doxygen
+OUTPUT_LANGUAGE        = Spanish
+GENERATE_LATEX         = NO
+
+# --- Qué se lee ---
+# Los tests y las vistas XML quedan afuera: los grafos muestran solo el código de producción. Lo que Doxygen no
+# ve (botones de vistas, crons, llamadas RPC desde el JS) está en docs/referencia.md.
+INPUT                  = README.md docs models controllers wizard tools migrations static/src
+FILE_PATTERNS          = *.py *.js *.md
+RECURSIVE              = YES
+EXCLUDE                = docs/_doxygen
+EXCLUDE_PATTERNS       = */__pycache__/*
+EXTENSION_MAPPING      = js=JavaScript
+FILTER_PATTERNS        = *.py=scripts/doxygen_filtro.sh *.js=scripts/doxygen_filtro.sh
+USE_MDFILE_AS_MAINPAGE = README.md
+# Anclas de títulos iguales a las de GitHub, para que funcionen los enlaces `archivo.md#seccion`.
+MARKDOWN_ID_STYLE      = GITHUB
+
+# --- Qué se documenta ---
+# Todo, aunque no tenga docstring, incluidos los métodos `_privados`, que en Odoo son la mayoría.
+EXTRACT_ALL            = YES
+EXTRACT_PRIVATE        = YES
+EXTRACT_STATIC         = YES
+HIDE_SCOPE_NAMES       = YES
+# Atributos del ORM que Doxygen confunde con campos propios de algunas clases.
+EXCLUDE_SYMBOLS        = env id ids
+
+# --- Código fuente y referencias cruzadas ---
+SOURCE_BROWSER         = YES
+REFERENCED_BY_RELATION = YES
+
+# --- Grafos (graphviz) ---
+HAVE_DOT               = YES
+CALL_GRAPH             = YES
+CALLER_GRAPH           = YES
+CLASS_GRAPH            = NO
+COLLABORATION_GRAPH    = NO
+DOT_IMAGE_FORMAT       = svg
+INTERACTIVE_SVG        = YES
+
+# --- Mensajes ---
+QUIET                  = YES
+WARN_LOGFILE           = docs/_doxygen/advertencias.log

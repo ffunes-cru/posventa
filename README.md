@@ -25,6 +25,7 @@ Leer en este orden. Los diagramas son [Mermaid](https://mermaid.js.org/): GitHub
 | [Operación](docs/operacion.md) | Ajustes, tareas programadas, Google Drive, comandos y problemas comunes. |
 | [Recetas](docs/recetas.md) | Paso a paso para los cambios más habituales. |
 | [Referencia](docs/referencia.md) | **Generada** desde Odoo: todos los modelos y campos, permisos y quién llama a cada método. |
+| Sitio Doxygen | **Generado** con `doxygen`: estos documentos y el código en un sitio con buscador, con grafos de llamadas por función. Ver [Operación](docs/operacion.md#sitio-de-documentación-doxygen). |
 
 ## Inicio rápido
 
@@ -34,6 +35,9 @@ Leer en este orden. Los diagramas son [Mermaid](https://mermaid.js.org/): GitHub
 
 # Correr los tests del módulo
 ./odoo-bin -d <base> -u posventa --test-tags=/posventa --stop-after-init --http-port=8071
+
+# Generar el sitio de documentación (abrir docs/_doxygen/html/index.html)
+doxygen
 ```
 
 Requisitos: `openpyxl` (importación de máquinas desde Excel) y, si se guardan los videos en Google Drive,

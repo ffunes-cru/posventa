@@ -62,6 +62,46 @@ Opciones explicadas en [Línea de comandos](odoo.md#línea-de-comandos).
 
 Los tests de navegador (`start_tour`) necesitan Chrome o Chromium instalado.
 
+## Sitio de documentación (Doxygen)
+
+[Doxygen](https://www.doxygen.nl/manual/index.html) arma un sitio web navegable, con buscador, que junta en un
+solo lugar estos documentos y el código Python y JS. Para cada función muestra su docstring, un enlace al código
+y dos grafos:
+
+- **Gráfico de llamadas de esta función:** a qué funciones llama, y lo que llaman esas, en cadena.
+- **Gráfico de llamadas a esta función:** desde qué funciones se la llama.
+
+Los nodos de los grafos se pueden cliquear para saltar a esa función. El sitio no se guarda en git: se genera
+cuando se lo quiere ver.
+
+```bash
+# Una vez: instalar doxygen y graphviz (Arch: pacman -S doxygen graphviz; Debian/Ubuntu: apt install doxygen graphviz)
+# Desde la carpeta del módulo:
+doxygen
+# Abrir docs/_doxygen/html/index.html en el navegador
+```
+
+La configuración está en `Doxyfile`, comentada; está probada con Doxygen 1.18. Las advertencias, por ejemplo un
+enlace roto en estos documentos, quedan en `docs/_doxygen/advertencias.log`. Los diagramas Mermaid se dibujan en
+el navegador y necesitan internet. Con una versión de Doxygen sin soporte de Mermaid, se ven como texto.
+
+**Qué no muestra.** Doxygen solo lee el código, así que no ve las llamadas que arma Odoo en tiempo de ejecución:
+
+- botones de las vistas
+- crons
+- acciones de servidor
+- `orm.call` desde el JS
+
+Un `action_*` que solo se llama desde un botón aparece sin nadie que lo llame. Esas conexiones están en la
+[referencia generada](referencia.md#puntos-de-entrada).
+
+Otros detalles a tener en cuenta:
+- `super().write()` aparece como una flecha de `write` a sí mismo.
+- El tipo que Doxygen le pone a algunos campos (`bool`, `list`) es una suposición suya: el tipo real es el
+  `fields.*` de la definición.
+- Para que entren en los grafos las llamadas dentro de `for rec in self:`, el filtro `scripts/doxygen_filtro.sh`
+  le hace leer `rec.` como `self.`. Mantener ese nombre de variable en los bucles sobre `self`.
+
 ## Problemas comunes
 
 | Síntoma | Causa probable | Qué hacer |
@@ -76,4 +116,5 @@ Los tests de navegador (`start_tour`) necesitan Chrome o Chromium instalado.
 ## Ver también
 
 - [Conceptos de Odoo](odoo.md): crons, línea de comandos y tests.
+- [Manual de Doxygen](https://www.doxygen.nl/manual/index.html) · [opciones del `Doxyfile`](https://www.doxygen.nl/manual/config.html)
 - [Configurar el servidor de correo saliente (Odoo)](https://www.odoo.com/documentation/19.0/applications/general/email_communication.html)
