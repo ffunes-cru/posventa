@@ -116,6 +116,7 @@ def _ultima_linea(stderr):
     lineas = [linea for linea in (stderr or '').splitlines() if linea.strip()]
     if not lineas:
         return ''
-    mensaje = re.sub(r'^\d{4}/\d\d/\d\d \d\d:\d\d:\d\d [A-Z]+\s*:\s*', '', lineas[-1])
+    # El nivel de log ('ERROR :') no aparece en todas las versiones de rclone
+    mensaje = re.sub(r'^\d{4}/\d\d/\d\d \d\d:\d\d:\d\d (?:[A-Z]+\s*:\s*)?', '', lineas[-1])
     mensaje = re.sub(r'\w+ "https?://[^"]*": ', '', mensaje)
     return mensaje.strip()[:300]

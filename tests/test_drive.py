@@ -41,6 +41,10 @@ class TestDrive(TransactionCase):
                                                      "2026/01/01 10:00:01 ERROR : Reclamos: permiso denegado\n")
         with self.assertRaisesRegex(DriveError, '^Reclamos: permiso denegado$'):
             self.drive.verificar()
+        # rclone 1.60 (Ubuntu 24.04, imagen de Odoo 19) no imprime el nivel de log
+        self.run.return_value = _resultado(1, stderr='2026/01/01 10:00:01 Failed to mkdir: Get "https://x": sin red\n')
+        with self.assertRaisesRegex(DriveError, '^Failed to mkdir: sin red$'):
+            self.drive.verificar()
 
     def test_03_enlace_interno_si_la_unidad_no_permite_publicos(self):
         self.run.side_effect = [_resultado(1, stderr="ERROR : sharing disabled"),
