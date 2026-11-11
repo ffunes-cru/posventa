@@ -1,0 +1,47 @@
+# Staging de Odoo en el VPS: un stack aparte de producción (otro Odoo, otra base, otro proyecto de Compose).
+# Va en ~/odoo-staging. Se publica con el nginx-proxy de producción a través de su red red-web.
+# Instalación: docs/despliegue.md.
+name: odoo-staging
+
+services:
+  odoo:
+    build: ./addons/posventa/docker
+    container_name: odoo-staging
+    restart: unless-stopped
+    depends_on: [db]
+    mem_limit: 2g
+    volumes:
+      - odoo-data:/var/lib/odoo
+      - ./config:/etc/odoo
+      - ./addons:/mnt/extra-addons
+    environment:
+      - HOST=db
+      - PASSWORD_FILE=/run/secrets/postgresql_password
+    secrets: [postgresql_password]
+    networks: [default, red-web]
+
+  db:
+    image: postgres:15
+    restart: unless-stopped
+    mem_limit: 1g
+    environment:
+      - POSTGRES_DB=postgres
+      - POSTGRES_USER=odoo
+      - POSTGRES_PASSWORD_FILE=/run/secrets/postgresql_password
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    secrets: [postgresql_password]
+    # Solo en la red interna del stack: ni nginx ni producción llegan a esta base
+
+volumes:
+  odoo-data:
+  db-data:
+
+networks:
+  red-web:
+    external: true
+    name: mi-servidor_red-web
+
+secrets:
+  postgresql_password:
+    file: ./pg_pass

@@ -1,142 +1,185 @@
 # Despliegue
 
-El servidor corre Odoo 19 con Docker Compose. Cada push corre los tests en GitHub Actions, y lo que llega a
-`master` se despliega solo en el servidor de pruebas. Lo mismo se puede hacer a mano con
-`scripts/desplegar.sh`.
+Posventa se prueba en un **staging** que corre en el mismo VPS que producción, pero como un stack aparte: otro
+Odoo, otra base de PostgreSQL y otra carpeta, publicado en `https://staging.portalcrucianelli.site` por el
+mismo `nginx-proxy`. Producción no comparte base, código ni reinicios con staging.
+
+Cada push corre los tests en GitHub Actions. Lo que llega a `master` (o lo que se lance a mano) se despliega en
+staging por SSH, con una clave que solo puede ejecutar "desplegar este commit".
 
 ```mermaid
 flowchart LR
     A[push] --> B[tests<br/>runner de GitHub]
-    B -->|master o<br/>Run workflow| C[desplegar<br/>runner del servidor]
-    C --> D[scripts/desplegar.sh<br/>copia, -u posventa, reinicia]
+    B -->|master o<br/>Run workflow| C[ssh deploy@VPS SHA]
+    C --> D[scripts/desplegar_ssh.sh<br/>valida el commit]
+    D --> E[scripts/desplegar.sh<br/>copia, -u posventa, reinicia]
+    subgraph VPS
+      N[nginx-proxy] --> P[odoo-web<br/>producción]
+      N --> S[odoo-staging]
+      S --> SD[(db de staging)]
+      P --> PD[(odoo-db)]
+    end
 ```
 
-## 1. Preparar el servidor (una vez)
+**Por qué no una base más en el Odoo de producción:** el código es compartido y cada despliegue reiniciaría
+producción. Además, con dos bases en un mismo Odoo, los enlaces de invitación no indican la base y Odoo no sabe
+a cuál mandar al usuario. Con un Odoo por base, ese problema no existe.
 
-### Imagen de Odoo con rclone
+## 1. Preparar el VPS (una vez)
 
-La imagen oficial `odoo:19.0` no trae rclone, que hace falta para subir los videos a Google Drive.
-`docker/Dockerfile` la extiende. En el `docker-compose.yml` del servidor, reemplazar `image: odoo:19.0` por la
-construcción de esa imagen:
+Los comandos se corren por SSH en el VPS. `~/mi-servidor` es la carpeta del compose de producción. Ahí solo se
+agrega un archivo de nginx y un certificado.
 
-```yaml
-services:
-  web:
-    build: ./addons/posventa/docker   # en lugar de image: odoo:19.0
-    volumes:
-      - ./addons:/mnt/extra-addons
-      - odoo-data:/var/lib/odoo        # filestore y videos esperando subir a Drive
-```
+### 1.1 Backup de producción
 
-Después: `docker compose build web && docker compose up -d`. La imagen ya trae `openpyxl`, que se usa para
-importar máquinas desde Excel.
-
-### Otros requisitos
-
-| Qué | Para qué |
-|---|---|
-| Disco libre para el volumen de `/var/lib/odoo` | Los videos esperan en `/var/lib/odoo/posventa_staging/` hasta subir a Drive (hasta 1 GB cada uno). |
-| Proxy con `client_max_body_size` de 1 MB o más | Cada fragmento de subida mide 768 KB. |
-| Servidor de correo saliente (Ajustes → Técnico) | Avisos a concesionarios. |
-
-### Primera instalación del módulo
-
-Copiar la carpeta del módulo a `./addons/posventa` y luego:
+Aunque no se toca, conviene tenerlo antes de cambiar nada en el servidor:
 
 ```bash
-docker compose run --rm web odoo -d <base> -i posventa --stop-after-init
-docker compose restart web
+cd ~/mi-servidor
+docker compose exec -T odoo-db pg_dump -U odoo -Fc <base_de_produccion> > ~/backup-$(date +%F).dump
+docker run --rm -v mi-servidor_odoo-web-data:/data -v ~:/backup alpine tar czf /backup/filestore-$(date +%F).tgz -C /data .
 ```
 
-Después seguir con [Configurar](#4-configurar-primera-vez). Las actualizaciones siguientes las hace el CI/CD.
+### 1.2 Dominio y certificado
 
-## 2. Despliegue automático con GitHub Actions
-
-El workflow está en `.github/workflows/ci.yml`:
-
-- **tests:** corre en cada push, en un runner de GitHub, con las imágenes oficiales `odoo:19.0` y
-  `postgres:16` y Chrome para los tests de navegador. Instala el módulo en una base vacía y corre sus tests.
-- **desplegar:** corre solo si pasaron los tests, en un runner instalado en el servidor de pruebas, en dos
-  casos: con cada push a `master`, o a mano desde *Actions → CI/CD → Run workflow* eligiendo cualquier branch.
-  Ejecuta `scripts/desplegar.sh`, que:
-  1. Copia el módulo a la carpeta de addons.
-  2. Detiene el contenedor de Odoo.
-  3. Corre `-u posventa`.
-  4. Lo vuelve a levantar.
-  5. Comprueba que responde.
-
-  Si la actualización falla, restaura el código anterior y levanta Odoo igual. La base no cambia, porque la
-  actualización corre en una sola transacción. Odoo queda caído mientras corre `-u posventa`, alrededor de
-  medio minuto.
-
-El runner del servidor se conecta a GitHub hacia afuera, así que el servidor no necesita estar expuesto a
-internet ni tener SSH abierto.
-
-### Instalar el runner en el servidor
-
-1. Crear un usuario para el runner, con acceso a Docker y permiso de escritura en la carpeta de addons:
+1. En el DNS del dominio: registro `A` de `staging.portalcrucianelli.site` apuntando a la IP del VPS.
+2. Certificado propio para staging. El bloque `listen 80` de `default.conf` ya atiende el desafío de certbot:
    ```bash
-   sudo useradd -m github-runner
-   sudo usermod -aG docker github-runner
-   sudo chown -R github-runner: /ruta/del/compose/addons/posventa   # o la carpeta addons entera
-   sudo apt install rsync curl
-   ```
-   Estar en el grupo `docker` equivale a ser root en ese servidor. Por eso conviene usar un servidor de pruebas
-   dedicado.
-2. En GitHub, en el repo: *Settings → Actions → Runners → New self-hosted runner → Linux*. Seguir los comandos
-   que muestra, como `github-runner`. En `./config.sh` agregar la etiqueta: `--labels posventa-pruebas`.
-3. Dejarlo como servicio, para que arranque solo con el servidor:
-   ```bash
-   sudo ./svc.sh install github-runner && sudo ./svc.sh start
+   cd ~/mi-servidor
+   docker compose run --rm certbot certonly --webroot -w /var/www/certbot -d staging.portalcrucianelli.site
    ```
 
-### Configurar el repo en GitHub
+### 1.3 Usuario de despliegue
 
-1. *Settings → Environments → New environment*, llamado `pruebas`. Cargar en *Environment variables*:
-
-   | Variable | Ejemplo | Obligatoria |
-   |---|---|---|
-   | `ODOO_COMPOSE_DIR` | `/opt/odoo` (la carpeta del `docker-compose.yml`) | Sí |
-   | `ODOO_DB` | `pruebas` | Sí |
-   | `ODOO_ADDONS_DIR` | Por defecto, `$ODOO_COMPOSE_DIR/addons` | No |
-   | `ODOO_SERVICE` | Por defecto, `web` | No |
-   | `ODOO_URL` | Por defecto, `http://localhost:8069` | No |
-
-2. **Obligatorio, porque el repo es público:** *Settings → Actions → General → Approval for running fork pull
-   request workflows from contributors* → **Require approval for all external contributors**. Sin esto, un
-   pull request de un desconocido puede modificar el workflow y ejecutar código en el runner del servidor.
-3. Opcional: en el environment `pruebas`, *Required reviewers*, para aprobar cada despliegue con un clic.
-
-### Despliegue a mano
-
-Desde una copia del repo en el servidor:
+Un usuario sin contraseña, dueño del stack de staging, que puede usar Docker:
 
 ```bash
-ODOO_COMPOSE_DIR=/opt/odoo ODOO_DB=pruebas scripts/desplegar.sh
+sudo adduser --disabled-password --gecos "" deploy
+sudo usermod -aG docker deploy
+docker network ls | grep red-web     # debe mostrar mi-servidor_red-web
 ```
 
-## 3. Producción
+Estar en el grupo `docker` equivale a ser root. Por eso la única forma de entrar como `deploy` es la clave del
+paso 1.6, y esa clave solo puede desplegar.
 
-Usar el mismo workflow con otro runner, con la etiqueta `posventa-produccion` y su propio environment.
-Ese environment debería tener *Required reviewers* y dispararse con tags (`v*`) en lugar de push a `master`.
-Antes de cada despliegue, sacar un backup de la base. Queda para cuando se pase a producción.
+### 1.4 Stack de staging
 
-## 4. Configurar (primera vez)
+Como `deploy` (`sudo -iu deploy`):
+
+```bash
+git clone https://github.com/ffunes-cru/posventa.git ~/posventa
+mkdir -p ~/odoo-staging/config ~/odoo-staging/addons
+cp ~/posventa/docker/staging/docker-compose.yml ~/odoo-staging/
+cp ~/posventa/docker/staging/odoo.conf ~/odoo-staging/config/
+sed -i "s|admin_passwd = CAMBIAR|admin_passwd = $(openssl rand -base64 24)|" ~/odoo-staging/config/odoo.conf
+(umask 077; openssl rand -base64 24 > ~/odoo-staging/pg_pass)
+rsync -a --exclude .git ~/posventa/ ~/odoo-staging/addons/posventa/
+
+cd ~/odoo-staging
+docker compose build odoo
+docker compose up -d db
+docker compose run --rm odoo odoo -d staging -i posventa --stop-after-init   # crea la base "staging"
+docker compose up -d odoo
+```
+
+Si el compose de producción no está en `~/mi-servidor`, corregir el nombre de la red en `networks.red-web.name`.
+El Odoo de staging tiene un tope de 2 GB de RAM y su base, de 1 GB, para no quitarle memoria a producción.
+
+### 1.5 nginx
+
+Copiar el bloque de staging y recargar nginx. La recarga no corta las conexiones de producción, y `nginx -t`
+evita recargar una configuración con errores:
+
+```bash
+sudo cp ~deploy/posventa/docker/staging/nginx-staging.conf ~/mi-servidor/nginx/staging.conf
+docker exec nginx-proxy nginx -t && docker exec nginx-proxy nginx -s reload
+```
+
+Entrar a `https://staging.portalcrucianelli.site` con `admin` / `admin` y **cambiar esa contraseña enseguida**.
+
+### 1.6 Clave SSH para GitHub Actions
+
+1. En tu PC, generar una clave nueva, solo para esto:
+   ```bash
+   ssh-keygen -t ed25519 -N "" -C github-actions-staging -f ./staging_deploy
+   ```
+2. En el VPS, autorizarla para `deploy` **con comando forzado**. Esa clave no abre una consola: solo ejecuta
+   `desplegar_ssh.sh`, que valida que el commit pedido esté en una branch del repo y lo despliega.
+   ```bash
+   sudo -iu deploy
+   mkdir -p ~/.ssh && chmod 700 ~/.ssh
+   clave='<pegar acá el contenido de staging_deploy.pub, la clave PÚBLICA>'
+   echo "command=\"$HOME/posventa/scripts/desplegar_ssh.sh\",restrict $clave" >> ~/.ssh/authorized_keys
+   chmod 600 ~/.ssh/authorized_keys
+   printf 'ODOO_COMPOSE_DIR=%s\nODOO_DB=staging\nODOO_SERVICE=odoo\nODOO_URL=https://staging.portalcrucianelli.site\n' \
+       ~/odoo-staging > ~/staging.env
+   ```
+
+### 1.7 GitHub
+
+Desde tu PC, en la carpeta del repo y con `gh` logueado:
+
+```bash
+gh api -X PUT repos/ffunes-cru/posventa/environments/staging
+gh secret set STAGING_SSH_KEY --env staging < ./staging_deploy
+ssh-keyscan -t ed25519 <ip-del-vps> | gh secret set STAGING_KNOWN_HOSTS --env staging
+gh variable set STAGING_SSH_DESTINO --env staging --body "deploy@<ip-del-vps>"   # otro puerto: ssh://deploy@<ip>:<puerto>
+rm ./staging_deploy ./staging_deploy.pub
+```
+
+Comprobar que la huella que devuelve `ssh-keyscan` coincide con la del VPS
+(`ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` en el servidor).
+
+Los secretos del environment no se entregan a los pull requests de forks. Además, el repo exige aprobar a mano
+los workflows de colaboradores externos (*Settings → Actions → General*, ya configurado).
+
+## 2. Día a día
+
+- **Push a `master`:** tests y, si pasan, despliegue en staging.
+- **Probar otra branch en staging:** *Actions → CI/CD → Run workflow* y elegir la branch.
+- **A mano, desde el VPS:** `sudo -iu deploy`, `cd ~/posventa && git pull` y luego
+  `set -a; . ~/staging.env; set +a; scripts/desplegar.sh`.
+
+`scripts/desplegar.sh`:
+1. Copia el módulo a `~/odoo-staging/addons`.
+2. Detiene el Odoo de staging.
+3. Corre `-u posventa`.
+4. Lo vuelve a levantar.
+5. Comprueba que responde.
+
+Si la actualización falla, restaura el código anterior y levanta Odoo igual. La base no cambia, porque la
+actualización corre en una sola transacción. Staging queda caído alrededor de medio minuto; producción, nunca.
+
+Si cambia `docker/Dockerfile`, reconstruir la imagen a mano: `cd ~/odoo-staging && docker compose build odoo && docker compose up -d odoo`.
+
+## 3. Configurar Odoo (primera vez)
 
 1. Ajustes → Usuarios: dar a los usuarios de Crucianelli los grupos de Posventa (*Staff* o *Administrador*).
-2. Posventa → Configuración → Ajustes:
+2. Ajustes → Técnico → Servidores de correo saliente, para que lleguen las invitaciones del portal.
+3. Posventa → Configuración → Ajustes:
    - Plazos de FRU y FEU (por defecto 10/3 y 20/90 días).
    - Google Drive: seguir [Operación → Google Drive](operacion.md#google-drive) y terminar con *Probar
      conexión*. Mientras no esté configurado, los videos se aceptan igual y esperan en el servidor.
-3. Cargar catálogos (sistemas, subsistemas, problemas, tipos de desvío) e importar máquinas desde Excel.
-4. Crear los concesionarios y darles acceso al portal (ver [Seguridad](seguridad.md)).
+4. Cargar catálogos (sistemas, subsistemas, problemas, tipos de desvío) e importar máquinas desde Excel.
+5. Crear los concesionarios y darles acceso al portal (ver [Seguridad](seguridad.md)).
 
-## 5. Probar
+La base de staging arranca vacía. Si algún día se copia la base de producción a staging, primero hay que correr
+`odoo neutralize -d staging`: desactiva correos, crons y pasarelas, para no escribirles a usuarios reales desde
+staging.
 
-- [ ] Un concesionario entra a `/my/posventa` y ve solo sus máquinas.
+## 4. Probar
+
+- [ ] Un concesionario recibe la invitación, entra a `/my/posventa` en el dominio de staging y ve solo sus
+      máquinas.
 - [ ] Crea un reclamo con una foto y un video de más de 20 MB.
 - [ ] En el backend, el video pasa de *Sincronizando* a *Disponible* en menos de 5 minutos y el enlace abre el
       archivo en Drive, también desde el portal del concesionario.
 - [ ] Con *Probar conexión* fallando (por ejemplo, con un ID de unidad equivocado), un video nuevo se acepta,
       queda *Sincronizando* con el motivo visible, y se sube solo al corregir el ID.
 - [ ] El staff toma el reclamo, carga una medida y lo cierra.
+
+## 5. Producción
+
+Cuando posventa pase a producción: mismo procedimiento contra el Odoo de `~/mi-servidor`, disparado por un tag
+(`v*`) y con aprobación manual en un environment `produccion`, y con backup antes de cada actualización. Queda
+para entonces.

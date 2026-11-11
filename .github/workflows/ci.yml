@@ -1,10 +1,9 @@
-# Tests en cada push y despliegue al servidor de pruebas.
+# Tests en cada push y despliegue al staging del VPS.
 #
 # - tests: en un runner de GitHub, con la imagen oficial de Odoo 19 y PostgreSQL.
-# - desplegar: en el runner propio instalado en el servidor de pruebas (etiqueta posventa-pruebas), que
-#   corre scripts/desplegar.sh contra el Odoo en Docker Compose. Solo con push a master o a mano desde
-#   Actions → CI/CD → Run workflow (cualquier branch).
-#   Configuración del runner y del environment "pruebas": docs/despliegue.md.
+# - desplegar: al staging del VPS, por SSH con una clave que solo puede desplegar un commit
+#   (scripts/desplegar_ssh.sh). Solo con push a master o a mano desde Actions → CI/CD → Run workflow
+#   (cualquier branch). Configuración: docs/despliegue.md.
 name: CI/CD
 
 on:
@@ -51,19 +50,20 @@ jobs:
   desplegar:
     needs: tests
     if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/master'
-    runs-on: [self-hosted, posventa-pruebas]
-    environment: pruebas
+    runs-on: ubuntu-latest
+    environment: staging
     concurrency:
-      group: desplegar-pruebas
+      group: desplegar-staging
       cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Desplegar
-        run: scripts/desplegar.sh
+      # La clave solo puede ejecutar scripts/desplegar_ssh.sh en el VPS (comando forzado en authorized_keys)
+      - name: Desplegar en staging por SSH
         env:
-          ODOO_COMPOSE_DIR: ${{ vars.ODOO_COMPOSE_DIR }}
-          ODOO_DB: ${{ vars.ODOO_DB }}
-          ODOO_ADDONS_DIR: ${{ vars.ODOO_ADDONS_DIR }}
-          ODOO_SERVICE: ${{ vars.ODOO_SERVICE }}
-          ODOO_URL: ${{ vars.ODOO_URL }}
+          SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.STAGING_KNOWN_HOSTS }}
+          DESTINO: ${{ vars.STAGING_SSH_DESTINO }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_staging && chmod 600 ~/.ssh/id_staging
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          ssh -i ~/.ssh/id_staging -o BatchMode=yes "$DESTINO" "$GITHUB_SHA"
