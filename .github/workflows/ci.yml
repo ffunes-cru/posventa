@@ -37,7 +37,14 @@ jobs:
         run: |
           docker run --rm --network host --user root -e DB_PORT -e HTTP_PORT \
             -v "$GITHUB_WORKSPACE/posventa:/src:ro" --entrypoint bash odoo:19.0 -ec '
-              apt-get -o Acquire::Retries=3 update -qq
+              # Prueba espejos de Ubuntu de a uno: a veces el DNS de los runners no resuelve algún dominio
+              for espejo in http://azure.archive.ubuntu.com/ubuntu/ http://mirrors.edge.kernel.org/ubuntu/ \
+                            http://archive.ubuntu.com/ubuntu/; do
+                sed -i -E "s#^URIs: .*#URIs: $espejo#" /etc/apt/sources.list.d/ubuntu.sources
+                timeout 120 apt-get -o Acquire::Retries=2 update -qq > /dev/null 2>&1 || true
+                apt-cache show python3-websocket > /dev/null 2>&1 && break
+                echo "Espejo $espejo no disponible, pruebo el siguiente"
+              done
               curl -fsSL --retry 3 -o /tmp/chrome.deb \
                 https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
               # Sin Chrome y websocket-client, Odoo saltea los tests de navegador sin avisar
