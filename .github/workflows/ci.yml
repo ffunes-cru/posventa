@@ -1,6 +1,6 @@
 # Tests en cada push y despliegue al staging del VPS.
 #
-# - tests: en un runner de GitHub, con la imagen oficial de Odoo 19 y PostgreSQL.
+# - tests: en un runner de GitHub, con las imágenes oficiales de Odoo 19 y PostgreSQL 16.
 # - desplegar: al staging del VPS, por SSH con una clave cuyo único comando posible es el script de
 #   despliegue del repo de infra (ffunes-cru/servidor, privado). Solo con push a master o a mano desde
 #   Actions → CI/CD → Run workflow (cualquier branch). Ver docs/despliegue.md.
@@ -17,38 +17,37 @@ jobs:
   tests:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    container:
-      image: odoo:19.0
-      options: --user root
-    services:
-      db:
-        image: postgres:16
-        env:
-          POSTGRES_USER: odoo
-          POSTGRES_PASSWORD: odoo
-          POSTGRES_DB: postgres
-        options: >-
-          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DB_PORT: 5433
+      HTTP_PORT: 8079
     steps:
       - uses: actions/checkout@v4
         with:
-          path: addons/posventa
+          path: posventa
 
-      - name: Instalar Chrome y websocket-client (sin ellos, los tests de navegador se saltean)
+      # Odoo y PostgreSQL en contenedores con la red del runner (--network host), y por lo tanto con su DNS:
+      # con la red propia de los contenedores de Actions, apt a veces no resolvía los espejos de Ubuntu.
+      - name: PostgreSQL
         run: |
-          # Espejo de Ubuntu en Azure (el que usan los runners de GitHub): archive.ubuntu.com a veces no resuelve
-          sed -i -e 's|http://archive.ubuntu.com|http://azure.archive.ubuntu.com|' \
-                 -e 's|http://security.ubuntu.com|http://azure.archive.ubuntu.com|' /etc/apt/sources.list.d/ubuntu.sources
-          apt-get -o Acquire::Retries=3 update -qq
-          curl -fsSL --retry 3 -o /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-          apt-get install -y -qq /tmp/chrome.deb python3-websocket
-          chown -R odoo "$GITHUB_WORKSPACE"
+          docker run -d --name db --network host -e POSTGRES_USER=odoo -e POSTGRES_PASSWORD=odoo \
+            postgres:16 -p "$DB_PORT"
+          until docker exec db pg_isready -q -p "$DB_PORT"; do sleep 1; done
 
       - name: Instalar posventa y correr sus tests
         run: |
-          runuser -u odoo -- odoo --addons-path="$GITHUB_WORKSPACE/addons" \
-            --db_host=db --db_user=odoo --db_password=odoo -d posventa_ci \
-            -i posventa --test-tags=/posventa --stop-after-init --log-level=test
+          docker run --rm --network host --user root -e DB_PORT -e HTTP_PORT \
+            -v "$GITHUB_WORKSPACE/posventa:/src:ro" --entrypoint bash odoo:19.0 -ec '
+              apt-get -o Acquire::Retries=3 update -qq
+              curl -fsSL --retry 3 -o /tmp/chrome.deb \
+                https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+              # Sin Chrome y websocket-client, Odoo saltea los tests de navegador sin avisar
+              apt-get install -y -qq /tmp/chrome.deb python3-websocket > /dev/null
+              mkdir -p /ws/addons && cp -r /src /ws/addons/posventa && chown -R odoo /ws
+              runuser -u odoo -- odoo --addons-path=/ws/addons \
+                --db_host=localhost --db_port="$DB_PORT" --db_user=odoo --db_password=odoo \
+                --http-port="$HTTP_PORT" -d posventa_ci -i posventa \
+                --test-tags=/posventa --stop-after-init --log-level=test
+            '
 
   desplegar:
     needs: tests
