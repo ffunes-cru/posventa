@@ -23,7 +23,7 @@ Leer en este orden. Los diagramas son [Mermaid](https://mermaid.js.org/): GitHub
 | [Flujos](docs/flujos.md) | Estados de ticket, máquina y certificado, y qué acción los cambia. |
 | [Seguridad](docs/seguridad.md) | Quién ve y hace qué, y cómo diagnosticar un error de acceso. |
 | [Operación](docs/operacion.md) | Ajustes, tareas programadas, Google Drive, comandos y problemas comunes. |
-| [Despliegue](docs/despliegue.md) | Checklist para instalarlo o actualizarlo en un servidor. |
+| [Despliegue](docs/despliegue.md) | Servidor con Docker Compose, CI/CD con GitHub Actions y checklist de prueba. |
 | [Recetas](docs/recetas.md) | Paso a paso para los cambios más habituales. |
 | [Referencia](docs/referencia.md) | **Generada** desde Odoo: todos los modelos y campos, permisos y quién llama a cada método. |
 | Sitio Doxygen | **Generado** con `doxygen`: estos documentos y el código en un sitio con buscador, con grafos de llamadas por función. Ver [Operación](docs/operacion.md#sitio-de-documentación-doxygen). |

@@ -1,0 +1,69 @@
+# Tests en cada push y despliegue al servidor de pruebas.
+#
+# - tests: en un runner de GitHub, con la imagen oficial de Odoo 19 y PostgreSQL.
+# - desplegar: en el runner propio instalado en el servidor de pruebas (etiqueta posventa-pruebas), que
+#   corre scripts/desplegar.sh contra el Odoo en Docker Compose. Solo con push a master o a mano desde
+#   Actions → CI/CD → Run workflow (cualquier branch).
+#   Configuración del runner y del environment "pruebas": docs/despliegue.md.
+name: CI/CD
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    container:
+      image: odoo:19.0
+      options: --user root
+    services:
+      db:
+        image: postgres:16
+        env:
+          POSTGRES_USER: odoo
+          POSTGRES_PASSWORD: odoo
+          POSTGRES_DB: postgres
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: addons/posventa
+
+      - name: Instalar Chrome y websocket-client (sin ellos, los tests de navegador se saltean)
+        run: |
+          apt-get update -qq
+          curl -fsSL -o /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+          apt-get install -y -qq /tmp/chrome.deb python3-websocket
+          chown -R odoo "$GITHUB_WORKSPACE"
+
+      - name: Instalar posventa y correr sus tests
+        run: |
+          runuser -u odoo -- odoo --addons-path="$GITHUB_WORKSPACE/addons" \
+            --db_host=db --db_user=odoo --db_password=odoo -d posventa_ci \
+            -i posventa --test-tags=/posventa --stop-after-init --log-level=test
+
+  desplegar:
+    needs: tests
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/master'
+    runs-on: [self-hosted, posventa-pruebas]
+    environment: pruebas
+    concurrency:
+      group: desplegar-pruebas
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Desplegar
+        run: scripts/desplegar.sh
+        env:
+          ODOO_COMPOSE_DIR: ${{ vars.ODOO_COMPOSE_DIR }}
+          ODOO_DB: ${{ vars.ODOO_DB }}
+          ODOO_ADDONS_DIR: ${{ vars.ODOO_ADDONS_DIR }}
+          ODOO_SERVICE: ${{ vars.ODOO_SERVICE }}
+          ODOO_URL: ${{ vars.ODOO_URL }}
