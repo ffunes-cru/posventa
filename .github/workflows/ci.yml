@@ -36,8 +36,11 @@ jobs:
 
       - name: Instalar Chrome y websocket-client (sin ellos, los tests de navegador se saltean)
         run: |
-          apt-get update -qq
-          curl -fsSL -o /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+          # Espejo de Ubuntu en Azure (el que usan los runners de GitHub): archive.ubuntu.com a veces no resuelve
+          sed -i -e 's|http://archive.ubuntu.com|http://azure.archive.ubuntu.com|' \
+                 -e 's|http://security.ubuntu.com|http://azure.archive.ubuntu.com|' /etc/apt/sources.list.d/ubuntu.sources
+          apt-get -o Acquire::Retries=3 update -qq
+          curl -fsSL --retry 3 -o /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
           apt-get install -y -qq /tmp/chrome.deb python3-websocket
           chown -R odoo "$GITHUB_WORKSPACE"
 
