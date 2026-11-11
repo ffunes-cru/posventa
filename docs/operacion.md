@@ -36,8 +36,8 @@ Son [acciones planificadas](odoo.md#acciones-planificadas-y-acciones-de-servidor
 
 Los videos van a una **unidad compartida** de Google Workspace, con una **cuenta de servicio**: no depende de la
 cuenta de una persona y no vence. Todo se configura desde *Posventa → Configuración → Ajustes*. En el servidor
-solo hace falta el programa rclone, que ya viene en la imagen de `docker/Dockerfile` (ver
-[Despliegue](despliegue.md#imagen-de-odoo-con-rclone)). Sin Docker, se instala con `sudo apt install rclone`.
+solo hace falta el programa rclone, que ya viene en la imagen de Odoo del VPS (`imagen-odoo/` en el repo de
+infra, ver [Despliegue](despliegue.md)). Sin Docker, se instala con `sudo apt install rclone`.
 Odoo le pasa las credenciales en cada llamada, así que no se corre `rclone config` ni existe un `rclone.conf`.
 
 ### Configuración inicial (una vez)
@@ -148,7 +148,7 @@ Otros detalles a tener en cuenta:
 | No se puede crear un reclamo | Máquina LIBERADA o PENDIENTE, o sin certificado vigente. | Ver el detalle de la máquina en el portal: indica el próximo certificado y su plazo. |
 | Un video queda "Sincronizando" mucho tiempo | Drive sin configurar o sin conexión, o el cron no corre. | Ver el motivo en la pestaña Multimedia del reclamo; *Probar conexión* en Ajustes; revisar que el cron esté activo. |
 | Google Cloud no deja crear la clave JSON | La política `iam.disableServiceAccountKeyCreation` de la organización (activa por defecto en organizaciones nuevas). | Un administrador de la organización la desactiva para ese proyecto. |
-| *Probar conexión*: "rclone no está instalado" | Odoo corre con la imagen oficial, sin rclone. | Usar la imagen de `docker/Dockerfile` (ver [Despliegue](despliegue.md#imagen-de-odoo-con-rclone)). |
+| *Probar conexión*: "rclone no está instalado" | Odoo corre con la imagen oficial, sin rclone. | Usar la imagen `imagen-odoo/` del repo de infra (ver [Despliegue](despliegue.md)). |
 | *Probar conexión*: "notFound" o "File not found" con el ID de la unidad | ID mal copiado o la cuenta de servicio no es miembro de la unidad. | Revisar el ID y los miembros de la unidad (paso 3 de la configuración inicial). |
 | *Probar conexión*: "insufficientPermissions" | La cuenta de servicio es miembro con rol de solo lectura. | Darle rol *Administrador de contenido*. |
 | Error HTTP 413 al subir | El fragmento supera el límite del proxy. | Bajar `posventa.chunk_size_kb` o subir `client_max_body_size`. |

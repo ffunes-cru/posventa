@@ -1,9 +1,9 @@
 # Tests en cada push y despliegue al staging del VPS.
 #
 # - tests: en un runner de GitHub, con la imagen oficial de Odoo 19 y PostgreSQL.
-# - desplegar: al staging del VPS, por SSH con una clave que solo puede desplegar un commit
-#   (scripts/desplegar_ssh.sh). Solo con push a master o a mano desde Actions → CI/CD → Run workflow
-#   (cualquier branch). Configuración: docs/despliegue.md.
+# - desplegar: al staging del VPS, por SSH con una clave cuyo único comando posible es el script de
+#   despliegue del repo de infra (ffunes-cru/servidor, privado). Solo con push a master o a mano desde
+#   Actions → CI/CD → Run workflow (cualquier branch). Ver docs/despliegue.md.
 name: CI/CD
 
 on:
@@ -56,7 +56,7 @@ jobs:
       group: desplegar-staging
       cancel-in-progress: false
     steps:
-      # La clave solo puede ejecutar scripts/desplegar_ssh.sh en el VPS (comando forzado en authorized_keys)
+      # La clave solo puede ejecutar scripts/desplegar.sh del repo de infra (comando forzado en authorized_keys)
       - name: Desplegar en staging por SSH
         env:
           SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
@@ -66,4 +66,4 @@ jobs:
           install -m 700 -d ~/.ssh
           printf '%s\n' "$SSH_KEY" > ~/.ssh/id_staging && chmod 600 ~/.ssh/id_staging
           printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
-          ssh -i ~/.ssh/id_staging -o BatchMode=yes "$DESTINO" "$GITHUB_SHA"
+          ssh -i ~/.ssh/id_staging -o BatchMode=yes "$DESTINO" "posventa $GITHUB_SHA"
