@@ -42,10 +42,6 @@ export class PvMultimediaChunkUploader extends Component {
         if (!file) {
             return;
         }
-        if (!this.config.rclone_configured) {
-            this.notification.add(this.config.rclone_msg, { type: "danger" });
-            return;
-        }
         if (file.size > this.config.max_file_size_bytes) {
             this.notification.add(
                 _t("El archivo '%s' supera el límite máximo de %s.", file.name, formatFileSize(this.config.max_file_size_bytes)),

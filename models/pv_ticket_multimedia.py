@@ -1,21 +1,23 @@
 # Part of Crucianelli Posventa Module
-"""Archivos pesados de un reclamo y su sincronización con Google Drive (rclone).
+"""Archivos pesados de un reclamo y su sincronización con Google Drive (tools/drive.py).
 
 La subida por fragmentos (controllers/multimedia.py) deja el archivo en staging y lo
-encola; el cron lo transfiere a Drive, con reintentos acotados y backoff.
+encola; el cron lo transfiere a Drive, con reintentos acotados y backoff. Si Drive no está
+configurado o no responde, los archivos esperan en staging sin consumir reintentos.
 """
 import logging
 import math
 import mimetypes
 import os
 import shutil
-import subprocess
 import time
 from datetime import timedelta
 
 from markupsafe import Markup, escape
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError
+
+from ..tools.drive import DriveError, RcloneDrive
 
 _logger = logging.getLogger(__name__)
 
@@ -47,20 +49,6 @@ def get_staging_root():
     path = os.path.expanduser(f"~/{STAGING_DIR_NAME}")
     os.makedirs(path, exist_ok=True)
     return path
-
-
-def _rclone_bin():
-    return shutil.which('rclone') or os.path.expanduser('~/.local/bin/rclone')
-
-
-def _rclone(*args, timeout=60):
-    return subprocess.run([_rclone_bin(), *args], capture_output=True, text=True, timeout=timeout)
-
-
-def _rclone_link(destino):
-    """Enlace compartido de un archivo o carpeta de Drive ('' si rclone no lo devuelve)."""
-    res = _rclone("link", destino)
-    return res.stdout.strip() if res.returncode == 0 else ""
 
 
 class PvTicketMultimedia(models.Model):
@@ -110,15 +98,11 @@ class PvTicketMultimedia(models.Model):
     @api.model
     def get_upload_config(self):
         """Límites y destino de subida que usan los asistentes JS (portal y backend)."""
-        storage_mode = self._get_storage_mode()
-        rclone_configured, rclone_msg = self._is_rclone_configured() if storage_mode == 'drive' else (True, 'OK')
         return {
-            'storage_mode': storage_mode,
+            'storage_mode': self._get_storage_mode(),
             'chunk_size_bytes': self._get_chunk_size_bytes(),
             'max_adjunto_bytes': MAX_ADJUNTO_MB * 1024 * 1024,
             'max_file_size_bytes': self._get_max_upload_bytes(),
-            'rclone_configured': rclone_configured,
-            'rclone_msg': rclone_msg,
         }
 
     @api.model
@@ -131,21 +115,6 @@ class PvTicketMultimedia(models.Model):
         if self._get_storage_mode() == 'odoo':
             max_mb = min(max_mb, ODOO_STORAGE_MAX_MB)
         return max_mb * 1024 * 1024
-
-    @api.model
-    def _is_rclone_configured(self):
-        """(configurado, mensaje): el binario de rclone existe y el remoto de Google Drive está definido."""
-        if not os.path.exists(_rclone_bin()):
-            return False, _("Binario rclone no encontrado en el servidor (~/.local/bin/rclone).")
-        remote = self._get_param('posventa.rclone_remote', 'crucianelli_drive')
-        try:
-            remotes = [r.strip().rstrip(':') for r in _rclone('listremotes', timeout=10).stdout.splitlines()]
-        except Exception as e:
-            return False, _("Error al consultar configuración de rclone: %s", str(e))
-        if remote not in remotes:
-            return False, _("El almacenamiento de Google Drive no está configurado en el servidor (el remoto '%s' no "
-                            "existe en rclone). Debe ejecutar 'rclone config' para vincular la cuenta de Google Drive.", remote)
-        return True, "OK"
 
     # --- Acciones ---
     def action_abrir_drive(self):
@@ -160,7 +129,7 @@ class PvTicketMultimedia(models.Model):
         for rec in self:
             if rec.estado_sync == 'disponible':
                 raise UserError(_("Este archivo ya se encuentra sincronizado y disponible en Google Drive."))
-            if not rec._staging_existe() and not rec._esta_en_drive():
+            if not rec._staging_existe() and not rec._esta_en_drive(RcloneDrive.desde_ajustes(self.env)):
                 raise UserError(_(
                     "No se encontró el archivo temporal en el servidor para reintentar la sincronización. "
                     "Puede adjuntarlo nuevamente mediante el botón 'Adjuntar Video / Multimedia'."
@@ -188,6 +157,16 @@ class PvTicketMultimedia(models.Model):
             ('sync_intentos', '<', MAX_SYNC_INTENTOS),
             '|', ('sync_proximo_intento', '=', False), ('sync_proximo_intento', '<=', fields.Datetime.now()),
         ], order='id')
+        if not pendientes:
+            return
+        drive = RcloneDrive.desde_ajustes(self.env)
+        try:
+            drive.verificar()
+        except DriveError as e:
+            # Drive sin configurar o caído: los archivos siguen en staging y se suben cuando vuelva
+            _logger.warning("Google Drive no disponible, %s archivos en espera: %s", len(pendientes), e)
+            pendientes.write({'error_message': _("En espera de Google Drive: %s", e)})
+            return
         IrCron = self.env['ir.cron']
         IrCron._commit_progress(remaining=len(pendientes))
         for multimedia in pendientes:
@@ -195,7 +174,7 @@ class PvTicketMultimedia(models.Model):
             multimedia.sync_intentos += 1
             IrCron._commit_progress()
             try:
-                multimedia._sync_to_drive()
+                multimedia._sync_to_drive(drive)
             except Exception as e:
                 _logger.exception("Error sincronizando multimedia %s a Drive", multimedia.id)
                 self.env.cr.rollback()
@@ -203,25 +182,18 @@ class PvTicketMultimedia(models.Model):
             if not IrCron._commit_progress(1):
                 break
 
-    def _get_drive_dest_dir(self):
-        """Carpeta del reclamo en Drive: <remoto>:<base>/<OF>_<TICKET>."""
+    def _carpeta_drive(self):
+        """Carpeta del reclamo dentro de la carpeta base de Drive: <OF>_<TICKET>."""
         ticket = self.ticket_id
-        remote = self._get_param('posventa.rclone_remote', 'crucianelli_drive')
-        base = self._get_param('posventa.rclone_drive_folder', 'Crucianelli_Posventa/Reclamos')
         carpeta = f"{ticket.maquina_id.of or 'MAQ'}_{ticket.name or f'TICKET_{ticket.id}'}"
-        return f"{remote}:{base}/{carpeta.replace(' ', '_').replace('/', '_')}"
+        return carpeta.replace(' ', '_').replace('/', '_')
 
     def _staging_existe(self):
         return bool(self.staging_path) and os.path.exists(self.staging_path)
 
-    def _esta_en_drive(self):
+    def _esta_en_drive(self, drive):
         """True si el archivo ya existe en la carpeta de Drive del reclamo (subida previa exitosa)."""
-        try:
-            res = _rclone("lsf", self._get_drive_dest_dir(), "--include", self.name, timeout=30)
-            return res.returncode == 0 and self.name in res.stdout
-        except Exception as err:
-            _logger.warning("Error verificando archivo en Drive: %s", err)
-            return False
+        return drive.existe(self._carpeta_drive(), self.name)
 
     def _get_mimetype(self):
         mime = (self.mimetype or '').lower()
@@ -229,30 +201,27 @@ class PvTicketMultimedia(models.Model):
             return 'video/webm'
         return mime or mimetypes.guess_type(self.name)[0] or 'application/octet-stream'
 
-    def _sync_to_drive(self):
-        """Sube el archivo a Drive con rclone y registra los enlaces. Devuelve True si quedó disponible."""
+    def _sync_to_drive(self, drive):
+        """Sube el archivo a Drive y registra los enlaces. Devuelve True si quedó disponible."""
         self.ensure_one()
-        configurado, mensaje = self._is_rclone_configured()
-        if not configurado:
-            self._registrar_error_sync(mensaje)
-            return False
-        ya_en_drive = self._esta_en_drive()
+        ya_en_drive = self._esta_en_drive(drive)
         if not ya_en_drive and not self._staging_existe():
             self._registrar_error_sync(_("Archivo temporal no encontrado para sincronización."))
             return False
 
-        dest_dir = self._get_drive_dest_dir()
+        carpeta = self._carpeta_drive()
         mime = self._get_mimetype()
         if not ya_en_drive:
-            # rclone copy: el archivo local se borra recién cuando el registro quedó disponible
-            res = _rclone("copy", self.staging_path, dest_dir, "-M", "--metadata-set", f"content-type={mime}", timeout=1200)
-            if res.returncode != 0:
-                self._registrar_error_sync((res.stderr or res.stdout or _("Error al ejecutar rclone copy."))[:500])
+            # Copia (no mueve): el archivo local se borra recién cuando el registro quedó disponible
+            try:
+                drive.copiar(self.staging_path, carpeta, mime)
+            except DriveError as e:
+                self._registrar_error_sync(str(e))
                 return False
 
         # Enlaces del archivo y de la carpeta (se muestran solo al concesionario dueño y al staff)
-        folder_url = _rclone_link(dest_dir)
-        drive_url = _rclone_link(f"{dest_dir}/{self.name}") or folder_url or f"https://drive.google.com/drive/search?q={self.name}"
+        folder_url = drive.enlace(carpeta)
+        drive_url = drive.enlace(carpeta, self.name) or folder_url
 
         staging_path = self.staging_path
         self.write({

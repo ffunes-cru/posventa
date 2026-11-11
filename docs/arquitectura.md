@@ -63,6 +63,7 @@ mano: las reglas se cumplen igual. Los tests `test_security_hardening.py` prueba
 | `migrations/` | [Scripts de migración](odoo.md#scripts-de-migración) que adaptan bases existentes al cambiar de versión. |
 | `tests/` | Tests automáticos. Son también la mejor documentación de cada regla: cada test describe un caso. |
 | `tools/documentacion.py` | Genera `docs/referencia.md`. |
+| `tools/drive.py` | Habla con Google Drive mediante rclone, con la cuenta de servicio cargada en Ajustes. |
 
 La lista completa de modelos, campos y métodos, y quién llama a cada método, está en la
 [referencia generada](referencia.md).
@@ -100,9 +101,11 @@ dejarlo en borrador para completarlo después.
 
 1. El navegador corta el archivo en fragmentos (768 KB por defecto) y los manda a `/posventa/ticket/upload_chunk`.
 2. El controller los guarda en una carpeta temporal y, con el último, arma el archivo y crea un
-   `pv.ticket.multimedia` en estado *Sincronizando*.
-3. El cron "Sincronizar multimedia pendiente a Google Drive" lo sube con `rclone`, guarda el enlace y lo deja
-   *Disponible*. Si falla, reintenta con espera creciente (hasta 5 veces) y avisa en el chatter.
+   `pv.ticket.multimedia` en estado *Sincronizando*. Esto no depende de que Drive funcione.
+3. El cron "Sincronizar multimedia pendiente a Google Drive" primero verifica la conexión. Si Drive no está
+   configurado o no responde, deja los archivos esperando sin gastar reintentos. Si responde, los sube con
+   `rclone` (`tools/drive.py`), guarda el enlace y los deja *Disponible*. Si falla la copia de un archivo,
+   reintenta con espera creciente (hasta 5 veces) y avisa en el chatter.
 4. En modo de almacenamiento "Odoo" no hay Drive: el archivo queda como adjunto normal del ticket (tope 200 MB).
 
 ## Decisiones de diseño que conviene conocer

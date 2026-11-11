@@ -309,7 +309,8 @@
                         <field name="error_message" class="d-block mt-1 font-monospace text-muted small" readonly="1"/>
                     </div>
                     <div class="alert alert-info py-2 mt-2" role="alert" invisible="estado_sync != 'procesando'">
-                        <i class="fa fa-spinner fa-spin me-1"/> El archivo está siendo transferido a Google Drive por rclone en segundo plano.
+                        <i class="fa fa-spinner fa-spin me-1"/> El archivo está guardado en el servidor y se transfiere a Google Drive en segundo plano.
+                        <field name="error_message" class="d-block mt-1 small" readonly="1" invisible="not error_message"/>
                     </div>
                     <group>
                         <group string="Detalles Técnicos">

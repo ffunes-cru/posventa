@@ -30,7 +30,8 @@ class PosventaMultimediaController(http.Controller):
         """Recibe un chunk binario de un archivo pesado y lo almacena en staging.
 
         Al recibir el último chunk ensambla el archivo y, según el modo de almacenamiento,
-        lo encola para Google Drive (cron) o lo guarda como adjunto estándar de Odoo.
+        lo encola para Google Drive (cron) o lo guarda como adjunto estándar de Odoo. La subida no
+        depende de que Drive esté disponible: el archivo espera en staging hasta que el cron lo suba.
         """
         try:
             try:
@@ -65,11 +66,6 @@ class PosventaMultimediaController(http.Controller):
                 return _error(f'El archivo supera el tamaño máximo permitido ({max_bytes // (1024 * 1024)} MB).', status=413)
             if total_chunks != -(-file_size // chunk_bytes):
                 return _error('La cantidad de fragmentos no coincide con el tamaño del archivo.')
-
-            if chunk_index == 0 and storage_mode == 'drive':
-                is_configured, rclone_err = Multimedia._is_rclone_configured()
-                if not is_configured:
-                    return _error(rclone_err)
 
             staging_session_dir = os.path.join(get_staging_root(), file_uuid)
             os.makedirs(staging_session_dir, exist_ok=True)
