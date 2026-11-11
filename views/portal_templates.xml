@@ -21,27 +21,21 @@
         </div>
     </template>
 
-    <template id="portal_breadcrumbs_posventa" name="Posventa Breadcrumbs" inherit_id="portal.portal_breadcrumbs" priority="40">
-        <xpath expr="//ol[hasclass('o_portal_submenu')]" position="inside">
-            <t t-if="page_name and page_name.startswith('pv_')">
-                <li t-if="page_name == 'pv_home'" class="breadcrumb-item active">Posventa</li>
-                <li t-else="" class="breadcrumb-item"><a href="/my/posventa">Posventa</a></li>
-                <li t-if="page_name == 'pv_maquinas'" class="breadcrumb-item active">Máquinas</li>
-                <t t-if="page_name in ('pv_maquina', 'pv_ticket_nuevo', 'pv_certificado_nuevo')">
-                    <li class="breadcrumb-item"><a href="/my/posventa/maquinas">Máquinas</a></li>
-                    <li t-if="page_name == 'pv_maquina'" class="breadcrumb-item active" t-out="maquina.of"/>
-                    <li t-else="" class="breadcrumb-item"><a t-attf-href="/my/posventa/maquina/#{maquina.id}" t-out="maquina.of"/></li>
-                    <li t-if="page_name == 'pv_ticket_nuevo'" class="breadcrumb-item active">Nuevo reclamo</li>
-                    <li t-if="page_name == 'pv_certificado_nuevo'" class="breadcrumb-item active">Cargar certificado</li>
-                </t>
-                <li t-if="page_name == 'pv_certificados'" class="breadcrumb-item active">Certificados</li>
-                <li t-if="page_name == 'pv_tickets'" class="breadcrumb-item active">Reclamos</li>
-                <t t-if="page_name == 'pv_ticket'">
-                    <li class="breadcrumb-item"><a href="/my/posventa/tickets">Reclamos</a></li>
-                    <li class="breadcrumb-item active" t-out="ticket.name"/>
-                </t>
+    <template id="portal_posventa_migas" name="Posventa: migas de pan">
+        <!-- Solo en páginas de detalle: en las secciones principales ya está la navegación -->
+        <ol t-if="page_name in ('pv_maquina', 'pv_ticket_nuevo', 'pv_certificado_nuevo', 'pv_ticket')" class="breadcrumb small mb-2">
+            <t t-if="page_name == 'pv_ticket'">
+                <li class="breadcrumb-item"><a href="/my/posventa/tickets">Reclamos</a></li>
+                <li class="breadcrumb-item active" t-out="ticket.name"/>
             </t>
-        </xpath>
+            <t t-else="">
+                <li class="breadcrumb-item"><a href="/my/posventa/maquinas">Máquinas</a></li>
+                <li t-if="page_name == 'pv_maquina'" class="breadcrumb-item active" t-out="maquina.of"/>
+                <li t-else="" class="breadcrumb-item"><a t-attf-href="/my/posventa/maquina/#{maquina.id}" t-out="maquina.of"/></li>
+                <li t-if="page_name == 'pv_ticket_nuevo'" class="breadcrumb-item active">Nuevo reclamo</li>
+                <li t-if="page_name == 'pv_certificado_nuevo'" class="breadcrumb-item active">Cargar certificado</li>
+            </t>
+        </ol>
     </template>
 
     <!-- ============================================================ -->
@@ -65,21 +59,73 @@
     </template>
 
     <template id="portal_posventa_nav" name="Posventa: navegación">
-        <ul class="nav nav-pills flex-nowrap overflow-auto mb-3 pb-1">
-            <li class="nav-item"><a t-attf-class="nav-link text-nowrap #{'active' if page_name == 'pv_home' else ''}" href="/my/posventa"><i class="fa fa-home me-1"/>Inicio</a></li>
-            <li class="nav-item"><a t-attf-class="nav-link text-nowrap #{'active' if page_name in ('pv_maquinas', 'pv_maquina') else ''}" href="/my/posventa/maquinas"><i class="fa fa-cogs me-1"/>Máquinas</a></li>
-            <li class="nav-item"><a t-attf-class="nav-link text-nowrap #{'active' if page_name in ('pv_tickets', 'pv_ticket') else ''}" href="/my/posventa/tickets"><i class="fa fa-ticket me-1"/>Reclamos</a></li>
-            <li class="nav-item"><a t-attf-class="nav-link text-nowrap #{'active' if page_name == 'pv_certificados' else ''}" href="/my/posventa/certificados"><i class="fa fa-file-text-o me-1"/>Certificados</a></li>
+        <!-- (dirección, ícono, nombre, páginas en las que la sección se marca como activa) -->
+        <t t-set="secciones" t-value="[
+            ('/my/posventa', 'fa-home', 'Inicio', ('pv_home',)),
+            ('/my/posventa/maquinas', 'fa-cogs', 'Máquinas', ('pv_maquinas', 'pv_maquina', 'pv_ticket_nuevo', 'pv_certificado_nuevo')),
+            ('/my/posventa/tickets', 'fa-ticket', 'Reclamos', ('pv_tickets', 'pv_ticket')),
+            ('/my/posventa/certificados', 'fa-file-text-o', 'Certificados', ('pv_certificados',)),
+        ]"/>
+        <!-- Pantallas medianas en adelante: pestañas arriba del contenido -->
+        <ul class="nav nav-pills d-none d-md-flex mb-3">
+            <li t-foreach="secciones" t-as="seccion" class="nav-item">
+                <a t-att-href="seccion[0]" t-attf-class="nav-link #{'active' if page_name in seccion[3] else ''}">
+                    <i t-attf-class="fa #{seccion[1]} me-1"/><t t-out="seccion[2]"/>
+                </a>
+            </li>
         </ul>
+        <!-- Celular: barra fija abajo, como en una app -->
+        <nav class="o_pv_tabbar d-md-none fixed-bottom">
+            <a t-foreach="secciones" t-as="seccion" t-att-href="seccion[0]"
+               t-attf-class="o_pv_tab #{'active' if page_name in seccion[3] else ''}">
+                <i t-attf-class="fa #{seccion[1]}"/>
+                <span t-out="seccion[2]"/>
+            </a>
+        </nav>
     </template>
 
-    <template id="portal_layout_posventa" name="Posventa: layout">
-        <t t-call="portal.portal_layout">
-            <div class="o_pv_portal">
-                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
-                    <h3 class="mb-0"><t t-out="titulo"/></h3>
-                    <span t-if="pv_concesionario" class="text-muted small"><i class="fa fa-building-o me-1"/><t t-out="pv_concesionario.name"/></span>
+    <template id="portal_app_layout" name="Posventa: layout de la app">
+        <!-- Layout base del frontend sin el encabezado ni el pie del sitio: la pantalla es solo la app.
+             El manifiesto permite instalarla en el celular (Instalar app / Agregar a pantalla de inicio). -->
+        <t t-call="web.frontend_layout">
+            <t t-set="title">Posventa Crucianelli</t>
+            <t t-set="x_icon" t-value="'/posventa/static/description/icon.png'"/>
+            <t t-set="no_header" t-value="True"/>
+            <t t-set="no_footer" t-value="True"/>
+            <t t-set="head">
+                <link rel="manifest" href="/posventa/static/src/app/manifest.webmanifest"/>
+                <meta name="theme-color" content="#c8102e"/>
+                <meta name="mobile-web-app-capable" content="yes"/>
+                <meta name="apple-mobile-web-app-capable" content="yes"/>
+                <meta name="apple-mobile-web-app-title" content="Posventa"/>
+                <link rel="apple-touch-icon" href="/posventa/static/src/img/app/icono-180.png"/>
+            </t>
+            <div class="o_pv_app">
+                <header class="o_pv_app_bar sticky-top">
+                    <div class="container d-flex align-items-center gap-2">
+                        <a href="/my/posventa" class="o_pv_app_marca">
+                            <img src="/posventa/static/description/icon.svg" alt="" width="30" height="30"/>
+                            <span>Posventa</span>
+                        </a>
+                        <span t-if="pv_concesionario" class="o_pv_app_concesionario text-truncate" t-out="pv_concesionario.name"/>
+                        <div class="ms-auto d-flex align-items-center gap-3">
+                            <a href="/my/account" title="Mi cuenta"><i class="fa fa-user-circle fa-lg"/></a>
+                            <a href="/web/session/logout?redirect=/my/posventa" title="Cerrar sesión"><i class="fa fa-sign-out fa-lg"/></a>
+                        </div>
+                    </div>
+                </header>
+                <div class="container pt-3 pb-4">
+                    <t t-out="0"/>
                 </div>
+            </div>
+        </t>
+    </template>
+
+    <template id="portal_layout_posventa" name="Posventa: página del portal">
+        <t t-call="posventa.portal_app_layout">
+            <div class="o_pv_portal">
+                <t t-call="posventa.portal_posventa_migas"/>
+                <h3 class="mb-3" t-out="titulo"/>
                 <t t-call="posventa.portal_posventa_nav"/>
                 <t t-call="posventa.portal_flash"/>
                 <t t-out="0"/>
@@ -88,7 +134,7 @@
     </template>
 
     <template id="portal_sin_concesionario" name="Posventa: sin concesionario">
-        <t t-call="portal.portal_layout">
+        <t t-call="posventa.portal_app_layout">
             <div class="alert alert-warning mt-3" role="alert">
                 <h4 class="alert-heading">Su usuario no está asociado a un concesionario</h4>
                 <p class="mb-0">Para operar en el portal de Posventa, el Administrador de Posventa debe vincular su usuario a la empresa del concesionario.</p>

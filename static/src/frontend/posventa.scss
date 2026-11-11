@@ -1,8 +1,82 @@
-/* Portal web de Posventa: estilos de los asistentes OWL (tema Crucianelli) */
+/* Portal web de Posventa: la app del concesionario y los asistentes OWL (tema Crucianelli) */
 
 :root {
     --pv-red-primary: #c8102e;
     --pv-red-dark: #991b1b;
+    --pv-tabbar-alto: 60px;
+}
+
+/* --- App del concesionario (views/portal_templates.xml: portal_app_layout) --- */
+
+.o_pv_app_bar {
+    background: var(--pv-red-primary);
+    color: #fff;
+    padding: 10px 0;
+    // Con la app instalada en el celular, deja lugar a la barra de estado
+    padding-top: calc(10px + env(safe-area-inset-top));
+
+    a {
+        color: #fff;
+        text-decoration: none;
+    }
+}
+
+.o_pv_app_marca {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    font-size: 1.1rem;
+
+    img {
+        background: #fff;
+        border-radius: 6px;
+        padding: 2px;
+    }
+}
+
+.o_pv_app_concesionario {
+    color: rgba(255, 255, 255, 0.75);
+    font-size: 0.875rem;
+    min-width: 0;
+}
+
+/* Barra de pestañas fija abajo, solo en el celular */
+.o_pv_tabbar {
+    display: flex;
+    background: #fff;
+    border-top: 1px solid #e2e8f0;
+    padding-bottom: env(safe-area-inset-bottom);
+    box-shadow: 0 -2px 8px rgba(15, 23, 42, 0.06);
+}
+
+.o_pv_tab {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    height: var(--pv-tabbar-alto);
+    color: #64748b;
+    font-size: 0.75rem;
+    text-decoration: none;
+
+    .fa {
+        font-size: 1.25rem;
+    }
+
+    &.active {
+        color: var(--pv-red-primary);
+        font-weight: 600;
+    }
+}
+
+@media (max-width: 767.98px) {
+    // Que la barra de pestañas no tape el final de la página
+    .o_pv_app {
+        padding-bottom: calc(var(--pv-tabbar-alto) + env(safe-area-inset-bottom));
+    }
 }
 
 .pv-detail-grid {

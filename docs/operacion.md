@@ -79,6 +79,24 @@ crear una nueva en Google Cloud, pegarla en Ajustes y borrar la vieja.
 
 Mientras Drive no funcione, los videos ocupan disco en el servidor: vigilar el espacio si la caída dura días.
 
+## App en el celular
+
+El portal del concesionario (`/my/posventa`) se puede instalar como una app. Queda con su propio ícono, abre en
+pantalla completa sin la barra del navegador y en el celular muestra las secciones en una barra fija abajo. Es la
+misma página web: no hay que publicar nada en las tiendas de aplicaciones y se actualiza sola con cada despliegue.
+
+Para instalarla, el concesionario entra a `/my/posventa` desde el celular, inicia sesión y:
+
+- **Android (Chrome):** menú ⋮ → *Instalar app* (o *Agregar a la pantalla principal*).
+- **iPhone (Safari):** botón Compartir → *Agregar a inicio*.
+- **Computadora (Chrome o Edge):** ícono de instalar en la barra de direcciones.
+
+Necesita HTTPS, que en staging y producción ya está. No funciona sin conexión.
+
+La configuración está en `static/src/app/manifest.webmanifest` (nombre, colores, página de inicio) y los íconos en
+`static/src/img/app/`, generados a partir de `static/description/icon.svg`. El layout es `portal_app_layout`, en
+`views/portal_templates.xml`.
+
 ## Comandos frecuentes
 
 Opciones explicadas en [Línea de comandos](odoo.md#línea-de-comandos).

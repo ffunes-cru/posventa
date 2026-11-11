@@ -47,6 +47,8 @@ El primer despliegue instala el módulo y crea la base. Después:
 
 - [ ] Un concesionario recibe la invitación, entra a `/my/posventa` en el dominio de staging y ve solo sus
       máquinas.
+- [ ] Desde el celular, instala el portal como app (ver [Operación → App en el celular](operacion.md#app-en-el-celular))
+      y la abre desde el ícono.
 - [ ] Crea un reclamo con una foto y un video de más de 20 MB.
 - [ ] En el backend, el video pasa de *Sincronizando* a *Disponible* en menos de 5 minutos y el enlace abre el
       archivo en Drive, también desde el portal del concesionario.
