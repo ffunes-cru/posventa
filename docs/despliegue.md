@@ -11,23 +11,31 @@ de Odoo con rclone, nginx y el script de despliegue.
 flowchart LR
     A[push] --> B[tests<br/>runner de GitHub]
     B -->|master o<br/>Run workflow| C[staging<br/>automático]
-    C -->|tag vX.Y.Z<br/>pendiente| D[producción<br/>con aprobación]
+    B -->|tag vX.Y.Z<br/>sobre master| D[producción<br/>backup antes]
 ```
 
 1. Se trabaja en una branch y se pushea: GitHub corre los tests (`.github/workflows/ci.yml`).
 2. Para probar una branch antes de mergearla: *Actions → CI/CD → Run workflow*, elegir la branch. Se despliega en
    staging si pasan los tests.
 3. PR a `master`, que está protegida: solo acepta PRs con los tests en verde. Al mergear se despliega en staging.
-4. Las versiones estables son tags `vX.Y.Z` sobre `master`, iguales a la versión del manifest sin el prefijo de
-   Odoo: `v1.2.0` ↔ `19.0.1.2.0`. El despliegue a producción por tag está pendiente.
+4. **Producción**: un tag con la versión del manifest sobre un commit de `master`, con o sin el prefijo de Odoo:
+   `v1.2.0` o `v19.0.1.2.0` ↔ `19.0.1.2.0`. Se despliega si pasan los tests y el tag coincide con el manifest.
 
-El job de despliegue entra al VPS por SSH con una clave cuyo único comando posible es
-`servidor/scripts/desplegar.sh staging`. Le manda `posventa <commit>`. El script valida que el commit esté en
-una branch de este repo, copia el módulo y lo instala o actualiza. Si falla, restaura la versión anterior.
+   ```bash
+   # 1. Subir la versión en __manifest__.py en la PR; al mergear se despliega en staging
+   # 2. Probar en staging; después, el tag sobre ese commit de master
+   git tag v1.2.0 && git push origin v1.2.0
+   ```
 
-La clave y el destino se cargan en el environment `staging` de este repo, como se explica en el README del repo
-de infra (*Desde GitHub Actions*): secretos `STAGING_SSH_KEY` y `STAGING_KNOWN_HOSTS`, y variable
-`STAGING_SSH_DESTINO`.
+Cada job entra al VPS por SSH con una clave cuyo único comando posible es
+`servidor/scripts/desplegar.sh <entorno>` (comando forzado en `authorized_keys`). Le manda `posventa <commit>`.
+El script valida el commit (en producción, solo de `master`), hace un backup de la base si es producción, copia
+el módulo y lo instala o actualiza. Si falla, restaura la versión anterior.
+
+Las claves, el `known_hosts` y el destino son **secretos** de los environments `staging` y `produccion` de este
+repo (`STAGING_SSH_KEY`, `STAGING_KNOWN_HOSTS`, `STAGING_SSH_DESTINO` y los mismos con `PRODUCCION_`). El
+environment `produccion` solo acepta tags `v*`. Se cargan con `scripts/configurar_ci.sh` del repo de infra (ver
+su README).
 
 ## Primera vez en staging
 
@@ -63,5 +71,4 @@ Posventa ya está instalado en producción, con una versión anterior a la fase 
 1. Restaurar en staging una copia neutralizada de la base de producción. El procedimiento está en el README del
    repo de infra, en *Staging con datos reales*.
 2. Desplegar en staging la versión nueva sobre esa copia y recorrer la lista de *Probar*.
-3. Recién entonces, desplegar en producción con `scripts/desplegar.sh produccion posventa <commit>`, que hace un
-   backup antes. Solo acepta commits de `master`.
+3. Recién entonces, pushear el tag de la versión sobre ese commit de `master` (ver *Flujo*).

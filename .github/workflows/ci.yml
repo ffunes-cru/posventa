@@ -1,13 +1,18 @@
-# Tests en cada push y despliegue al staging del VPS.
+# Tests en cada push y despliegue al VPS (repo de infra ffunes-cru/servidor, privado):
 #
 # - tests: en un runner de GitHub, con las imágenes oficiales de Odoo 19 y PostgreSQL 16.
-# - desplegar: al staging del VPS, por SSH con una clave cuyo único comando posible es el script de
-#   despliegue del repo de infra (ffunes-cru/servidor, privado). Solo con push a master o a mano desde
-#   Actions → CI/CD → Run workflow (cualquier branch). Ver docs/despliegue.md.
+# - staging: push a la rama principal, o a mano desde Actions → CI/CD → Run workflow (cualquier rama).
+# - produccion: tag v<versión del manifiesto>, con o sin la serie de Odoo, sobre un commit de la rama principal
+#   (desplegar.sh rechaza cualquier otro). Ej.: git tag v1.2.0 && git push origin v1.2.0
+#
+# Los dos despliegues van por SSH con una clave cuyo único comando posible es scripts/desplegar.sh del repo
+# de infra, con el entorno fijo (comando forzado en authorized_keys). Ver docs/despliegue.md.
 name: CI/CD
 
 on:
   push:
+    branches: ['**']
+    tags: ['v*']
   workflow_dispatch:
 
 permissions:
@@ -56,23 +61,56 @@ jobs:
                 --test-tags=/posventa --stop-after-init --log-level=test
             '
 
-  desplegar:
+  staging:
     needs: tests
-    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/master'
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-latest
     environment: staging
     concurrency:
       group: desplegar-staging
       cancel-in-progress: false
     steps:
-      # La clave solo puede ejecutar scripts/desplegar.sh del repo de infra (comando forzado en authorized_keys)
       - name: Desplegar en staging por SSH
         env:
           SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
           KNOWN_HOSTS: ${{ secrets.STAGING_KNOWN_HOSTS }}
-          DESTINO: ${{ vars.STAGING_SSH_DESTINO }}
+          DESTINO: ${{ secrets.STAGING_SSH_DESTINO }}
         run: |
           install -m 700 -d ~/.ssh
-          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_staging && chmod 600 ~/.ssh/id_staging
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_deploy && chmod 600 ~/.ssh/id_deploy
           printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
-          ssh -i ~/.ssh/id_staging -o BatchMode=yes "$DESTINO" "posventa $GITHUB_SHA"
+          ssh -i ~/.ssh/id_deploy -o BatchMode=yes "$DESTINO" "posventa $GITHUB_SHA"
+
+  produccion:
+    needs: tests
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    environment: produccion
+    concurrency:
+      group: desplegar-produccion
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      # Con o sin la serie de Odoo: manifiesto 19.0.1.2.0 → tag v1.2.0 o v19.0.1.2.0
+      - name: El tag es la versión del manifiesto
+        run: |
+          read -r completa corta <<< "$(python3 -c "import ast
+          v = ast.literal_eval(open('__manifest__.py').read())['version']
+          p = v.split('.')
+          print(v, '.'.join(p[2:]) if len(p) == 5 else v)")"
+          case "$GITHUB_REF_NAME" in
+            "v$completa" | "v$corta") ;;
+            *) echo "::error::El tag $GITHUB_REF_NAME no es la versión del manifiesto (v$completa o v$corta)."; exit 1 ;;
+          esac
+      - name: Desplegar en producción por SSH
+        env:
+          SSH_KEY: ${{ secrets.PRODUCCION_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.PRODUCCION_KNOWN_HOSTS }}
+          DESTINO: ${{ secrets.PRODUCCION_SSH_DESTINO }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_deploy && chmod 600 ~/.ssh/id_deploy
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          ssh -i ~/.ssh/id_deploy -o BatchMode=yes "$DESTINO" "posventa $GITHUB_SHA"
