@@ -46,6 +46,17 @@ al portal* → marcar el contacto → *Otorgar acceso*. El contacto recibe el co
 grupos Portal y Concesionario (`wizard/portal_wizard.py`). Si la persona no figura, primero crearla como
 contacto de la empresa del concesionario.
 
+**"El correo ya es el usuario (login) de…":** en Odoo cada usuario entra con su correo como login, y no puede
+haber dos usuarios con el mismo, aunque uno esté archivado. La validación es de Odoo (módulo `portal`,
+`_assert_user_email_uniqueness`); posventa solo amplía el mensaje para decir qué usuario lo tiene: nombre, si es
+interno, portal o está archivado, de qué contacto es y de qué concesionario. Casos habituales:
+
+- **La misma persona cargada dos veces** (por ejemplo, en dos concesionarios o como contacto suelto): dar el acceso
+  desde el contacto que ya tiene el usuario o, si el usuario está archivado, reactivarlo (Ajustes → Usuarios,
+  filtro *Archivados*) y corregir su empresa.
+- **Un correo personal compartido**, o el de alguien de Crucianelli que ya es usuario interno: cargarle al
+  contacto otro correo.
+
 ## Lo que ve cada uno
 
 | | Concesionario | Staff | Admin |
