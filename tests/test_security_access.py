@@ -1,7 +1,7 @@
 # Part of Crucianelli Posventa Module
 from .common import TestPosventaCommon, DUMMY_PDF_BASE64
 from odoo import fields
-from odoo.exceptions import AccessError
+from odoo.exceptions import AccessError, UserError
 
 
 class TestSecurityAccess(TestPosventaCommon):
@@ -161,3 +161,25 @@ class TestSecurityAccess(TestPosventaCommon):
         linea_cliente = self.env['portal.wizard'].with_context(active_ids=cliente.ids).create({}).user_ids
         linea_cliente.action_grant_access()
         self.assertNotIn(self.group_concesionario, cliente.user_ids.all_group_ids)
+
+    def test_08_correo_ya_usado_dice_por_quien(self):
+        """Con un correo que ya es el login de otro usuario, el error dice quién lo usa, aunque esté archivado."""
+        anterior = self.env['res.partner'].create({
+            'name': 'Operador Anterior', 'email': 'repetido@example.com', 'parent_id': self.partner_conc_b.id,
+        })
+        usuario = self.env['res.users'].create({
+            'name': 'Operador Anterior', 'login': 'repetido@example.com', 'partner_id': anterior.id,
+            'group_ids': [(6, 0, [self.group_portal.id])],
+        })
+        usuario.active = False
+        contacto = self.env['res.partner'].create({
+            'name': 'Operador Nuevo', 'email': 'Repetido@example.com', 'parent_id': self.partner_conc_a.id,
+        })
+        action = self.concesionario_a.with_user(self.user_admin).action_gestionar_acceso_portal()
+        linea = self.env['portal.wizard'].browse(action['res_id']).user_ids.filtered(lambda u: u.partner_id == contacto)
+        with self.assertRaises(UserError) as error:
+            linea.with_user(self.user_admin).action_grant_access()
+        mensaje = str(error.exception)
+        for texto in ('Operador Nuevo', 'repetido@example.com', 'Operador Anterior (portal, archivado, concesionario',
+                      self.concesionario_b.name):
+            self.assertIn(texto, mensaje)
