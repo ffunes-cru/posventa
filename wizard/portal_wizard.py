@@ -14,6 +14,12 @@ class PortalWizardUser(models.TransientModel):
             self.user_id.sudo().write({'group_ids': [(4, self.env.ref('posventa.group_pv_concesionario').id)]})
         return res
 
+    def action_quien_usa_el_correo(self):
+        """Ícono rojo y botón "¿Quién lo usa?" del asistente: muestra el error con el usuario que tiene el correo."""
+        self.ensure_one()
+        self._assert_user_email_uniqueness()
+        return self.action_refresh_modal()
+
     def _assert_user_email_uniqueness(self):
         """El error de Odoo por correo repetido solo dice que hay "un usuario existente". Acá se dice cuál: su
         nombre, si es interno, portal o está archivado, de qué contacto es y de qué concesionario."""

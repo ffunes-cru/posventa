@@ -177,8 +177,10 @@ class TestSecurityAccess(TestPosventaCommon):
         })
         action = self.concesionario_a.with_user(self.user_admin).action_gestionar_acceso_portal()
         linea = self.env['portal.wizard'].browse(action['res_id']).user_ids.filtered(lambda u: u.partner_id == contacto)
+        # Odoo oculta "Otorgar acceso": el detalle sale del ícono rojo / botón "¿Quién lo usa?"
+        self.assertEqual(linea.email_state, 'exist')
         with self.assertRaises(UserError) as error:
-            linea.with_user(self.user_admin).action_grant_access()
+            linea.with_user(self.user_admin).action_quien_usa_el_correo()
         mensaje = str(error.exception)
         for texto in ('Operador Nuevo', 'repetido@example.com', 'Operador Anterior (portal, archivado, concesionario',
                       self.concesionario_b.name):
