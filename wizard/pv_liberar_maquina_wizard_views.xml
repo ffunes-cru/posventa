@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="pv_liberar_maquina_wizard_view_form" model="ir.ui.view">
+        <field name="name">pv.liberar.maquina.wizard.view.form</field>
+        <field name="model">pv.liberar.maquina.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Liberar Máquina">
+                <sheet>
+                    <div class="alert alert-warning mb-3" role="alert">
+                        La máquina vuelve a estado <strong>LIBERADA</strong>: sus certificados vigentes y vencidos se archivan
+                        y los plazos de carga se reinician desde hoy.
+                    </div>
+                    <group>
+                        <field name="maquina_id"/>
+                        <field name="liberacion_solicitante_id" invisible="not liberacion_solicitada"/>
+                        <field name="motivo" placeholder="Ej: canje de unidad, error de carga de certificados..."/>
+                    </group>
+                </sheet>
+                <footer>
+                    <button name="action_liberar" string="Liberar Máquina" type="object" class="btn-danger"/>
+                    <button string="Cancelar" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

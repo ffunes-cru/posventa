@@ -8,6 +8,7 @@
             <list string="Motivos de Rechazo" editable="bottom">
                 <field name="sequence" widget="handle"/>
                 <field name="name"/>
+                <field name="aplica_a"/>
                 <field name="color" widget="color_picker"/>
                 <field name="descripcion"/>
                 <field name="active"/>
@@ -28,6 +29,7 @@
                     </div>
                     <group>
                         <group>
+                            <field name="aplica_a" widget="radio"/>
                             <field name="color" widget="color_picker"/>
                             <field name="sequence"/>
                             <field name="active" widget="boolean_toggle"/>
@@ -41,10 +43,29 @@
         </field>
     </record>
 
+    <!-- Search View -->
+    <record id="pv_tipo_rechazo_view_search" model="ir.ui.view">
+        <field name="name">pv.tipo.rechazo.view.search</field>
+        <field name="model">pv.tipo.rechazo</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <filter string="Rechazo de Reclamo" name="aplica_reclamo" domain="[('aplica_a', '=', 'reclamo')]"/>
+                <filter string="Sin Cobertura de Garantía" name="aplica_garantia" domain="[('aplica_a', '=', 'garantia')]"/>
+                <separator/>
+                <filter string="Archivados" name="inactive" domain="[('active', '=', False)]"/>
+                <group>
+                    <filter string="Aplica a" name="group_aplica_a" context="{'group_by': 'aplica_a'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
     <!-- Action -->
     <record id="action_pv_tipo_rechazo" model="ir.actions.act_window">
         <field name="name">Motivos de Rechazo</field>
         <field name="res_model">pv.tipo.rechazo</field>
         <field name="view_mode">list,form</field>
+        <field name="context">{'search_default_group_aplica_a': 1}</field>
     </record>
 </odoo>

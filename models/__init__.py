@@ -1,6 +1,5 @@
 # Part of Crucianelli Posventa Module
 from . import pv_concesionario
-from . import pv_concesionario_contacto
 from . import pv_maquina
 from . import pv_certificado
 from . import pv_sistema
@@ -11,7 +10,6 @@ from . import pv_ticket
 from . import pv_ticket_campo_valor
 from . import pv_ticket_medida
 from . import pv_ticket_multimedia
-from . import pv_maquina_transfer
 from . import res_config_settings
 from . import pv_dashboard
 from . import pv_tipo_desvio

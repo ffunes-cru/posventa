@@ -111,10 +111,5 @@ class PvTicketMedida(models.Model):
         ])
         for medida in vencidas:
             medida.estado = 'vencida'
-            medida.ticket_id.message_post(
-                body=Markup(_('⚠️ Medida vencida: <b>%s</b> (Responsable: %s)')) % (
-                    escape(medida.name), escape(medida.responsable_id.name or 'Sin asignar')
-                ),
-                message_type='notification',
-                subtype_xmlid='mail.mt_note',
-            )
+            medida.ticket_id._message_log(body=Markup(_('⚠️ Medida vencida: <b>%s</b> (Responsable: %s)')) % (
+                escape(medida.name), escape(medida.responsable_id.name or 'Sin asignar')))

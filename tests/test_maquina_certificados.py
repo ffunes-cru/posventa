@@ -1,6 +1,6 @@
 # Part of Crucianelli Posventa Module
 from .common import TestPosventaCommon, DUMMY_PDF_BASE64
-from odoo.exceptions import ValidationError, UserError
+from odoo.exceptions import AccessError, ValidationError
 from odoo import fields
 from datetime import timedelta
 
@@ -123,8 +123,14 @@ class TestMaquinaCertificados(TestPosventaCommon):
         })
         self.assertEqual(maquina.estado, 'vendida')
 
-        # Concesionario performs action_liberar_maquina
-        maquina.with_user(self.user_concesionario_a).action_liberar_maquina()
+        # Concesionario requests liberation; only the admin can approve it
+        maquina.with_user(self.user_concesionario_a).action_solicitar_liberacion('Canje de unidad')
+        self.assertTrue(maquina.liberacion_solicitada)
+        self.assertEqual(maquina.estado, 'vendida')
+        with self.assertRaises(AccessError):
+            maquina.with_user(self.user_concesionario_a).action_aprobar_liberacion()
+        maquina.with_user(self.user_admin).action_aprobar_liberacion()
+        self.assertFalse(maquina.liberacion_solicitada)
 
         self.assertEqual(maquina.estado, 'liberada')
         self.assertFalse(maquina.tiene_fru)
@@ -164,7 +170,7 @@ class TestMaquinaCertificados(TestPosventaCommon):
             'archivo': DUMMY_PDF_BASE64,
             'archivo_nombre': 'fru_exp.pdf',
         })
-        self.assertTrue(fru_expirable.fecha_limite_vigencia < today)
+        self.assertTrue(fru_expirable.fecha_vencimiento < today)
 
         # Machine 2: With CPM, released 30 days ago -> FRU should NOT expire because CPM is active
         maquina_con_cpm = self.env['pv.maquina'].create({
@@ -195,7 +201,7 @@ class TestMaquinaCertificados(TestPosventaCommon):
             'archivo_nombre': 'cpm.pdf',
         })
         self.assertFalse(cpm.fecha_vencimiento)
-        self.assertFalse(cpm.fecha_limite_vigencia)
+        self.assertFalse(cpm.fecha_vencimiento)
         self.assertEqual(maquina_con_cpm.estado, 'vendida')
 
         # Run cron
@@ -233,8 +239,7 @@ class TestMaquinaCertificados(TestPosventaCommon):
             self.env['pv.ticket'].create({
                 'maquina_id': maquina.id,
                 'certificado_id': fru.id,
-                'tipo_ticket': 'pre_pm',
-                'desvio_tipo': 'rotura',
+                'desvio_tipo_id': self.desvio_rotura.id,
                 'descripcion': 'Test error con certificado vencido',
             })
 
@@ -256,7 +261,7 @@ class TestMaquinaCertificados(TestPosventaCommon):
             'concesionario_id': self.concesionario_a.id,
         })
         today = fields.Date.today()
-        fru = self.env['pv.certificado'].create({
+        self.env['pv.certificado'].create({
             'maquina_id': maquina.id,
             'tipo': 'fru',
             'fecha': today,
@@ -275,14 +280,13 @@ class TestMaquinaCertificados(TestPosventaCommon):
             'archivo_nombre': 'feu_1.pdf',
         })
         self.assertEqual(feu_1.estado_certificado, 'vigente')
-        self.assertEqual(feu_1.fecha_limite_vigencia, today + timedelta(days=validity_days))
+        self.assertEqual(feu_1.fecha_vencimiento, today + timedelta(days=validity_days))
 
         # Can create ticket with FEU 1
         ticket = self.env['pv.ticket'].create({
             'maquina_id': maquina.id,
             'certificado_id': feu_1.id,
-            'tipo_ticket': 'pre_pm',
-            'desvio_tipo': 'rotura',
+            'desvio_tipo_id': self.desvio_rotura.id,
             'descripcion': 'Reclamo sobre FEU 1',
         })
         self.assertEqual(ticket.estado, 'borrador')
@@ -295,8 +299,7 @@ class TestMaquinaCertificados(TestPosventaCommon):
             self.env['pv.ticket'].create({
                 'maquina_id': maquina.id,
                 'certificado_id': feu_1.id,
-                'tipo_ticket': 'pre_pm',
-                'desvio_tipo': 'rotura',
+                'desvio_tipo_id': self.desvio_rotura.id,
                 'descripcion': 'Reclamo sobre FEU vencido',
             })
 
@@ -309,14 +312,13 @@ class TestMaquinaCertificados(TestPosventaCommon):
             'archivo_nombre': 'feu_2_renovado.pdf',
         })
         self.assertEqual(feu_2.estado_certificado, 'vigente')
-        self.assertEqual(feu_2.fecha_limite_vigencia, today + timedelta(days=validity_days))
+        self.assertEqual(feu_2.fecha_vencimiento, today + timedelta(days=validity_days))
 
         # Now can create tickets again with renewed FEU 2
         ticket_2 = self.env['pv.ticket'].create({
             'maquina_id': maquina.id,
             'certificado_id': feu_2.id,
-            'tipo_ticket': 'pre_pm',
-            'desvio_tipo': 'rotura',
+            'desvio_tipo_id': self.desvio_rotura.id,
             'descripcion': 'Reclamo sobre FEU 2 renovado',
         })
         self.assertEqual(ticket_2.estado, 'borrador')

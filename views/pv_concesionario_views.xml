@@ -8,7 +8,6 @@
             <list string="Concesionarios">
                 <field name="name"/>
                 <field name="partner_id"/>
-                <field name="user_id"/>
                 <field name="email"/>
                 <field name="phone"/>
                 <field name="city"/>
@@ -25,6 +24,9 @@
         <field name="model">pv.concesionario</field>
         <field name="arch" type="xml">
             <form string="Concesionario">
+                <header>
+                    <button name="action_gestionar_acceso_portal" string="Gestionar Acceso al Portal" type="object" class="oe_highlight" icon="fa-key"/>
+                </header>
                 <sheet>
                     <div class="oe_button_box" name="button_box">
                         <button name="action_view_maquinas" type="object" class="oe_stat_button" icon="fa-cubes">
@@ -43,7 +45,6 @@
                     <group>
                         <group string="Asociaciones">
                             <field name="partner_id"/>
-                            <field name="user_id"/>
                         </group>
                         <group string="Contacto">
                             <field name="email"/>
@@ -60,17 +61,7 @@
                                     <field name="function" string="Puesto / Cargo"/>
                                     <field name="phone"/>
                                     <field name="email"/>
-                                    <field name="user_ids" widget="many2many_tags" string="Usuarios"/>
-                                </list>
-                            </field>
-                        </page>
-                        <page string="Personal Histórico" name="personal_legacy" invisible="not contacto_ids">
-                            <field name="contacto_ids" mode="list">
-                                <list editable="bottom">
-                                    <field name="name"/>
-                                    <field name="cargo"/>
-                                    <field name="telefono"/>
-                                    <field name="email"/>
+                                    <field name="user_ids" widget="many2many_tags" string="Usuario del Portal" readonly="1"/>
                                 </list>
                             </field>
                         </page>
@@ -91,7 +82,6 @@
                 <field name="partner_id"/>
                 <field name="city"/>
                 <field name="state_id"/>
-                <filter string="Con login" name="has_user" domain="[('user_id', '!=', False)]"/>
                 <filter string="Archivados" name="inactive" domain="[('active', '=', False)]"/>
             </search>
         </field>

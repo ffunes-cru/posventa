@@ -1,1 +1,4 @@
 __.*/
+__pycache__/
+*.pyc
+docs/_doxygen/

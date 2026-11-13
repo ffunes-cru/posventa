@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<odoo>
-    <!-- Client Action for OWL Concesionario Portal -->
-    <record id="action_pv_portal_concesionario" model="ir.actions.client">
-        <field name="name">Portal Concesionario</field>
-        <field name="tag">pv_portal_concesionario</field>
-        <field name="target">current</field>
-    </record>
-</odoo>

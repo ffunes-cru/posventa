@@ -1,0 +1,553 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <t t-name="posventa.TicketWizard">
+        <div class="pv-wizard-container">
+            <!-- Stepper Header -->
+            <div class="pv-wizard-stepper">
+                <t t-foreach="steps" t-as="stepObj" t-key="stepObj.key">
+                    <div class="pv-wizard-step">
+                        <div class="pv-step-circle" t-att-class="{
+                            'active': state.currentStepIndex === stepObj_index,
+                            'completed': state.currentStepIndex > stepObj_index
+                        }">
+                            <t t-if="state.currentStepIndex > stepObj_index">
+                                <i class="fa fa-check"/>
+                            </t>
+                            <t t-else="">
+                                <t t-esc="stepObj_index + 1"/>
+                            </t>
+                        </div>
+                        <span class="pv-step-label" t-att-class="{
+                            'active': state.currentStepIndex === stepObj_index,
+                            'completed': state.currentStepIndex > stepObj_index
+                        }">
+                            <t t-esc="stepObj.label"/>
+                        </span>
+                        <t t-if="stepObj_index &lt; steps.length - 1">
+                            <div class="pv-step-connector" t-att-class="{
+                                'completed': state.currentStepIndex > stepObj_index
+                            }"/>
+                        </t>
+                    </div>
+                </t>
+            </div>
+
+            <!-- Step Content -->
+            <div class="pv-wizard-content">
+                <!-- STEP: Machine & Certificate -->
+                <t t-if="currentStepKey === 'machine'">
+                    <h3><i class="fa fa-cogs text-primary me-2"/> Máquina y Certificado Asociado</h3>
+                    <t t-if="borradoresExistentes.length">
+                        <div class="alert alert-warning" role="alert">
+                            <i class="fa fa-exclamation-triangle me-1"/>
+                            Esta máquina ya tiene <strong t-esc="borradoresExistentes.length"/> ticket(s) en Borrador
+                            (<t t-esc="borradoresExistentes.map(t => t.name).join(', ')"/>). Si es el mismo reclamo,
+                            complételo y envíelo desde el detalle de la máquina en lugar de crear uno nuevo.
+                        </div>
+                    </t>
+                    <p class="text-muted">Verifique los datos de la máquina y seleccione el certificado vigente al cual corresponderá este reclamo:</p>
+
+                    <div class="pv-detail-grid mb-4">
+                        <div class="pv-detail-field">
+                            <span class="pv-df-label">Orden de Fabricación (OF)</span>
+                            <span class="pv-df-value" t-esc="props.maquina.of"/>
+                        </div>
+                        <div class="pv-detail-field">
+                            <span class="pv-df-label">Tipo de Máquina</span>
+                            <span class="pv-df-value" t-esc="props.maquina.tipo_label"/>
+                        </div>
+                        <div class="pv-detail-field">
+                            <span class="pv-df-label">Cliente</span>
+                            <span class="pv-df-value" t-esc="props.maquina.cliente || 'Sin cliente asignado'"/>
+                        </div>
+                        <div class="pv-detail-field">
+                            <span class="pv-df-label">Tipo de Reclamo Detectado</span>
+                            <span class="pv-df-value fw-bold text-primary">
+                                <t t-if="state.tipoTicket === 'post_pm'">Post Puesta en Marcha (CPM Activo)</t>
+                                <t t-else="">Pre Puesta en Marcha (En proceso de entrega)</t>
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Certificate Selector -->
+                    <div class="card border rounded-3 p-3 bg-light">
+                        <label class="fw-bold mb-2 text-dark">
+                            <i class="fa fa-certificate text-danger me-1"/> Seleccionar Certificado Asociado <span class="text-danger">*</span>
+                        </label>
+
+                        <t t-if="availableCertificates.length &gt; 0">
+                            <div class="d-flex flex-column gap-2">
+                                <t t-foreach="availableCertificates" t-as="cert" t-key="cert.id">
+                                    <label class="border rounded-3 p-3 bg-white d-flex align-items-center justify-content-between cursor-pointer"
+                                           t-att-class="{'border-danger shadow-sm': state.certificadoId === cert.id}">
+                                        <div class="d-flex align-items-center">
+                                            <input type="radio" name="certificadoSelector" class="form-check-input me-3"
+                                                   t-att-value="cert.id"
+                                                   t-att-checked="state.certificadoId === cert.id"
+                                                   t-on-change="() => state.certificadoId = cert.id"/>
+                                            <div>
+                                                <div class="fw-bold text-dark"><t t-esc="cert.tipo_label"/></div>
+                                                <div class="text-muted small">
+                                                    <span>Fecha de Emisión: <t t-esc="cert.fecha || '-'"/></span>
+                                                    <t t-if="cert.concesionario_name">
+                                                        <span class="ms-2">| Emisor: <t t-esc="cert.concesionario_name"/></span>
+                                                    </t>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <span class="badge bg-success">Vigente</span>
+                                            <t t-if="cert.fecha_vencimiento">
+                                                <span class="badge bg-info text-dark ms-1">
+                                                    Vence: <t t-esc="cert.fecha_vencimiento"/>
+                                                </span>
+                                            </t>
+                                        </div>
+                                    </label>
+                                </t>
+                            </div>
+                        </t>
+                        <t t-else="">
+                            <div class="alert alert-warning mb-0">
+                                <i class="fa fa-exclamation-triangle me-2"/>
+                                <strong>Atención:</strong> Esta máquina no posee certificados vigentes para el tipo de reclamo seleccionado. No se pueden crear tickets sobre certificados vencidos o no cargados.
+                            </div>
+                        </t>
+                    </div>
+                </t>
+
+                <!-- STEP: Classification -->
+                <t t-if="currentStepKey === 'classification'">
+                    <h3><i class="fa fa-tags text-primary me-2"/> Clasificación del Reclamo</h3>
+
+                    <t t-if="state.tipoTicket === 'post_pm'">
+                        <div class="pv-form-group">
+                            <label>Sistema Involucrado <span class="required">*</span></label>
+                            <select class="pv-form-select" t-on-change="onSistemaChange">
+                                <option value="">-- Seleccione un Sistema --</option>
+                                <t t-foreach="state.sistemas" t-as="sis" t-key="sis.id">
+                                    <option t-att-value="sis.id" t-att-selected="state.sistemaId === sis.id">
+                                        <t t-esc="sis.name"/>
+                                    </option>
+                                </t>
+                            </select>
+                        </div>
+
+                        <t t-if="state.sistemaId">
+                            <div class="pv-form-group">
+                                <label>Subsistema Involucrado <span class="required">*</span></label>
+                                <select class="pv-form-select" t-on-change="onSubsistemaChange">
+                                    <option value="">-- Seleccione un Subsistema --</option>
+                                    <t t-foreach="state.subsistemas" t-as="sub" t-key="sub.id">
+                                        <option t-att-value="sub.id" t-att-selected="state.subsistemaId === sub.id">
+                                            <t t-esc="sub.name"/>
+                                        </option>
+                                    </t>
+                                </select>
+                            </div>
+                        </t>
+
+                        <t t-if="state.subsistemaId">
+                            <div class="pv-form-group">
+                                <label>Problema Catalogado <span class="required">*</span></label>
+                                <select class="pv-form-select" t-model="state.problemaId">
+                                    <option value="">-- Seleccione un Problema --</option>
+                                    <t t-foreach="state.problemas" t-as="prob" t-key="prob.id">
+                                        <option t-att-value="prob.id"><t t-esc="prob.name"/></option>
+                                    </t>
+                                    <option t-att-value="problemaNoListadoValue">Otro / no está en la lista</option>
+                                </select>
+                                <t t-if="state.problemaId === problemaNoListadoValue">
+                                    <small class="text-muted">Detalle el problema en la descripción del reclamo.</small>
+                                </t>
+                            </div>
+                        </t>
+
+                        <div class="row">
+                            <div class="col-md-6 pv-form-group">
+                                <label>Ubicación Actual</label>
+                                <input type="text" class="pv-form-input" placeholder="Ciudad / Establecimiento / Campo..." t-model="state.ubicacionActual"/>
+                            </div>
+                            <div class="col-md-6 pv-form-group">
+                                <label>Hectáreas Trabajadas <span class="required">*</span></label>
+                                <input type="number" class="pv-form-input" min="0" step="any" placeholder="Ej: 350" t-model="state.hectareas"/>
+                            </div>
+                        </div>
+                    </t>
+
+                    <t t-else="">
+                        <!-- Pre PM -->
+                        <div class="pv-form-group">
+                            <label>Tipo de Desvío <span class="required">*</span></label>
+                            <select class="pv-form-select" t-on-change="onDesvioTipoChange">
+                                <t t-foreach="state.tiposDesvio" t-as="td" t-key="td.id">
+                                    <option t-att-value="td.id" t-att-selected="state.desvioTipoId === td.id" t-esc="td.name"/>
+                                </t>
+                            </select>
+                        </div>
+                    </t>
+                </t>
+
+                <!-- STEP: Dynamic Extra Fields -->
+                <t t-if="currentStepKey === 'extra_fields'">
+                    <h3><i class="fa fa-list-alt text-primary me-2"/> Información Dinámica del Subsistema</h3>
+                    <p class="text-muted">Por favor complete la siguiente información requerida para este subsistema:</p>
+
+                    <t t-foreach="state.camposExtras" t-as="campo" t-key="campo.id">
+                        <div class="pv-form-group">
+                            <label>
+                                <t t-esc="campo.name"/>
+                                <t t-if="campo.obligatorio"><span class="required"> *</span></t>
+                            </label>
+
+                            <!-- Texto -->
+                            <t t-if="campo.tipo_campo === 'texto'">
+                                <input type="text" class="pv-form-input"
+                                    t-att-value="state.camposValues[campo.id] || ''"
+                                    t-on-input="(ev) => this.setCampoValue(campo.id, ev.target.value)"/>
+                            </t>
+
+                            <!-- Número -->
+                            <t t-if="campo.tipo_campo === 'numero'">
+                                <input type="number" class="pv-form-input"
+                                    t-att-value="state.camposValues[campo.id] || ''"
+                                    t-on-input="(ev) => this.setCampoValue(campo.id, ev.target.value)"/>
+                            </t>
+
+                            <!-- Selección -->
+                            <t t-if="campo.tipo_campo === 'seleccion'">
+                                <select class="pv-form-select"
+                                    t-on-change="(ev) => this.setCampoValue(campo.id, ev.target.value)">
+                                    <option value="">-- Seleccione una opción --</option>
+                                    <t t-foreach="campo.opciones" t-as="opc" t-key="opc">
+                                        <option t-att-value="opc" t-att-selected="state.camposValues[campo.id] === opc">
+                                            <t t-esc="opc"/>
+                                        </option>
+                                    </t>
+                                </select>
+                            </t>
+
+                            <!-- Booleano -->
+                            <t t-if="campo.tipo_campo === 'booleano'">
+                                <select class="pv-form-select"
+                                    t-on-change="(ev) => this.setCampoValue(campo.id, ev.target.value)">
+                                    <option value="true" t-att-selected="state.camposValues[campo.id] === 'true'">Sí</option>
+                                    <option value="false" t-att-selected="state.camposValues[campo.id] === 'false' or !state.camposValues[campo.id]">No</option>
+                                </select>
+                            </t>
+                        </div>
+                    </t>
+                </t>
+
+                <!-- STEP: Description, Photos & Attachments -->
+                <t t-if="currentStepKey === 'description'">
+                    <h3><i class="fa fa-pencil-square-o text-primary me-2"/> Detalles y Adjuntos del Reclamo</h3>
+
+                    <t t-if="state.placeholderDescripcion">
+                        <div class="alert alert-info py-2 px-3 mb-3 small">
+                            <i class="fa fa-info-circle me-1"/> <strong>Guía de ayuda:</strong> <t t-esc="state.placeholderDescripcion"/>
+                        </div>
+                    </t>
+
+                    <div class="pv-form-group">
+                        <label>Descripción del Problema <span class="required">*</span></label>
+                        <textarea class="pv-form-textarea" placeholder="Describa detalladamente el problema o falla observada..." t-model="state.descripcion"/>
+                    </div>
+
+                    <div class="pv-form-group">
+                        <label>Acciones Realizadas por el Concesionario</label>
+                        <textarea class="pv-form-textarea" placeholder="Indique qué acciones preliminares o pruebas ha realizado en la máquina..." t-model="state.accionesRealizadas"/>
+                    </div>
+
+                    <!-- Direct File Attachments (Odoo Standard Storage Mode) -->
+                    <t t-if="state.storageMode === 'odoo'">
+                        <div class="pv-form-group border rounded-3 p-3 bg-light">
+                            <label class="fw-bold mb-1"><i class="fa fa-paperclip me-1 text-primary"/> Adjuntar Archivos / Fotos de la Problemática <span class="required">*</span></label>
+                            <p class="text-muted small mb-2">Suba imágenes o videos donde se aprecie claramente la problemática técnica observada (Requerido para enviar):</p>
+                            
+                            <input type="file" multiple="multiple" class="form-control mb-2" t-on-change="onFilesChange" accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx"/>
+
+                            <t t-if="state.attachments.length &gt; 0">
+                                <div class="d-flex flex-wrap gap-2 mt-2">
+                                    <t t-foreach="state.attachments" t-as="att" t-key="att_index">
+                                        <div class="badge bg-white text-dark border p-2 d-flex align-items-center">
+                                            <i class="fa fa-file me-2 text-secondary"/>
+                                            <span class="me-2 text-truncate" style="max-width: 180px;" t-esc="att.name"/>
+                                            <span class="text-muted small me-2">(<t t-esc="formatFileSize(att.size)"/>)</span>
+                                            <button type="button" class="btn-close btn-close-sm" t-on-click="() => this.removeAttachment(att_index)" style="font-size: 8px;"/>
+                                        </div>
+                                    </t>
+                                </div>
+                            </t>
+                        </div>
+                    </t>
+
+                    <!-- Heavy Files / Diagnostic Videos (Google Drive Storage Mode) -->
+                    <t t-else="">
+                        <div class="pv-form-group border border-primary border-opacity-25 rounded-3 p-3 bg-white shadow-sm">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label class="fw-bold mb-0 text-primary">
+                                    <i class="fa fa-cloud-upload me-1"/> Videos de Diagnóstico y Fotos de la Problemática (Google Drive) <span class="required">*</span>
+                                </label>
+                                <span class="badge bg-primary text-white small">
+                                    <i class="fa fa-google me-1"/> Google Drive
+                                </span>
+                            </div>
+                            <p class="text-muted small mb-2">
+                                Adjunte videos de diagnóstico, imágenes o registros donde se observe la falla técnica (Requerido para enviar). Se sincronizarán automáticamente con Google Drive:
+                            </p>
+                            
+                            <input type="file" multiple="multiple" class="form-control mb-2" t-on-change="onHeavyFilesChange" accept="video/*,image/*,.mp4,.mov,.avi,.mkv,.zip,.rar,.tar,.gz"/>
+
+                            <t t-if="state.heavyFiles.length &gt; 0">
+                                <div class="d-flex flex-column gap-2 mt-2">
+                                    <t t-foreach="state.heavyFiles" t-as="hf" t-key="hf_index">
+                                        <div class="border rounded p-2 bg-light d-flex justify-content-between align-items-center">
+                                            <div class="d-flex align-items-center text-truncate me-2">
+                                                <i class="fa fa-video-camera me-2 text-primary fs-5"/>
+                                                <div>
+                                                    <strong class="d-block text-truncate" style="max-width: 250px;" t-esc="hf.name"/>
+                                                    <small class="text-muted"><t t-esc="formatFileSize(hf.size)"/> • Preparado para Google Drive</small>
+                                                </div>
+                                            </div>
+                                            <button type="button" class="btn btn-sm btn-outline-danger" t-on-click="() => this.removeHeavyFile(hf_index)" title="Quitar archivo">
+                                                <i class="fa fa-trash"/>
+                                            </button>
+                                        </div>
+                                    </t>
+                                </div>
+                            </t>
+                        </div>
+                    </t>
+
+                    <div class="pv-form-group">
+                        <label>Enlace Multimedia Adicional (Google Drive / Fotos / Videos)</label>
+                        <input type="url" class="pv-form-input" placeholder="https://drive.google.com/drive/folders/..." t-model="state.multimediaUrl"/>
+                        <span class="text-muted small">Copie y pegue aquí un enlace a carpeta externa si los archivos superan el tamaño máximo.</span>
+                    </div>
+                </t>
+
+                <!-- STEP: Review & Summary -->
+                <t t-if="currentStepKey === 'summary'">
+                    <h3><i class="fa fa-check-circle text-success me-2"/> Resumen Final del Ticket</h3>
+                    <p class="text-muted">Por favor revise la totalidad de los datos ingresados antes de crear el ticket:</p>
+
+                    <div class="pv-detail-grid mb-3 p-3 bg-light rounded border">
+                        <div class="pv-detail-field">
+                            <span class="pv-df-label">Orden de Fabricación (OF)</span>
+                            <span class="pv-df-value" t-esc="props.maquina.of"/>
+                        </div>
+                        <div class="pv-detail-field">
+                            <span class="pv-df-label">Tipo de Máquina</span>
+                            <span class="pv-df-value" t-esc="props.maquina.tipo_label"/>
+                        </div>
+                        <div class="pv-detail-field">
+                            <span class="pv-df-label">Certificado Asociado</span>
+                            <span class="pv-df-value text-danger fw-bold">
+                                <t t-if="selectedCertificado">
+                                    <t t-esc="selectedCertificado.tipo_label"/>
+                                </t>
+                                <t t-else="">-</t>
+                            </span>
+                        </div>
+                        <div class="pv-detail-field">
+                            <span class="pv-df-label">Tipo de Ticket</span>
+                            <span class="pv-df-value text-primary font-weight-bold">
+                                <t t-if="state.tipoTicket === 'post_pm'">Post Puesta en Marcha</t>
+                                <t t-else="">Pre Puesta en Marcha</t>
+                            </span>
+                        </div>
+
+                        <t t-if="state.tipoTicket === 'post_pm'">
+                            <div class="pv-detail-field">
+                                <span class="pv-df-label">Sistema</span>
+                                <span class="pv-df-value" t-esc="selectedSistemaName || '-'"/>
+                            </div>
+                            <div class="pv-detail-field">
+                                <span class="pv-df-label">Subsistema</span>
+                                <span class="pv-df-value" t-esc="selectedSubsistemaName || '-'"/>
+                            </div>
+                            <t t-if="selectedProblemaName">
+                                <div class="pv-detail-field">
+                                    <span class="pv-df-label">Problema</span>
+                                    <span class="pv-df-value" t-esc="selectedProblemaName"/>
+                                </div>
+                            </t>
+                            <t t-if="state.ubicacionActual">
+                                <div class="pv-detail-field">
+                                    <span class="pv-df-label">Ubicación</span>
+                                    <span class="pv-df-value" t-esc="state.ubicacionActual"/>
+                                </div>
+                            </t>
+                            <t t-if="state.hectareas">
+                                <div class="pv-detail-field">
+                                    <span class="pv-df-label">Hectáreas</span>
+                                    <span class="pv-df-value" t-esc="state.hectareas"/>
+                                </div>
+                            </t>
+                        </t>
+                        <t t-else="">
+                            <div class="pv-detail-field">
+                                <span class="pv-df-label">Tipo de Desvío</span>
+                                <span class="pv-df-value" t-esc="desvioTipoLabel"/>
+                            </div>
+                        </t>
+                    </div>
+
+                    <!-- Display Dynamic Extra Fields Entered -->
+                    <t t-if="state.camposExtras.length &gt; 0">
+                        <div class="mb-3 p-3 bg-light rounded border">
+                            <h6 class="fw-bold mb-2 text-primary">Información Adicional del Subsistema:</h6>
+                            <div class="row">
+                                <t t-foreach="state.camposExtras" t-as="c" t-key="c.id">
+                                    <div class="col-md-6 mb-2">
+                                        <span class="text-muted small d-block" t-esc="c.name"/>
+                                        <strong t-esc="state.camposValues[c.id] || '-'"/>
+                                    </div>
+                                </t>
+                            </div>
+                        </div>
+                    </t>
+
+                    <div class="pv-form-group mb-3">
+                        <label class="fw-bold">Descripción del Reclamo:</label>
+                        <div class="p-3 bg-white rounded border text-break" t-esc="state.descripcion"/>
+                    </div>
+
+                    <t t-if="state.accionesRealizadas">
+                        <div class="pv-form-group mb-3">
+                            <label class="fw-bold">Acciones Realizadas por el Concesionario:</label>
+                            <div class="p-3 bg-white rounded border text-break" t-esc="state.accionesRealizadas"/>
+                        </div>
+                    </t>
+
+                    <t t-if="state.attachments.length &gt; 0">
+                        <div class="pv-form-group mb-3">
+                            <label class="fw-bold">Archivos Adjuntos a Cargar:</label>
+                            <div class="d-flex flex-wrap gap-2 p-2 bg-white rounded border">
+                                <t t-foreach="state.attachments" t-as="att" t-key="att_index">
+                                    <span class="badge bg-light text-dark border p-2">
+                                        <i class="fa fa-file me-1 text-primary"/> <t t-esc="att.name"/> (<t t-esc="formatFileSize(att.size)"/>)
+                                    </span>
+                                </t>
+                            </div>
+                        </div>
+                    </t>
+
+                    <t t-if="state.heavyFiles.length &gt; 0">
+                        <div class="pv-form-group mb-3">
+                            <label class="fw-bold text-primary"><i class="fa fa-cloud-upload me-1"/> Videos / Archivos Pesados (Google Drive):</label>
+                            <div class="d-flex flex-wrap gap-2 mt-1">
+                                <t t-foreach="state.heavyFiles" t-as="hf" t-key="hf_index">
+                                    <span class="badge bg-primary text-white p-2">
+                                        <i class="fa fa-video-camera me-1"/> <t t-esc="hf.name"/> (<t t-esc="formatFileSize(hf.size)"/>)
+                                    </span>
+                                </t>
+                            </div>
+                        </div>
+                    </t>
+
+                    <t t-if="state.multimediaUrl">
+                        <div class="pv-form-group mb-3">
+                            <label class="fw-bold">Multimedia (Google Drive):</label>
+                            <div class="p-2 bg-white rounded border">
+                                <a t-att-href="state.multimediaUrl" target="_blank" class="text-primary font-weight-bold" t-esc="state.multimediaUrl"/>
+                            </div>
+                        </div>
+                    </t>
+                </t>
+
+                <!-- Heavy File Upload In-Progress Banner -->
+                <t t-if="state.isUploadingHeavy">
+                    <div class="alert alert-info border-start border-4 border-info shadow-sm p-3 mt-3 mb-2 rounded-3">
+                        <div class="d-flex align-items-center mb-2">
+                            <div class="spinner-border spinner-border-sm text-info me-2" role="status"/>
+                            <strong class="text-dark" t-esc="state.uploadProgressText || 'Transfiriendo archivos pesados a Google Drive...'"/>
+                        </div>
+                        <div class="progress" style="height: 10px;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated bg-info" style="width: 100%;"/>
+                        </div>
+                        <small class="text-muted mt-2 d-block"><i class="fa fa-info-circle me-1"/> La subida se transmite en bloques seguros. Por favor no cierre el navegador hasta que finalice.</small>
+                    </div>
+                </t>
+
+                <!-- Heavy File Upload Error & Decision Panel -->
+                <t t-if="state.uploadError">
+                    <div class="alert alert-danger border-start border-4 border-danger shadow p-4 mt-3 mb-2 rounded-3">
+                        <div class="d-flex align-items-start mb-3">
+                            <i class="fa fa-exclamation-triangle fa-2x text-danger me-3 mt-1"/>
+                            <div>
+                                <h5 class="alert-heading text-danger fw-bold mb-1">
+                                    Inconveniente al subir un archivo
+                                </h5>
+                                <div class="text-dark">
+                                    No se pudo transferir: <strong t-esc="state.uploadError.filename"/>
+                                </div>
+                                <div class="text-muted small mt-1">
+                                    Detalle: <span t-esc="state.uploadError.error"/>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="alert alert-warning py-2 px-3 small mb-3 border">
+                            <i class="fa fa-shield me-1"/> 
+                            <strong>Tranquilidad:</strong> Los datos del reclamo ya quedaron registrados en el sistema en estado <strong>Borrador</strong> para no perder lo ingresado.
+                        </div>
+                        <p class="fw-bold mb-2 text-dark">¿Cómo desea continuar?</p>
+                        <div class="d-flex flex-wrap gap-2">
+                            <button type="button" class="btn btn-primary" t-att-disabled="state.submitting" t-on-click="() => this.retryUpload()">
+                                <i class="fa fa-refresh me-1"/> Reintentar Subida
+                            </button>
+                            <button type="button" class="btn btn-warning text-dark fw-bold" t-att-disabled="state.submitting" t-on-click="() => this.proceedWithoutFailedFile()">
+                                <i class="fa fa-paper-plane me-1"/> Continuar y Enviar Reclamo (sin este archivo)
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" t-att-disabled="state.submitting" t-on-click="() => this.keepInDraft()">
+                                <i class="fa fa-save me-1"/> Dejar en Borrador (adjuntar después)
+                            </button>
+                        </div>
+                    </div>
+                </t>
+            </div>
+
+            <!-- Wizard Footer Buttons -->
+            <div class="pv-wizard-footer">
+                <t t-if="!state.uploadError">
+                    <div>
+                        <t t-if="state.currentStepIndex &gt; 0">
+                            <button class="pv-btn pv-btn-secondary" t-on-click="() => this.prevStep()">
+                                <i class="fa fa-arrow-left"/> Anterior
+                            </button>
+                        </t>
+                        <t t-else="">
+                            <button class="pv-btn pv-btn-secondary" t-on-click="props.onClose">
+                                Cancelar
+                            </button>
+                        </t>
+                    </div>
+
+                    <div>
+                        <t t-if="state.currentStepIndex &lt; steps.length - 1">
+                            <button class="pv-btn pv-btn-primary" t-on-click="() => this.nextStep()">
+                                Siguiente <i class="fa fa-arrow-right"/>
+                            </button>
+                        </t>
+                        <t t-else="">
+                            <button class="pv-btn pv-btn-secondary me-2" t-att-disabled="state.submitting" t-on-click="() => this.submitTicket(false)">
+                                <i class="fa fa-save"/> Guardar en Borrador
+                            </button>
+                            <button class="pv-btn pv-btn-success" t-att-disabled="state.submitting" t-on-click="() => this.submitTicket(true)">
+                                <i class="fa fa-paper-plane"/> Guardar y Enviar Ticket
+                            </button>
+                        </t>
+                    </div>
+                </t>
+                <t t-else="">
+                    <div class="w-100 text-end text-muted small py-1">
+                        <i class="fa fa-info-circle me-1"/> Elija una de las opciones del cuadro superior para resolver la subida.
+                    </div>
+                </t>
+            </div>
+        </div>
+    </t>
+
+</templates>

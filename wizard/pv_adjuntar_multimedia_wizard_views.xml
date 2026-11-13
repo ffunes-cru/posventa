@@ -16,10 +16,7 @@
                     <group invisible="tipo_carga != 'archivo'">
                         <field name="chunk_file_uploader" widget="pv_multimedia_chunk_uploader" nolabel="1"/>
                         <field name="uploaded_multimedia_id" invisible="1"/>
-                        <field name="uploaded_multimedia_id_int" invisible="1"/>
                         <field name="name" placeholder="Título o descripción opcional (por defecto toma el nombre del archivo)"/>
-                        <field name="file" invisible="1"/>
-                        <field name="filename" invisible="1"/>
                     </group>
                     <group invisible="tipo_carga != 'enlace_drive'">
                         <field name="name" placeholder="Ej: Video de prueba hidráulica en campo" required="tipo_carga == 'enlace_drive'"/>

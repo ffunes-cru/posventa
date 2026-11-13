@@ -46,8 +46,7 @@ class TestTicketWorkflow(TestPosventaCommon):
         # 1. Create ticket in Borrador and Send directly (Portal behavior)
         ticket = self.env['pv.ticket'].with_user(self.user_concesionario_a).create({
             'maquina_id': self.maquina_stock.id,
-            'tipo_ticket': 'pre_pm',
-            'desvio_tipo': 'rotura',
+            'desvio_tipo_id': self.desvio_rotura.id,
             'descripcion': 'Manguera hidráulica cortada en transporte',
             'acciones_realizadas': 'Se verificó en descarga y se fotografió',
         })
@@ -55,17 +54,13 @@ class TestTicketWorkflow(TestPosventaCommon):
         self.assertEqual(ticket.certificado_id, self.fru)
 
         # Attach standard ir.attachment
-        attachment = self.env['ir.attachment'].with_user(self.user_concesionario_a).create({
-            'name': 'foto_rotura.png',
-            'datas': DUMMY_PDF_BASE64,
-            'res_model': 'pv.ticket',
-            'res_id': ticket.id,
-            'mimetype': 'image/png',
-        })
-        self.assertTrue(attachment.id)
+        # El concesionario (usuario portal) adjunta por el método del modelo, no creando ir.attachment
+        attachment_id = ticket.with_user(self.user_concesionario_a).portal_adjuntar_archivo(
+            'foto_rotura.png', DUMMY_PDF_BASE64, 'image/png')
+        self.assertTrue(attachment_id)
 
-        # Concessionaire sends ticket via public action_enviar_ticket_direct
-        ticket.with_user(self.user_concesionario_a).action_enviar_ticket_direct()
+        # Concessionaire sends ticket via action_enviar_ticket
+        ticket.with_user(self.user_concesionario_a).action_enviar_ticket()
         self.assertEqual(ticket.estado, 'abierto')
 
         # 2. Concessionaire cannot modify acciones_realizadas once out of borrador
@@ -89,7 +84,7 @@ class TestTicketWorkflow(TestPosventaCommon):
         self.assertTrue(medida.id)
 
         # 5. Staff accepts ticket
-        ticket.with_user(self.user_staff).action_aceptar_ticket_direct()
+        ticket.with_user(self.user_staff).action_aceptar_ticket()
         self.assertEqual(ticket.estado, 'aceptado')
         self.assertTrue(ticket.fecha_solucion)
 
@@ -100,6 +95,7 @@ class TestTicketWorkflow(TestPosventaCommon):
             'ticket_id': ticket.id,
             'tipo_garantia': 'tecnica',
             'garantia_aceptada': True,
+            'solucion_aplicada': 'Se envió manguera nueva.',
         })
         wizard.action_confirmar()
         self.assertEqual(ticket.estado, 'cerrado')
@@ -110,7 +106,6 @@ class TestTicketWorkflow(TestPosventaCommon):
         """Concessionaire creates Post-PM ticket, associates CPM, and Staff rejects it with reason."""
         ticket = self.env['pv.ticket'].with_user(self.user_concesionario_a).create({
             'maquina_id': self.maquina_sold.id,
-            'tipo_ticket': 'post_pm',
             'sistema_id': self.sistema.id,
             'subsistema_id': self.subsistema.id,
             'problema_id': self.problema.id,
@@ -121,25 +116,26 @@ class TestTicketWorkflow(TestPosventaCommon):
         })
         self.assertEqual(ticket.certificado_id, self.cpm)
 
-        ticket.with_user(self.user_concesionario_a).action_enviar_ticket_direct()
+        ticket.with_user(self.user_concesionario_a).action_enviar_ticket()
         ticket.with_user(self.user_staff).action_tomar_ticket()
 
         # Staff rejects ticket
-        ticket.with_user(self.user_staff).action_rechazar_ticket_direct('Falla por mal uso del operador.')
+        tag = self.env['pv.tipo.rechazo'].create({'name': 'Falla por mal uso del operador'})
+        ticket.with_user(self.user_staff).write({'rechazo_tag_ids': [(6, 0, tag.ids)]})
+        ticket.with_user(self.user_staff).action_rechazar_ticket()
         self.assertEqual(ticket.estado, 'rechazado')
-        self.assertIn('mal uso', ticket.motivo_rechazo)
+        self.assertEqual(ticket.rechazo_tag_ids, tag)
 
     def test_03_accept_and_close_with_sap_order_wizard(self):
         """Test accepting directly without popup, and closing with wizard (always opens popup, SAP optional)."""
         from .common import DUMMY_PDF_BASE64
         ticket = self.env['pv.ticket'].with_user(self.user_concesionario_a).create({
             'maquina_id': self.maquina_stock.id,
-            'tipo_ticket': 'pre_pm',
-            'desvio_tipo': 'faltante',
+            'desvio_tipo_id': self.desvio_faltante.id,
             'descripcion': 'Falta manual y bulón',
             'multimedia_url': 'https://drive.google.com/test-mandatory-file-1',
         })
-        ticket.with_user(self.user_concesionario_a).action_enviar_ticket_direct()
+        ticket.with_user(self.user_concesionario_a).action_enviar_ticket()
         ticket.with_user(self.user_staff).action_tomar_ticket()
 
         # 1. Staff accepts directly (no popup)
@@ -150,12 +146,11 @@ class TestTicketWorkflow(TestPosventaCommon):
         # 2. Case A: Close without SAP order -> opens wizard and classifies as 'comercial'
         ticket_no_sap = self.env['pv.ticket'].with_user(self.user_concesionario_a).create({
             'maquina_id': self.maquina_stock.id,
-            'tipo_ticket': 'pre_pm',
-            'desvio_tipo': 'faltante',
+            'desvio_tipo_id': self.desvio_faltante.id,
             'descripcion': 'Falta calco lateral',
             'multimedia_url': 'https://drive.google.com/test-mandatory-file-2',
         })
-        ticket_no_sap.with_user(self.user_concesionario_a).action_enviar_ticket_direct()
+        ticket_no_sap.with_user(self.user_concesionario_a).action_enviar_ticket()
         ticket_no_sap.with_user(self.user_staff).action_tomar_ticket()
         ticket_no_sap.with_user(self.user_staff).action_aceptar_ticket()
         res_no_sap = ticket_no_sap.with_user(self.user_staff).action_cerrar_ticket()
@@ -166,6 +161,7 @@ class TestTicketWorkflow(TestPosventaCommon):
             'ticket_id': ticket_no_sap.id,
             'tipo_garantia': 'comercial',
             'garantia_aceptada': True,
+            'solucion_aplicada': 'Se envió calco lateral.',
         })
         wizard_no_sap.action_confirmar()
         self.assertEqual(ticket_no_sap.estado, 'cerrado')
@@ -188,6 +184,7 @@ class TestTicketWorkflow(TestPosventaCommon):
             'tipo_garantia': 'tecnica',
             'garantia_aceptada': True,
             'garantia_observaciones': 'Pieza defectuosa devuelta a planta y validada.',
+            'solucion_aplicada': 'Reemplazo de pieza defectuosa.',
             'garantia_adjunto': DUMMY_PDF_BASE64,
             'garantia_adjunto_name': 'devolucion_comprobante.pdf',
         })
@@ -214,22 +211,115 @@ class TestTicketWorkflow(TestPosventaCommon):
 
         ticket = self.env['pv.ticket'].create({
             'maquina_id': self.maquina_stock.id,
-            'tipo_ticket': 'pre_pm',
             'desvio_tipo_id': desvio.id,
             'descripcion': 'Falta documentación de cabina',
             'multimedia_url': 'https://drive.google.com/test-doc',
         })
-        self.assertEqual(ticket.desvio_tipo, 'faltante')
         self.assertEqual(ticket.desvio_tipo_id, desvio)
 
         # Rejection tag integration
-        ticket.with_user(self.user_concesionario_a).action_enviar_ticket_direct()
+        ticket.with_user(self.user_concesionario_a).action_enviar_ticket()
         ticket.with_user(self.user_staff).action_tomar_ticket()
         ticket.with_user(self.user_staff).write({
             'rechazo_tag_ids': [(6, 0, [rechazo.id])],
         })
         ticket.with_user(self.user_staff).action_rechazar_ticket()
         self.assertEqual(ticket.estado, 'rechazado')
-        self.assertIn('Desgaste por uso normal', ticket.motivo_rechazo)
+        self.assertEqual(ticket.rechazo_tag_ids, rechazo)
+
+    def _ticket_en_proceso(self, descripcion='Falta bulón'):
+        ticket = self.env['pv.ticket'].with_user(self.user_concesionario_a).create({
+            'maquina_id': self.maquina_stock.id,
+            'desvio_tipo_id': self.desvio_faltante.id,
+            'descripcion': descripcion,
+            'multimedia_url': 'https://drive.google.com/test-file',
+        })
+        ticket.with_user(self.user_concesionario_a).action_enviar_ticket()
+        ticket.with_user(self.user_staff).action_tomar_ticket()
+        return ticket
+
+    def test_05_rechazo_requiere_tags_de_reclamo(self):
+        """Rejecting a claim requires claim-type tags; coverage tags are not accepted."""
+        ticket = self._ticket_en_proceso()
+        with self.assertRaises(UserError):
+            ticket.with_user(self.user_staff).action_rechazar_ticket()
+
+        tag_garantia = self.env['pv.tipo.rechazo'].create({'name': 'Mal uso', 'aplica_a': 'garantia'})
+        with self.assertRaises(ValidationError):
+            ticket.with_user(self.user_staff).write({'rechazo_tag_ids': [(6, 0, tag_garantia.ids)]})
+        self.assertEqual(ticket.estado, 'en_proceso')
+
+    def test_06_cierre_sin_garantia_requiere_motivos_y_solucion(self):
+        """Closing without coverage requires coverage tags; closing always requires the applied solution."""
+        ticket = self._ticket_en_proceso()
+        ticket.with_user(self.user_staff).action_aceptar_ticket()
+        tag_garantia = self.env['pv.tipo.rechazo'].create({'name': 'Mantenimiento nulo', 'aplica_a': 'garantia'})
+
+        wizard = self.env['pv.cerrar.ticket.wizard'].with_user(self.user_staff).create({
+            'ticket_id': ticket.id,
+            'garantia_aceptada': False,
+            'solucion_aplicada': 'Se envió repuesto con cargo.',
+        })
+        with self.assertRaises(UserError):
+            wizard.action_confirmar()
+
+        wizard.solucion_aplicada = '   '
+        wizard.garantia_rechazo_tag_ids = tag_garantia
+        with self.assertRaises(UserError):
+            wizard.action_confirmar()
+
+        wizard.solucion_aplicada = 'Se envió repuesto con cargo.'
+        wizard.action_confirmar()
+        self.assertEqual(ticket.estado, 'cerrado')
+        self.assertFalse(ticket.garantia_aceptada)
+        self.assertEqual(ticket.garantia_rechazo_tag_ids, tag_garantia)
+        self.assertEqual(ticket.solucion_aplicada, 'Se envió repuesto con cargo.')
 
 
+
+    def test_07_clasificacion_post_pm_obligatoria(self):
+        """Post-PM requires sistema/subsistema, catalogued problem (or 'no listado') and hectares > 0."""
+        base = {
+            'maquina_id': self.maquina_sold.id,
+            'sistema_id': self.sistema.id,
+            'subsistema_id': self.subsistema.id,
+            'descripcion': 'Pérdida de presión',
+            'multimedia_url': 'https://drive.google.com/test-file',
+        }
+        Ticket = self.env['pv.ticket'].with_user(self.user_concesionario_a)
+        with self.assertRaises(ValidationError):
+            Ticket.create(dict(base, problema_id=self.problema.id))  # sin hectáreas
+        with self.assertRaises(ValidationError):
+            Ticket.create(dict(base, hectareas=100))  # sin problema
+        with self.assertRaises(ValidationError):
+            Ticket.create(dict(base, hectareas=100, problema_id=self.problema.id, problema_no_listado=True))
+
+        otro_subsistema = self.env['pv.subsistema'].create({'name': 'Otro', 'sistema_id': self.sistema.id})
+        with self.assertRaises(ValidationError):
+            Ticket.create(dict(base, hectareas=100, subsistema_id=otro_subsistema.id, problema_id=self.problema.id))
+
+        otro_sistema = self.env['pv.sistema'].create({'name': 'Eléctrico'})
+        with self.assertRaises(ValidationError):
+            Ticket.create(dict(base, hectareas=100, sistema_id=otro_sistema.id, problema_id=self.problema.id))
+
+        ticket = Ticket.create(dict(base, hectareas=100, problema_no_listado=True))
+        self.assertEqual(ticket.tipo_ticket, 'post_pm')
+        ticket.action_enviar_ticket()
+        self.assertEqual(ticket.estado, 'abierto')
+
+    def test_08_kpis_promedian_solo_etapas_alcanzadas(self):
+        """Tickets not yet attended must not pull the T1 average down."""
+        from datetime import timedelta
+        atendido = self._ticket_en_proceso('Ticket atendido')
+        atendido.sudo().write({
+            'fecha_creacion': atendido.fecha_primera_atencion - timedelta(hours=10),
+        })
+        self._ticket_en_proceso('Otro atendido').sudo().write({'fecha_primera_atencion': False})
+        pendiente = self.env['pv.ticket'].with_user(self.user_concesionario_a).create({
+            'maquina_id': self.maquina_stock.id, 'desvio_tipo_id': self.desvio_faltante.id,
+            'descripcion': 'Sin atender', 'multimedia_url': 'https://drive.google.com/x',
+        })
+        pendiente.action_enviar_ticket()
+        self.env.flush_all()
+        data = self.concesionario_a.with_user(self.user_concesionario_a)._get_portal_resumen()
+        self.assertAlmostEqual(data['kpis']['avg_t1'], 10.0, places=1)

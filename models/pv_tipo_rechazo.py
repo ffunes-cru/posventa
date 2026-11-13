@@ -2,6 +2,12 @@
 from odoo import fields, models
 
 
+APLICA_A = [
+    ('reclamo', 'Rechazo de Reclamo'),
+    ('garantia', 'Sin Cobertura de Garantía'),
+]
+
+
 class PvTipoRechazo(models.Model):
     _name = 'pv.tipo.rechazo'
     _description = 'Tipo / Motivo de Rechazo de Reclamo o Garantía'
@@ -11,6 +17,14 @@ class PvTipoRechazo(models.Model):
         string='Motivo / Tag',
         required=True,
         translate=True,
+    )
+    aplica_a = fields.Selection(
+        APLICA_A,
+        string='Aplica a',
+        required=True,
+        default='reclamo',
+        help='Rechazo de Reclamo: el concesionario cargó el reclamo de forma incorrecta (debe crear uno nuevo).\n'
+             'Sin Cobertura de Garantía: el reclamo era válido pero la pieza no está cubierta y la abona el concesionario/cliente.',
     )
     color = fields.Integer(
         string='Color de Etiqueta',

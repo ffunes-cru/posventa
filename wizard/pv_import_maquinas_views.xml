@@ -7,16 +7,18 @@
             <form string="Importar Máquinas">
                 <group invisible="state != 'upload'">
                     <group>
-                        <field name="archivo" filename="archivo_nombre"/>
+                        <field name="archivo" filename="archivo_nombre" options="{'accepted_file_extensions': '.xlsx'}"/>
                         <field name="archivo_nombre" invisible="1"/>
                     </group>
                     <group>
-                        <div class="alert alert-info">
-                            <p><strong>Formato esperado del archivo Excel:</strong></p>
+                        <div class="alert alert-info" role="status">
+                            <p><strong>Archivo Excel (.xlsx)</strong>, con la primera fila de encabezados:</p>
                             <p>Columnas: <code>of</code>, <code>tipo</code>, <code>concesionario</code>,
                             <code>cliente</code>, <code>ciudad</code>, <code>provincia</code>, <code>estado</code></p>
                             <p>Tipos válidos: PIONERA, GRINGA, DRILOR, PLANTOR, MIXIA</p>
-                            <p>Estados válidos: LIBERADA, STOCK, VENDIDA</p>
+                            <p>Estados válidos: LIBERADA (si está vacío), STOCK, VENDIDA</p>
+                            <p>Concesionario, cliente y provincia tienen que existir en Odoo (sin importar
+                            mayúsculas). El cliente es opcional. Detalle en la documentación (Operación).</p>
                         </div>
                     </group>
                 </group>
@@ -31,11 +33,6 @@
                         <field name="lineas_ok"/>
                         <field name="lineas_error"/>
                     </group>
-                </group>
-                <group invisible="state != 'done'">
-                    <div class="alert alert-success">
-                        <p><strong>Importación completada exitosamente.</strong></p>
-                    </div>
                 </group>
                 <field name="state" invisible="1"/>
                 <footer>
