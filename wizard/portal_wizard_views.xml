@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Con el correo ya usado, Odoo oculta "Otorgar acceso" y solo muestra un ícono rojo que no explica nada:
+         el ícono y el botón "¿Quién lo usa?" muestran qué usuario tiene ese correo (portal_wizard.py). -->
+    <record id="portal_wizard_view_quien_usa_el_correo" model="ir.ui.view">
+        <field name="name">portal.wizard.form: quién usa el correo (posventa)</field>
+        <field name="model">portal.wizard</field>
+        <field name="inherit_id" ref="portal.wizard_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//button[@icon='fa-user-times text-danger']" position="attributes">
+                <attribute name="name">action_quien_usa_el_correo</attribute>
+            </xpath>
+            <xpath expr="//button[@name='action_grant_access']" position="before">
+                <button string="¿Quién lo usa?" name="action_quien_usa_el_correo" type="object" class="btn-link text-danger"
+                    invisible="email_state != 'exist'"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

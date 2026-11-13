@@ -44,6 +44,7 @@ Módulo para la gestión integral de reclamos de posventa:
         'wizard/pv_liberar_maquina_wizard_views.xml',
         'wizard/pv_cerrar_ticket_wizard_views.xml',
         'wizard/pv_adjuntar_multimedia_wizard_views.xml',
+        'wizard/portal_wizard_views.xml',
         # Views
         'views/res_config_settings_views.xml',
         'views/pv_concesionario_views.xml',
