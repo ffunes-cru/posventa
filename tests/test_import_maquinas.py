@@ -3,6 +3,7 @@ import base64
 import io
 
 import openpyxl
+from openpyxl.styles import Font
 
 from odoo.exceptions import UserError
 from odoo.tests import tagged
@@ -58,3 +59,40 @@ class TestImportMaquinas(TestPosventaCommon):
         wizard = self._wizard(['<b>OF</b>', 'x', '', '', '', '', ''])
         wizard.action_preview()
         self.assertNotIn('<b>OF</b>', wizard.error_html)
+
+    def test_03_cliente_provincias_y_filas_vacias(self):
+        cliente = self.env['res.partner'].create({'name': 'Cliente Importado'})
+        self.env['res.partner'].create([{'name': 'Cliente Repetido'}, {'name': 'Cliente Repetido'}])
+        libro = openpyxl.Workbook()
+        hoja = libro.active
+        for fila in (ENCABEZADOS,
+                     ['OF-C1', 'gringa', self.concesionario_a.name, 'cliente importado', '', 'Cordoba', 'vendida'],
+                     ['OF-C2', 'gringa', self.concesionario_a.name, '', '', 'CABA', ''],
+                     ['OF-C3', 'gringa', self.concesionario_a.name, 'Cliente Inexistente', '', '', ''],
+                     ['OF-C4', 'gringa', self.concesionario_a.name, 'Cliente Repetido', '', '', '']):
+            hoja.append(fila)
+        # Filas vacías al final con formato: no son errores
+        hoja.cell(row=10, column=1).font = Font(bold=True)
+        archivo = io.BytesIO()
+        libro.save(archivo)
+        wizard = self.env['pv.import.maquinas'].with_user(self.user_admin).create({
+            'archivo': base64.b64encode(archivo.getvalue()),
+        })
+        wizard.action_preview()
+        self.assertEqual((wizard.lineas_ok, wizard.lineas_error), (2, 2))
+        self.assertIn('Cliente inexistente: Cliente Inexistente', wizard.error_html)
+        self.assertIn('Cliente ambiguo, hay 2 con ese nombre', wizard.error_html)
+
+        maquinas = self.env['pv.maquina'].search(wizard.action_import()['domain'], order='of')
+        self.assertEqual(maquinas[0].cliente_id, cliente)
+        self.assertEqual(maquinas[0].provincia_id.code, 'X')  # Córdoba
+        self.assertEqual(maquinas[1].provincia_id.code, 'C')  # Ciudad Autónoma de Buenos Aires
+        self.assertFalse(maquinas[1].cliente_id)
+
+    def test_04_solo_excel(self):
+        for contenido in (b'of,tipo,concesionario\nOF-1,gringa,X\n', b'\xd0\xcf\x11\xe0' + bytes(100)):
+            wizard = self.env['pv.import.maquinas'].with_user(self.user_admin).create({
+                'archivo': base64.b64encode(contenido),
+            })
+            with self.assertRaisesRegex(UserError, 'no es un Excel .xlsx'):
+                wizard.action_preview()

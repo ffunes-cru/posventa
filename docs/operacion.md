@@ -79,6 +79,38 @@ crear una nueva en Google Cloud, pegarla en Ajustes y borrar la vieja.
 
 Mientras Drive no funcione, los videos ocupan disco en el servidor: vigilar el espacio si la caída dura días.
 
+## Importar máquinas (Excel)
+
+*Posventa → Configuración → Importar Máquinas (Excel)*, solo para el administrador. Da de alta máquinas en bloque
+desde un **Excel `.xlsx`**: no acepta CSV ni `.xls` viejos (si el archivo está en uno de esos formatos, abrirlo en
+Excel y guardarlo como `.xlsx`). Lee la primera hoja; la primera fila son los encabezados, en cualquier orden y
+sin importar mayúsculas.
+
+| Columna | Obligatoria | Qué va |
+|---|---|---|
+| `of` | Sí | Orden de fabricación. No puede existir ya ni repetirse en el archivo. |
+| `tipo` | Sí | `pionera`, `gringa`, `drilor`, `plantor` o `mixia`. |
+| `concesionario` | Sí | Nombre de un concesionario cargado en Posventa. |
+| `cliente` | No | Nombre de un contacto de Odoo, igual al cargado salvo mayúsculas. |
+| `ciudad` | No | Texto libre. |
+| `provincia` | No | Provincia argentina. También `CABA` o `Capital Federal`. |
+| `estado` | No | `liberada` (si está vacío), `stock` o `vendida`. |
+
+Las columnas `cliente`, `ciudad`, `provincia` y `estado` tienen que estar en el encabezado aunque estén vacías.
+
+1. **Vista previa** valida todo el archivo sin crear nada: muestra las filas válidas y, por cada fila con
+   problemas, la línea de la planilla y los errores.
+2. **Importar** crea solo las filas válidas. Las que tenían errores se corrigen y se vuelven a importar en otro
+   archivo: las ya creadas darían *OF duplicada*.
+
+Cómo se comparan los nombres:
+
+- **Concesionario y provincia**: sin importar mayúsculas, tildes ni espacios de más (`cordoba` = `Córdoba`).
+- **Cliente**: sin importar mayúsculas, pero con las mismas tildes que en Odoo. Si no existe, la fila da error:
+  crear antes el contacto. Si hay dos contactos con ese nombre, también (*Cliente ambiguo*): dejar uno solo
+  o cargar el cliente a mano en la máquina.
+- Las filas completamente vacías se ignoran (por ejemplo, las que quedan al final con formato).
+
 ## App en el celular
 
 El portal del concesionario (`/my/posventa`) se puede instalar como una app. Queda con su propio ícono, abre en

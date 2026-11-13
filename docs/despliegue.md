@@ -48,7 +48,8 @@ El primer despliegue instala el módulo y crea la base. Después:
    - Plazos de FRU y FEU (por defecto 10/3 y 20/90 días).
    - Google Drive: seguir [Operación → Google Drive](operacion.md#google-drive) y terminar con *Probar
      conexión*. Mientras no esté configurado, los videos se aceptan igual y esperan en el servidor.
-5. Cargar catálogos (sistemas, subsistemas, problemas, tipos de desvío) e importar máquinas desde Excel.
+5. Cargar catálogos (sistemas, subsistemas, problemas, tipos de desvío) e importar máquinas desde Excel (ver
+   [Operación → Importar máquinas](operacion.md#importar-máquinas-excel)).
 6. Crear los concesionarios y darles acceso al portal (ver [Seguridad](seguridad.md)).
 
 ## Probar
