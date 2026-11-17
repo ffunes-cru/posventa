@@ -63,6 +63,7 @@ mano: las reglas se cumplen igual. Los tests `test_security_hardening.py` prueba
 | `migrations/` | [Scripts de migración](odoo.md#scripts-de-migración) que adaptan bases existentes al cambiar de versión. |
 | `tests/` | Tests automáticos. Son también la mejor documentación de cada regla: cada test describe un caso. |
 | `tools/documentacion.py` | Genera `docs/referencia.md`. |
+| `tools/complejidad.py` | Genera la parte de métricas de `docs/mantenibilidad.md` (se corre suelto, con lizard). |
 | `tools/drive.py` | Habla con Google Drive mediante rclone, con la cuenta de servicio cargada en Ajustes. |
 
 La lista completa de modelos, campos y métodos, y quién llama a cada método, está en la
