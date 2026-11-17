@@ -273,9 +273,9 @@
                                     <t t-foreach="state.attachments" t-as="att" t-key="att_index">
                                         <div class="badge bg-white text-dark border p-2 d-flex align-items-center">
                                             <i class="fa fa-file me-2 text-secondary"/>
-                                            <span class="me-2 text-truncate" style="max-width: 180px;" t-esc="att.name"/>
+                                            <span class="me-2 text-truncate o_pv_adjunto_nombre" t-esc="att.name"/>
                                             <span class="text-muted small me-2">(<t t-esc="formatFileSize(att.size)"/>)</span>
-                                            <button type="button" class="btn-close" t-on-click="() => this.removeAttachment(att_index)" style="font-size: 8px;"/>
+                                            <button type="button" class="btn-close o_pv_quitar_adjunto" t-on-click="() => this.removeAttachment(att_index)"/>
                                         </div>
                                     </t>
                                 </div>
@@ -307,7 +307,7 @@
                                             <div class="d-flex align-items-center text-truncate me-2">
                                                 <i class="fa fa-video-camera me-2 text-primary fs-5"/>
                                                 <div>
-                                                    <strong class="d-block text-truncate" style="max-width: 250px;" t-esc="hf.name"/>
+                                                    <strong class="d-block text-truncate o_pv_archivo_nombre" t-esc="hf.name"/>
                                                     <small class="text-muted"><t t-esc="formatFileSize(hf.size)"/> • Preparado para Google Drive</small>
                                                 </div>
                                             </div>
@@ -410,20 +410,20 @@
                         </div>
                     </t>
 
-                    <div class="pv-form-group mb-3">
+                    <div class="pv-form-group">
                         <label class="fw-bold">Descripción del Reclamo:</label>
                         <div class="p-3 bg-white rounded border text-break" t-esc="state.descripcion"/>
                     </div>
 
                     <t t-if="state.accionesRealizadas">
-                        <div class="pv-form-group mb-3">
+                        <div class="pv-form-group">
                             <label class="fw-bold">Acciones Realizadas por el Concesionario:</label>
                             <div class="p-3 bg-white rounded border text-break" t-esc="state.accionesRealizadas"/>
                         </div>
                     </t>
 
                     <t t-if="state.attachments.length &gt; 0">
-                        <div class="pv-form-group mb-3">
+                        <div class="pv-form-group">
                             <label class="fw-bold">Archivos Adjuntos a Cargar:</label>
                             <div class="d-flex flex-wrap gap-2 p-2 bg-white rounded border">
                                 <t t-foreach="state.attachments" t-as="att" t-key="att_index">
@@ -436,7 +436,7 @@
                     </t>
 
                     <t t-if="state.heavyFiles.length &gt; 0">
-                        <div class="pv-form-group mb-3">
+                        <div class="pv-form-group">
                             <label class="fw-bold text-primary"><i class="fa fa-cloud-upload me-1"/> Videos / Archivos Pesados (Google Drive):</label>
                             <div class="d-flex flex-wrap gap-2 mt-1">
                                 <t t-foreach="state.heavyFiles" t-as="hf" t-key="hf_index">
@@ -449,7 +449,7 @@
                     </t>
 
                     <t t-if="state.multimediaUrl">
-                        <div class="pv-form-group mb-3">
+                        <div class="pv-form-group">
                             <label class="fw-bold">Multimedia (Google Drive):</label>
                             <div class="p-2 bg-white rounded border">
                                 <a t-att-href="state.multimediaUrl" target="_blank" class="text-primary fw-bold" t-esc="state.multimediaUrl"/>
@@ -465,8 +465,8 @@
                             <div class="spinner-border spinner-border-sm text-info me-2" role="status"/>
                             <strong class="text-dark" t-esc="state.uploadProgressText || 'Transfiriendo archivos pesados a Google Drive...'"/>
                         </div>
-                        <div class="progress" style="height: 10px;">
-                            <div class="progress-bar progress-bar-striped progress-bar-animated bg-info" style="width: 100%;"/>
+                        <div class="progress o_pv_progreso">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated bg-info w-100"/>
                         </div>
                         <small class="text-muted mt-2 d-block"><i class="fa fa-info-circle me-1"/> La subida se transmite en bloques seguros. Por favor no cierre el navegador hasta que finalice.</small>
                     </div>

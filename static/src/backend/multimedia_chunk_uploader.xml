@@ -6,11 +6,10 @@
 
             <!-- Estado Inicial: Selector / Dropzone -->
             <t t-if="state.status === 'idle'">
-                <div class="border border-2 rounded-3 p-4 text-center bg-light cursor-pointer o_pv_dropzone" 
-                     t-on-click="triggerFileSelect"
-                     style="cursor: pointer; border-color: #0d6efd !important;">
+                <div class="border border-2 rounded-3 p-4 text-center bg-light cursor-pointer o_pv_dropzone"
+                     t-on-click="triggerFileSelect">
                     <div class="mb-2">
-                        <i class="fa fa-cloud-upload text-primary" style="font-size: 3rem;"/>
+                        <i class="fa fa-cloud-upload text-primary o_pv_icono_grande"/>
                     </div>
                     <h6 class="fw-bold mb-1 text-dark">Haga clic aquí para seleccionar un archivo o video</h6>
                     <p class="text-muted small mb-2">
@@ -39,7 +38,7 @@
                             <span class="badge bg-primary fs-6"><t t-esc="state.progress"/>%</span>
                         </div>
                     </div>
-                    <div class="progress" style="height: 10px;">
+                    <div class="progress o_pv_progreso">
                         <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" 
                              role="progressbar" 
                              t-attf-style="width: {{state.progress}}%;" 
@@ -58,7 +57,7 @@
                 <div class="alert alert-success d-flex align-items-center justify-content-between mb-0 p-3 shadow-sm" role="alert">
                     <div class="d-flex align-items-center">
                         <div class="me-3 text-success">
-                            <i class="fa fa-check-circle" style="font-size: 2.2rem;"/>
+                            <i class="fa fa-check-circle o_pv_icono_ok"/>
                         </div>
                         <div>
                             <h6 class="alert-heading fw-bold mb-1">¡Archivo adjuntado exitosamente!</h6>

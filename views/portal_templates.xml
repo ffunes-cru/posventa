@@ -368,7 +368,7 @@
                 <a t-foreach="d['tickets']" t-as="t" t-attf-href="/my/posventa/ticket/#{t['id']}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center gap-2">
                     <div>
                         <div class="fw-bold" t-out="t['name']"/>
-                        <div class="small text-muted text-truncate" style="max-width: 32rem;" t-out="t['descripcion']"/>
+                        <div class="small text-muted text-truncate o_pv_descripcion_corta" t-out="t['descripcion']"/>
                     </div>
                     <t t-call="posventa.portal_badge_ticket"><t t-set="estado" t-value="t['estado']"/></t>
                 </a>

@@ -3,9 +3,214 @@
 /* Zona para soltar archivos del asistente de multimedia */
 .o_pv_dropzone {
     border-style: dashed !important;
+    border-color: #0d6efd !important;
     transition: box-shadow 0.2s ease;
 
     &:hover {
         box-shadow: $box-shadow-sm;
+    }
+}
+
+.o_pv_icono_grande {
+    font-size: 3rem;
+}
+
+.o_pv_icono_ok {
+    font-size: 2.2rem;
+}
+
+/* Asistente de cierre del ticket: textos largos */
+.o_pv_texto_largo {
+    min-height: 80px;
+}
+
+/* ---------------------------------------------------------------- */
+/* Tablero de control (views/pv_dashboard_views.xml)                */
+/* ---------------------------------------------------------------- */
+
+$pv-estados: (
+    borrador: #6c757d,
+    abierto: #17a2b8,
+    en_proceso: #ffc107,
+    aceptado: #28a745,
+    rechazado: #dc3545,
+    cerrado: #343a40,
+);
+
+// Degradé de cada indicador: desde, hasta
+$pv-kpis: (
+    t1: (#4f46e5, #3730a3),
+    t2: (#10b981, #065f46),
+    t3: (#f59e0b, #b45309),
+);
+
+// El tablero ocupa todo el ancho, sin la hoja del formulario
+.o_dashboard_form {
+    .o_form_sheet_bg {
+        background: #f8f9fc !important;
+        padding: 16px !important;
+    }
+
+    .o_form_sheet {
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        max-width: 100% !important;
+        padding: 0 !important;
+    }
+
+    .card {
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+        &:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.1) !important;
+        }
+    }
+}
+
+.pv-dashboard-banner {
+    background: $white;
+    padding: map-get($spacers, 4);
+    margin-bottom: map-get($spacers, 4);
+    box-shadow: $box-shadow-sm;
+    border: 1px solid #e3e6f0;
+    border-radius: 8px;
+
+    h3 {
+        font-size: 24px;
+        font-weight: $font-weight-bold;
+        margin-bottom: map-get($spacers, 1);
+    }
+
+    p {
+        font-size: 14px;
+        margin-bottom: 0;
+    }
+
+    // Odoo descarta el atributo style de los <button> del formulario: el radio de 5px
+    // que tenía este botón nunca se aplicó, y no se agrega para no cambiar el aspecto.
+    .btn {
+        font-weight: $font-weight-bold;
+        box-shadow: $box-shadow-sm;
+        padding: map-get($spacers, 2) map-get($spacers, 4);
+    }
+}
+
+// Tarjeta de cantidad de tickets por estado, con el color del estado arriba
+.pv-estado {
+    height: 100%;
+    text-align: center;
+    background: $white;
+    border: 0;
+    border-radius: 8px;
+    box-shadow: $box-shadow-sm;
+    cursor: pointer;
+
+    @each $estado, $color in $pv-estados {
+        &.pv-estado-#{$estado} {
+            border-top: 4px solid $color;
+        }
+    }
+
+    .card-body {
+        padding-top: map-get($spacers, 4);
+        padding-bottom: map-get($spacers, 4);
+    }
+
+    h6 {
+        text-transform: uppercase;
+        font-weight: $font-weight-bold;
+        font-size: 12px;
+        letter-spacing: 0.8px;
+        margin-bottom: map-get($spacers, 2);
+    }
+
+    .pv-estado-cuenta {
+        font-size: 2.5rem;
+        font-weight: $font-weight-bold;
+        line-height: 1.1;
+        margin-bottom: map-get($spacers, 3);
+    }
+
+    // Sin los 11px y el radio de 4px del style original, que Odoo descartaba (ver el banner)
+    .btn {
+        width: 100%;
+        font-weight: $font-weight-bold;
+    }
+}
+
+// Indicador de tiempo promedio, sobre un degradé
+.pv-kpi {
+    padding: map-get($spacers, 4);
+    text-align: center;
+    color: $white;
+    border: 0;
+    border-radius: 8px;
+    box-shadow: $box-shadow-sm;
+
+    @each $kpi, $degrade in $pv-kpis {
+        &.pv-kpi-#{$kpi} {
+            background: linear-gradient(135deg, nth($degrade, 1) 0%, nth($degrade, 2) 100%);
+        }
+    }
+
+    // Odoo les da color propio a los títulos
+    h6, h2 {
+        color: $white;
+        font-weight: $font-weight-bold;
+    }
+
+    h6 {
+        text-transform: uppercase;
+        font-size: $small-font-size;
+        letter-spacing: 1px;
+        opacity: 0.75;
+        margin-bottom: map-get($spacers, 2);
+    }
+
+    h2 {
+        font-size: 42px;
+        margin-bottom: map-get($spacers, 1);
+    }
+
+    p {
+        font-size: $small-font-size;
+        opacity: 0.75;
+        margin-bottom: 0;
+    }
+}
+
+// Modo oscuro (módulos de modo oscuro de la comunidad y del tema)
+$pv-modo-oscuro: 'body.o_web_client_dark_mode, body.o-dark-mode, [data-color-mode="dark"], [data-bs-theme="dark"]';
+
+#{$pv-modo-oscuro} {
+    .o_dashboard_form .o_form_sheet_bg {
+        background: #212534 !important;
+    }
+
+    .pv-dashboard-banner {
+        background: #2b3044;
+        border-color: #3d435e;
+
+        h3 {
+            color: #f87171 !important;
+        }
+
+        p {
+            color: #a0aec0 !important;
+        }
+    }
+
+    .pv-estado {
+        background: #2b3044;
+
+        .text-muted {
+            color: #a0aec0 !important;
+        }
+
+        .text-dark {
+            color: #f8fafc !important;
+        }
     }
 }
