@@ -10,3 +10,4 @@ from . import test_security_hardening
 from . import test_portal
 from . import test_import_maquinas
 from . import test_documentacion
+from . import test_propiedades

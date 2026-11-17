@@ -40,7 +40,7 @@ jobs:
 
       - name: Instalar posventa y correr sus tests
         run: |
-          docker run --rm --network host --user root -e DB_PORT -e HTTP_PORT \
+          docker run --rm --network host --user root -e DB_PORT -e HTTP_PORT -e POSVENTA_EXIGIR_HYPOTHESIS=1 \
             -v "$GITHUB_WORKSPACE/posventa:/src:ro" --entrypoint bash odoo:19.0 -ec '
               # Prueba espejos de Ubuntu de a uno: a veces el DNS de los runners no resuelve algún dominio
               for espejo in http://azure.archive.ubuntu.com/ubuntu/ http://mirrors.edge.kernel.org/ubuntu/ \
@@ -52,8 +52,9 @@ jobs:
               done
               curl -fsSL --retry 3 -o /tmp/chrome.deb \
                 https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-              # Sin Chrome y websocket-client, Odoo saltea los tests de navegador sin avisar
-              apt-get install -y -qq /tmp/chrome.deb python3-websocket > /dev/null
+              # Sin Chrome y websocket-client, Odoo saltea los tests de navegador sin avisar; Hypothesis, para
+              # tests/test_propiedades.py (con POSVENTA_EXIGIR_HYPOTHESIS, si falta el test falla)
+              apt-get install -y -qq /tmp/chrome.deb python3-websocket python3-hypothesis > /dev/null
               mkdir -p /ws/addons && cp -r /src /ws/addons/posventa && chown -R odoo /ws
               runuser -u odoo -- odoo --addons-path=/ws/addons \
                 --db_host=localhost --db_port="$DB_PORT" --db_user=odoo --db_password=odoo \
