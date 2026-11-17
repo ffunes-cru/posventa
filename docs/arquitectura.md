@@ -61,7 +61,7 @@ mano: las reglas se cumplen igual. Los tests `test_security_hardening.py` prueba
 | `security/` | [Grupos](odoo.md#grupos), [permisos por modelo](odoo.md#permisos-de-acceso) (`ir.model.access.csv`) y [reglas de registro](odoo.md#reglas-de-registro) (`pv_security.xml`). |
 | `data/` | Datos iniciales: secuencia de tickets, catálogos, crons, plantillas de correo y ajustes por defecto. |
 | `migrations/` | [Scripts de migración](odoo.md#scripts-de-migración) que adaptan bases existentes al cambiar de versión. |
-| `tests/` | Tests automáticos. Son también la mejor documentación de cada regla: cada test describe un caso. |
+| `tests/` | Tests automáticos. Son también la mejor documentación de cada regla: cada test describe un caso. `test_propiedades.py` es distinto: con [Hypothesis](https://hypothesis.readthedocs.io/) arma secuencias al azar de operaciones (certificados, reclamos, traslados, liberaciones, por usuarios correctos y equivocados) y después de cada paso verifica los invariantes del módulo. |
 | `tools/documentacion.py` | Genera `docs/referencia.md`. |
 | `tools/drive.py` | Habla con Google Drive mediante rclone, con la cuenta de servicio cargada en Ajustes. |
 
