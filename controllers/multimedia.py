@@ -5,7 +5,7 @@ import os
 import re
 import shutil
 from markupsafe import Markup, escape
-from odoo import http, _
+from odoo import http
 from odoo.http import request
 from odoo.addons.posventa.models.pv_ticket_multimedia import get_staging_root
 
@@ -158,7 +158,7 @@ class PosventaMultimediaController(http.Controller):
         })
         shutil.rmtree(staging_dir, ignore_errors=True)
         ticket.sudo().message_post(
-            body=Markup(_("📎 <b>Archivo adjuntado:</b> %s")) % escape(filename),
+            body=Markup(ticket.env._("📎 <b>Archivo adjuntado:</b> %s")) % escape(filename),
             message_type='comment',
             subtype_xmlid='mail.mt_note',
             attachment_ids=[attachment.id],
