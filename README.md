@@ -25,6 +25,7 @@ Leer en este orden. Los diagramas son [Mermaid](https://mermaid.js.org/): GitHub
 | [Operación](docs/operacion.md) | Ajustes, tareas programadas, Google Drive, comandos y problemas comunes. |
 | [Despliegue](docs/despliegue.md) | Flujo de staging y producción, CI/CD con GitHub Actions y checklist de prueba. |
 | [Recetas](docs/recetas.md) | Paso a paso para los cambios más habituales. |
+| [Mantenibilidad](docs/mantenibilidad.md) | Complejidad ciclomática y cobertura de tests función por función, puntos críticos y mejoras priorizadas. La parte de métricas es **generada** con `tools/complejidad.py`. |
 | [Referencia](docs/referencia.md) | **Generada** desde Odoo: todos los modelos y campos, permisos y quién llama a cada método. |
 | Sitio Doxygen | **Generado** con `doxygen`: estos documentos y el código en un sitio con buscador, con grafos de llamadas por función. Ver [Operación](docs/operacion.md#sitio-de-documentación-doxygen). |
 
