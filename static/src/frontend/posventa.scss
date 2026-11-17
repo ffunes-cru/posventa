@@ -302,6 +302,24 @@
     resize: vertical;
 }
 
+/* Asistente de reclamo: nombres de archivo cortados y botón de quitar chico */
+.o_pv_adjunto_nombre {
+    max-width: 180px;
+}
+
+.o_pv_archivo_nombre {
+    max-width: 250px;
+}
+
+.btn-close.o_pv_quitar_adjunto {
+    font-size: 8px;
+}
+
+/* Lista de reclamos del portal: descripción en una línea */
+.o_pv_descripcion_corta {
+    max-width: 32rem;
+}
+
 @media (max-width: 768px) {
     .pv-detail-grid {
         grid-template-columns: repeat(2, 1fr);

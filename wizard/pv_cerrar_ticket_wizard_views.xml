@@ -15,9 +15,9 @@
                         <field name="tipo_garantia" widget="radio" options="{'horizontal': true}"/>
                         <field name="garantia_aceptada" widget="boolean_toggle" string="¿La garantía cubre la pieza?"/>
                         <field name="garantia_rechazo_tag_ids" widget="many2many_tags" options="{'color_field': 'color', 'no_create': True}" invisible="garantia_aceptada" required="not garantia_aceptada" placeholder="Seleccione motivos sin cobertura..."/>
-                        <field name="solucion_aplicada" placeholder="Describa qué se hizo para resolver la falla (repuesto enviado, ajuste, reparación en campo...)" style="min-height: 80px;"/>
+                        <field name="solucion_aplicada" placeholder="Describa qué se hizo para resolver la falla (repuesto enviado, ajuste, reparación en campo...)" class="o_pv_texto_largo"/>
                         <field name="sap_numero_orden" placeholder="Ej: 4500012345 (opcional)"/>
-                        <field name="garantia_observaciones" placeholder="Ingrese observaciones y justificación del análisis de la garantía y devolución..." style="min-height: 80px;"/>
+                        <field name="garantia_observaciones" placeholder="Ingrese observaciones y justificación del análisis de la garantía y devolución..." class="o_pv_texto_largo"/>
                         <field name="garantia_adjunto" filename="garantia_adjunto_name"/>
                         <field name="garantia_adjunto_name" invisible="1"/>
                     </group>

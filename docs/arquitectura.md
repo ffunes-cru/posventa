@@ -56,8 +56,8 @@ mano: las reglas se cumplen igual. Los tests `test_security_hardening.py` prueba
 | `views/portal_templates.xml` | Todas las páginas del portal ([QWeb](odoo.md#vistas-qweb-y-owl)). |
 | `views/*_views.xml`, `views/pv_menu.xml` | Pantallas y menús del backend. |
 | `static/src/frontend/` | JavaScript del portal ([OWL](odoo.md#vistas-qweb-y-owl)): asistente de reclamo, asistente de certificado y subida de archivos. |
-| `static/src/backend/` | Widget del backend para subir videos por fragmentos. |
-| `static/src/shared/chunk_upload.js` | Subida por fragmentos, compartida por portal y backend. |
+| `static/src/backend/` | Widget del backend para subir videos por fragmentos y estilos del backend (`posventa_backend.scss`: tablero, zona de subida). |
+| `static/src/shared/` | Lo compartido por portal y backend: subida por fragmentos (`chunk_upload.js`) y estilos comunes. |
 | `security/` | [Grupos](odoo.md#grupos), [permisos por modelo](odoo.md#permisos-de-acceso) (`ir.model.access.csv`) y [reglas de registro](odoo.md#reglas-de-registro) (`pv_security.xml`). |
 | `data/` | Datos iniciales: secuencia de tickets, catálogos, crons, plantillas de correo y ajustes por defecto. |
 | `migrations/` | [Scripts de migración](odoo.md#scripts-de-migración) que adaptan bases existentes al cambiar de versión. |
@@ -120,6 +120,12 @@ dejarlo en borrador para completarlo después.
   (`CAMPOS_CARGA_CONCESIONARIO`, `CAMPOS_POST_ENVIO_CONCESIONARIO`, `CAMPOS_SOLO_STAFF`). Al agregar un campo al
   ticket hay que decidir en cuál va.
 - **Notas en el [chatter](odoo.md#chatter)** con `_message_log()` de Odoo: quedan como nota interna, sin notificar a nadie.
+- **Estilos: clases propias para la estructura, utilidades del tema para el color.** Lo que se repite
+  (tarjetas del tablero, campos del asistente) es una clase `pv-*`/`o_pv_*` en el SCSS; un color suelto es una
+  utilidad de Bootstrap en el markup (`text-muted`, `btn-outline-info`), que Odoo adapta al contexto. Sin
+  `style=""` en las plantillas (en los `<button>` de un formulario Odoo además lo descarta) ni `<style>` en las
+  vistas. Odoo 19 trae Bootstrap 5.3: las clases de Bootstrap 4 (`font-weight-bold`, `ml-1`, `text-right`) no
+  existen y no avisan.
 - **Los crons son [`noupdate`](odoo.md#archivos-de-datos-y-noupdate).** Si cambia el método que llama un cron, hay que actualizar el registro existente
   con un script de migración (ver `migrations/19.0.1.1.0/post-migrate.py`).
 

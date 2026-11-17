@@ -1,0 +1,6 @@
+/* Compartido por el backend y el portal (static/src/shared/ entra en los dos bundles) */
+
+/* Barra de progreso de subida, más baja que la de Bootstrap */
+.progress.o_pv_progreso {
+    height: 10px;
+}
