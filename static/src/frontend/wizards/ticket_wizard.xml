@@ -275,7 +275,7 @@
                                             <i class="fa fa-file me-2 text-secondary"/>
                                             <span class="me-2 text-truncate" style="max-width: 180px;" t-esc="att.name"/>
                                             <span class="text-muted small me-2">(<t t-esc="formatFileSize(att.size)"/>)</span>
-                                            <button type="button" class="btn-close btn-close-sm" t-on-click="() => this.removeAttachment(att_index)" style="font-size: 8px;"/>
+                                            <button type="button" class="btn-close" t-on-click="() => this.removeAttachment(att_index)" style="font-size: 8px;"/>
                                         </div>
                                     </t>
                                 </div>
@@ -353,7 +353,7 @@
                         </div>
                         <div class="pv-detail-field">
                             <span class="pv-df-label">Tipo de Ticket</span>
-                            <span class="pv-df-value text-primary font-weight-bold">
+                            <span class="pv-df-value text-primary fw-bold">
                                 <t t-if="state.tipoTicket === 'post_pm'">Post Puesta en Marcha</t>
                                 <t t-else="">Pre Puesta en Marcha</t>
                             </span>
@@ -452,7 +452,7 @@
                         <div class="pv-form-group mb-3">
                             <label class="fw-bold">Multimedia (Google Drive):</label>
                             <div class="p-2 bg-white rounded border">
-                                <a t-att-href="state.multimediaUrl" target="_blank" class="text-primary font-weight-bold" t-esc="state.multimediaUrl"/>
+                                <a t-att-href="state.multimediaUrl" target="_blank" class="text-primary fw-bold" t-esc="state.multimediaUrl"/>
                             </div>
                         </div>
                     </t>

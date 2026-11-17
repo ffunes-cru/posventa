@@ -1,0 +1,11 @@
+/* Posventa en el backend (web.assets_backend) */
+
+/* Zona para soltar archivos del asistente de multimedia */
+.o_pv_dropzone {
+    border-style: dashed !important;
+    transition: box-shadow 0.2s ease;
+
+    &:hover {
+        box-shadow: $box-shadow-sm;
+    }
+}

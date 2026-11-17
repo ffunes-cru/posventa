@@ -93,7 +93,7 @@
                         <label>Archivo Adjunto (PDF o Imagen) <span class="required">*</span></label>
                         <input type="file" class="pv-form-input" accept=".pdf,.jpg,.jpeg,.png" t-on-change="onFileChange"/>
                         <t t-if="state.archivoNombre">
-                            <div class="mt-2 text-success font-weight-bold">
+                            <div class="mt-2 text-success fw-bold">
                                 <i class="fa fa-file-pdf-o me-1"/> Archivo cargado: <t t-esc="state.archivoNombre"/>
                             </div>
                         </t>
