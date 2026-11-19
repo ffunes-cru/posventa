@@ -155,3 +155,20 @@ class TestPortalPosventa(TestPosventaCommon, HttpCase):
         staff_body = self.env.ref('posventa.mail_template_ticket_creado')._render_field(
             'body_html', self.ticket_a.ids)[self.ticket_a.id]
         self.assertIn(f'/odoo/pv.ticket/{self.ticket_a.id}', staff_body)
+
+    def test_subida_por_fragmentos_exige_token_csrf(self):
+        """Otro sitio no puede subir archivos a un reclamo con la sesión del concesionario (CSRF)."""
+        self.authenticate('concesionario_a', 'concesionario_a')
+        datos = {'ticket_id': self.ticket_a.id, 'file_uuid': 'prueba-csrf', 'filename': 'nota.txt',
+                 'chunk_index': 0, 'total_chunks': 1, 'file_size': 4}
+
+        def subir(**extra):
+            return self.url_open('/posventa/ticket/upload_chunk', data=dict(datos, **extra),
+                                 files={'chunk': ('nota.txt', b'hola', 'text/plain')})
+
+        sin_token = subir()
+        self.assertEqual(sin_token.status_code, 400)
+        self.assertFalse(self.ticket_a.multimedia_ids)
+        con_token = subir(csrf_token=http.Request.csrf_token(self))
+        self.assertEqual(con_token.status_code, 200, con_token.text)
+        self.assertEqual(con_token.json().get('status'), 'completed', con_token.text)
