@@ -25,7 +25,9 @@ def _error(message, status=400):
 
 class PosventaMultimediaController(http.Controller):
 
-    @http.route('/posventa/ticket/upload_chunk', type='http', auth='user', methods=['POST'], csrf=False)
+    # Con CSRF: el navegador manda el token (static/src/shared/chunk_upload.js), así otro sitio no puede subir
+    # archivos a un reclamo usando la sesión del concesionario.
+    @http.route('/posventa/ticket/upload_chunk', type='http', auth='user', methods=['POST'])
     def upload_chunk(self, **post):
         """Recibe un chunk binario de un archivo pesado y lo almacena en staging.
 

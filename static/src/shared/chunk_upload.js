@@ -43,6 +43,7 @@ export async function uploadFileInChunks({ ticketId, file, uuid, name, chunkSize
     for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
         const start = chunkIndex * chunkSize;
         const formData = new FormData();
+        formData.append("csrf_token", odoo.csrf_token);
         formData.append("ticket_id", ticketId);
         formData.append("file_uuid", uuid);
         formData.append("filename", name || file.name);
