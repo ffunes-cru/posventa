@@ -34,7 +34,7 @@
                     <group>
                         <group>
                             <field name="tipo" readonly="id"/>
-                            <field name="maquina_id" domain="[('tiene_cpm', '=', False)]" readonly="context.get('default_maquina_id') or id"/>
+                            <field name="maquina_id" readonly="context.get('default_maquina_id') or id"/>
                             <field name="fecha" readonly="id"/>
                             <field name="estado_certificado" widget="badge"/>
                         </group>

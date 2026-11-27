@@ -196,7 +196,7 @@ class PvMaquina(models.Model):
                 'descripcion': (t.descripcion or '')[:100],
             } for t in self.ticket_ids.sorted('create_date', reverse=True)[:20]],
             'puede_crear_ticket': self.estado not in ESTADOS_MAQUINA_SIN_TICKETS and bool(self._get_certificados_vigentes()),
-            'puede_crear_certificado': not self.tiene_cpm and self.estado != 'pendiente' and puede_operar,
+            'puede_crear_certificado': self.estado != 'pendiente' and puede_operar,
             'puede_transferir': self.estado == 'stock' and sin_tramite,
             'puede_solicitar_liberacion': self.estado in ESTADOS_LIBERABLES and sin_tramite,
             'liberacion_solicitada': self.liberacion_solicitada,

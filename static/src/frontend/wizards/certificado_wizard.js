@@ -29,6 +29,8 @@ export class CertificadoWizard extends Component {
             defaultTipo = "feu";
         } else if (maquina.tiene_feu && hasFeuVigente && !maquina.tiene_cpm) {
             defaultTipo = "cpm";
+        } else if (maquina.tiene_cpm) {
+            defaultTipo = "informe_servicio";
         }
 
         this.state = useState({
@@ -110,14 +112,14 @@ export class CertificadoWizard extends Component {
             {
                 value: "informe_servicio",
                 label: _t("Informe de Servicio"),
-                disabled: false,
-                reason: "",
+                disabled: !m.tiene_cpm,
+                reason: m.tiene_cpm ? "" : _t("Requiere cargar primero el CPM"),
             },
             {
                 value: "recall",
                 label: _t("Recall"),
-                disabled: false,
-                reason: "",
+                disabled: Boolean(m.tiene_cpm),
+                reason: m.tiene_cpm ? _t("La máquina ya está completa (CPM activo)") : "",
             },
         ];
     }
