@@ -51,7 +51,6 @@ class PvCertificado(models.Model):
     tipo = fields.Selection(TIPO_CERTIFICADO, string='Tipo', required=True, tracking=True)
     maquina_id = fields.Many2one(
         'pv.maquina', string='Máquina', required=True, ondelete='cascade', tracking=True,
-        domain="[('tiene_cpm', '=', False)]",
     )
     concesionario_id = fields.Many2one('pv.concesionario', string='Concesionario Emisor', tracking=True)
     fecha = fields.Date(string='Fecha', default=fields.Date.context_today, required=True, tracking=True)
@@ -152,6 +151,11 @@ class PvCertificado(models.Model):
             maquina = rec.maquina_id.name
             if rec.maquina_id.estado == 'pendiente':
                 raise ValidationError(_('No se pueden cargar certificados en la máquina %s porque se encuentra en proceso de transferencia pendiente.', maquina))
+            if rec.tipo == 'informe_servicio':
+                # Es posterior al CPM y puede haber varios (uno por visita de servicio).
+                if not rec._otros_de_la_maquina('cpm', ['vigente']):
+                    raise ValidationError(_('El Informe de Servicio se puede cargar recién después del Certificado de Puesta en Marcha (CPM) de la máquina %s.', maquina))
+                continue
             if rec._otros_de_la_maquina('cpm', ['vigente']):
                 raise ValidationError(_('La máquina %s ya posee un Certificado de Puesta en Marcha (CPM) vigente. No se pueden agregar más certificados a una máquina completa.', maquina))
             if rec.tipo == 'fru' and rec._otros_de_la_maquina('fru', ESTADOS_CARGADO):

@@ -559,3 +559,40 @@ class TestMaquinaCertificados(TestPosventaCommon):
         self.assertEqual(cpm.estado_certificado, 'vigente')
         self.assertEqual(maquina.estado, 'vendida')
 
+    def _cargar(self, maquina, tipo, user=None):
+        Certificado = self.env['pv.certificado']
+        if user:
+            Certificado = Certificado.with_user(user)
+        return Certificado.create({
+            'maquina_id': maquina.id,
+            'tipo': tipo,
+            'fecha': fields.Date.today(),
+            'archivo': DUMMY_PDF_BASE64,
+            'archivo_nombre': '%s.pdf' % tipo,
+        })
+
+    def test_04_informe_servicio_solo_despues_del_cpm(self):
+        """El informe de servicio se desbloquea al cargar el CPM, y puede haber varios."""
+        maquina = self.env['pv.maquina'].create({
+            'tipo': 'plantor', 'of': 'OF-TEST-004', 'concesionario_id': self.concesionario_a.id,
+        })
+        self._cargar(maquina, 'fru')
+        self._cargar(maquina, 'feu')
+        with self.assertRaises(ValidationError):
+            self._cargar(maquina, 'informe_servicio')
+        self._cargar(maquina, 'cpm')
+        informe_1 = self._cargar(maquina, 'informe_servicio', self.user_concesionario_a)
+        informe_2 = self._cargar(maquina, 'informe_servicio', self.user_concesionario_a)
+        self.assertEqual((informe_1 | informe_2).mapped('estado_certificado'), ['vigente', 'vigente'])
+        self.assertTrue(maquina.get_portal_detail_data()['puede_crear_certificado'])
+
+    def test_05_maquina_completa_sigue_rechazando_otros_certificados(self):
+        """Con CPM vigente solo se agrega el informe de servicio, no un recall ni otro FEU."""
+        maquina = self.env['pv.maquina'].create({
+            'tipo': 'plantor', 'of': 'OF-TEST-005', 'concesionario_id': self.concesionario_a.id,
+        })
+        for tipo in ('fru', 'feu', 'cpm'):
+            self._cargar(maquina, tipo)
+        for tipo in ('recall', 'feu'):
+            with self.assertRaises(ValidationError):
+                self._cargar(maquina, tipo)
