@@ -492,7 +492,7 @@
                         <strong>Reclamo rechazado</strong> por error de carga: <t t-out="', '.join(ticket.rechazo_tag_ids.mapped('name'))"/>.
                         Si corresponde, cree un nuevo reclamo con la información correcta.
                     </div>
-                    <div t-if="ticket.estado == 'aceptado'" class="alert alert-primary" role="status">
+                    <div t-if="ticket.estado == 'aceptado'" class="alert alert-success" role="status">
                         El reclamo fue <strong>aceptado</strong> y la garantía está en evaluación.
                     </div>
                     <div t-if="ticket.estado == 'cerrado'" t-attf-class="alert #{'alert-success' if ticket.garantia_aceptada else 'alert-warning'}" role="status">
